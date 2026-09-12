@@ -1,0 +1,315 @@
+#!/usr/bin/env node
+/**
+ * 配色校验器：复现 docs/移动端配色与字体方案.md 中的全部实测数值。
+ *
+ * 为什么要有这个文件：
+ *   该文档声明「所有对比度、色盲可区分度均为脚本实测值」，并承诺「后续任何颜色改动
+ *   都应重跑校验，而不是目测」。如果校验脚本不存在，这句承诺就是空的。
+ *
+ * 用法：
+ *   node scripts/check-contrast.mjs          # 跑校验，全部通过退出码 0，有 MISMATCH 退出码 1
+ *   node scripts/check-contrast.mjs --verbose # 额外打印未断言的信息性数据
+ *
+ * 标准：
+ *   - 对比度按 WCAG 2.2 相对亮度公式（sRGB 线性化后加权）
+ *   - 色盲可区分度用 Viénot/Brettel 线性近似模拟 deutan / protan，模拟空间欧氏距离 ×255
+ *   - 灰度可辨性用相对亮度差 ΔL
+ *
+ * 阈值约定：正文 ≥4.5，大字/控件 ≥3.0，装饰豁免；
+ *          色盲可区分度 ≥40 视为可区分，环形图相邻段 ≥70。
+ *
+ * 零依赖，纯 Node ESM。
+ */
+
+// ---------------------------------------------------------------- 基础计算
+
+/** '#RGB' 或 '#RRGGBB' → [r, g, b] */
+function toRgb(hex) {
+  const h = hex.replace('#', '');
+  const full =
+    h.length === 3
+      ? h
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : h;
+  return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16));
+}
+
+/** sRGB 分量线性化（WCAG 定义） */
+function linearize(v) {
+  const c = v / 255;
+  return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+}
+
+/** 相对亮度 L */
+function luminance(hex) {
+  const [r, g, b] = toRgb(hex).map(linearize);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** 两色对比度 */
+function contrast(a, b) {
+  const [la, lb] = [luminance(a), luminance(b)];
+  const hi = Math.max(la, lb);
+  const lo = Math.min(la, lb);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** 色盲模拟：返回线性 RGB 三元组 */
+function simulate(hex, kind) {
+  const [r, g, b] = toRgb(hex).map(linearize);
+  if (kind === 'deutan') return [0.625 * r + 0.375 * g, 0.7 * r + 0.3 * g, 0.3 * g + 0.7 * b];
+  if (kind === 'protan')
+    return [0.567 * r + 0.433 * g, 0.558 * r + 0.442 * g, 0.242 * g + 0.758 * b];
+  return [r, g, b];
+}
+
+/** 模拟空间欧氏距离 ×255 */
+function distance(a, b, kind) {
+  const [x, y] = [simulate(a, kind), simulate(b, kind)];
+  return Math.sqrt(x.reduce((acc, v, i) => acc + (v - y[i]) ** 2, 0)) * 255;
+}
+
+/** 色盲可区分度：取 deutan / protan 的较差者（保守口径） */
+function cvd(a, b) {
+  return Math.min(distance(a, b, 'deutan'), distance(a, b, 'protan'));
+}
+
+const pairsOf = (arr) => arr.flatMap((a, i) => arr.slice(i + 1).map((b) => [a, b]));
+
+// ---------------------------------------------------------------- 断言框架
+
+let passed = 0;
+const failures = [];
+
+/** 断言：actual 应等于 expected（容差 tol） */
+function expect(label, actual, expected, tol = 0.01) {
+  const ok = Math.abs(actual - expected) <= tol;
+  if (ok) passed += 1;
+  else failures.push({ label, actual, expected, tol });
+  const mark = ok ? '\x1b[32m✅\x1b[0m' : '\x1b[31m❌ MISMATCH\x1b[0m';
+  const shown = Number.isInteger(expected) === false || tol < 1 ? actual.toFixed(2) : actual;
+  console.log(`  ${mark}  ${label.padEnd(46)} 实测 ${String(shown).padStart(6)}  文档 ${expected}`);
+}
+
+function section(title) {
+  console.log(`\n\x1b[1m${title}\x1b[0m`);
+}
+
+// 文档中的关键色值（与 docs/移动端配色与字体方案.md 保持一致）
+const WHITE = '#FFFFFF';
+const PAGE = '#F5F6F8';
+const BRAND = {
+  400: '#FF8552',
+  500: '#FF6B35',
+  600: '#CF4A12',
+  700: '#C7430F',
+  800: '#B33A0C',
+  900: '#8F2E08',
+};
+
+console.log('\x1b[1m配色校验 —— 对照 docs/移动端配色与字体方案.md\x1b[0m');
+
+// ---------------------------------------------------------------- 1. 现状体检
+section('1. 现状体检（文档 §1.2 的 9 处不达标，必须复现出来）');
+expect('#333 正文 on 白', contrast('#333333', WHITE), 12.63);
+expect('#666 次要 on 白', contrast('#666666', WHITE), 5.74);
+expect('#999 辅助 on 白（不达标）', contrast('#999999', WHITE), 2.85);
+expect('#bbb 最弱 on 白（不达标）', contrast('#BBBBBB', WHITE), 1.92);
+expect('#ccc 占位 on 白（不达标）', contrast('#CCCCCC', WHITE), 1.61);
+expect('#999 on 页面底（不达标）', contrast('#999999', PAGE), 2.63);
+expect('白字 on #FF6B35 按钮（不达标）', contrast(WHITE, '#FF6B35'), 2.84);
+expect('白字 on 渐变亮端 #FFB347（不达标）', contrast(WHITE, '#FFB347'), 1.78);
+expect('收入 #52C41A on 白（不达标）', contrast('#52C41A', WHITE), 2.27);
+expect('支出 #FF4D4F on 白（不达标）', contrast('#FF4D4F', WHITE), 3.27);
+expect('链接 #4A90D9 on 白（不达标）', contrast('#4A90D9', WHITE), 3.34);
+
+// ---------------------------------------------------------------- 2. 品牌橙阶
+section('2. 品牌主色阶（文档 §2.2）—— 按职责分档，白字对比度');
+expect('brand-400 #FF8552 白字', contrast(WHITE, BRAND[400]), 2.41);
+expect('brand-500 #FF6B35 白字（禁放文字）', contrast(WHITE, BRAND[500]), 2.84);
+expect('brand-600 #CF4A12 白字（按钮底）', contrast(WHITE, BRAND[600]), 4.52);
+expect('brand-700 #C7430F 白字（文字/焦点环）', contrast(WHITE, BRAND[700]), 4.95);
+expect('brand-800 #B33A0C 白字（按下态）', contrast(WHITE, BRAND[800]), 5.95);
+expect('brand-900 #8F2E08 白字（渐变暗端）', contrast(WHITE, BRAND[900]), 8.2);
+expect('深墨字 #3D1200 on #FF6B35（备选路线）', contrast('#3D1200', BRAND[500]), 5.76);
+
+// ---------------------------------------------------------------- 3. 辅助色
+section('3. 辅助色（文档 §2.3）');
+expect('info #1D63B8 on 白', contrast('#1D63B8', WHITE), 5.95);
+expect('success #0B8038 on 白', contrast('#0B8038', WHITE), 5.05);
+expect('warning #B45309 on 白', contrast('#B45309', WHITE), 5.02);
+expect('danger #D92D20 on 白', contrast('#D92D20', WHITE), 4.83);
+expect('warning #B45309 ↔ 图表橙 #C2410C 色盲距离', cvd('#B45309', '#C2410C'), 11.7, 0.1);
+
+section('4. 浅底徽标（文档 §2.3 末尾）—— 深字压浅底，独立色值');
+expect('收入徽标 #0B6B33 on #E7F6ED', contrast('#0B6B33', '#E7F6ED'), 5.94);
+expect('支出徽标 #B42318 on #FDECEA', contrast('#B42318', '#FDECEA'), 5.75);
+expect('品牌徽标 #B33A0C on #FFF1EB', contrast('#B33A0C', '#FFF1EB'), 5.4);
+expect('中性徽标 #4A5563 on #EEF1F5', contrast('#4A5563', '#EEF1F5'), 6.69);
+console.log('  \x1b[2m-- 反例：直接复用主语义色会掉下去，这正是要拆徽标色的原因 --\x1b[0m');
+expect('  $income #0B8038 on #E7F6ED（勉强过）', contrast('#0B8038', '#E7F6ED'), 4.52);
+expect('  $expense #D92D20 on #FDECEA（不达标）', contrast('#D92D20', '#FDECEA'), 4.22);
+expect('  $brand-700 #C7430F on #FFF1EB（差 0.01）', contrast('#C7430F', '#FFF1EB'), 4.49);
+
+// ---------------------------------------------------------------- 5. 文字与边界
+section('5. 文字色阶与边界（文档 §2.4 / §2.5）');
+expect('border-input #8A94A6 on 白（控件需 3:1）', contrast('#8A94A6', WHITE), 3.06);
+expect('text-primary #1F2329 on 卡片', contrast('#1F2329', WHITE), 15.78);
+expect('text-primary #1F2329 on 页面底', contrast('#1F2329', PAGE), 14.59);
+expect('text-secondary #5A6472 on 卡片', contrast('#5A6472', WHITE), 6.0);
+expect('text-secondary #5A6472 on 页面底', contrast('#5A6472', PAGE), 5.55);
+expect('text-tertiary #6E7787 on 卡片', contrast('#6E7787', WHITE), 4.51);
+expect('text-tertiary #6E7787 on 页面底', contrast('#6E7787', PAGE), 4.17);
+expect('text-disabled #A8B0BD on 卡片（豁免）', contrast('#A8B0BD', WHITE), 2.19);
+expect('text-disabled #A8B0BD on 页面底（豁免）', contrast('#A8B0BD', PAGE), 2.02);
+
+// ---------------------------------------------------------------- 6. 图表序列
+const SERIES = ['#C2410C', '#1D63B8', '#C2185B', '#0E7C42', '#7C3AED', '#0E7490', '#8A94A6'];
+section('6. 图表 7 色序列（文档 §2.7）');
+{
+  const white = SERIES.map((c) => contrast(c, WHITE));
+  const lo = Math.min(...white);
+  const hi = Math.max(...white);
+  expect('序列对白底最低可见度', lo, 3.06);
+  expect('序列对白底最高可见度', hi, 5.95);
+
+  const adjacent = SERIES.slice(0, -1).map((c, i) => [c, SERIES[i + 1]]);
+  const adjMin = Math.min(...adjacent.map(([a, b]) => cvd(a, b)));
+  const adjWorst = adjacent.reduce((worst, p) => (cvd(...p) < cvd(...worst) ? p : worst));
+  expect('相邻段色盲可区分度最低值（阈值 ≥70）', adjMin, 75.0, 0.1);
+
+  const allMin = Math.min(...pairsOf(SERIES).map(([a, b]) => cvd(a, b)));
+  const allWorst = pairsOf(SERIES).reduce((worst, p) => (cvd(...p) < cvd(...worst) ? p : worst));
+  expect('全组合最小可区分度（不相邻，靠图例兜底）', allMin, 15.6, 0.1);
+
+  console.log(`  \x1b[2m相邻最接近的一对：${adjWorst.join(' ↔ ')}\x1b[0m`);
+  console.log(
+    `  \x1b[2m全组合最接近的一对：${allWorst.join(' ↔ ')}（文档称 品牌橙红 ↔ 品红）\x1b[0m`,
+  );
+  if (allMin >= 40) {
+    failures.push({
+      label: '全组合最小可区分度应低于 40（文档明确标注为需图例兜底）',
+      actual: allMin,
+      expected: '<40',
+      tol: 0,
+    });
+  }
+}
+
+// ---------------------------------------------------------------- 7. 深色模式
+section('7. 深色模式（文档 §5）—— 全部以 bg-card #24272E 为基准');
+console.log(
+  '  \x1b[2m本段曾因底色混用而出错：文档一度同时存在按 #1E2126 与 #22252B 算出的数值。\n' +
+    '  以下断言强制全部以 #24272E 为基准，底色一改就得重算——这正是本节要防的错。\x1b[0m',
+);
+{
+  const DARK_PAGE = '#14161A';
+  const DARK_CARD = '#24272E';
+  expect('bg-card 对 bg-page 的层级对比（需 ≥1.2）', contrast(DARK_CARD, DARK_PAGE), 1.21);
+  expect('divider #31363E on 卡片（装饰，豁免）', contrast('#31363E', DARK_CARD), 1.23);
+  expect('border-input #6B7484 on 卡片（控件需 3:1）', contrast('#6B7484', DARK_CARD), 3.17);
+  expect('text-primary #E8EAED on 卡片', contrast('#E8EAED', DARK_CARD), 12.4);
+  expect('text-secondary #B4BCC8 on 卡片', contrast('#B4BCC8', DARK_CARD), 7.81);
+  expect('text-tertiary #98A1AF on 卡片', contrast('#98A1AF', DARK_CARD), 5.73);
+  expect('text-disabled #5A6270 on 卡片（豁免）', contrast('#5A6270', DARK_CARD), 2.43);
+  expect('brand-700 深色版 #FF8A5B on 卡片', contrast('#FF8A5B', DARK_CARD), 6.43);
+  expect('收入深色版 #3DD68C on 卡片', contrast('#3DD68C', DARK_CARD), 7.97);
+  expect('支出深色版 #FF6B6B on 卡片', contrast('#FF6B6B', DARK_CARD), 5.39);
+
+  // 深色模式的核心论断：亮色 token 不能直接复用
+  console.log('  \x1b[2m-- 反例：亮色 token 直接搬到深色卡片 --\x1b[0m');
+  const reuseBrand = contrast('#C7430F', DARK_CARD);
+  const reuseIncome = contrast('#0B8038', DARK_CARD);
+  console.log(
+    `  \x1b[2m   brand-700 #C7430F → ${reuseBrand.toFixed(2)}:1   收入 #0B8038 → ${reuseIncome.toFixed(2)}:1\x1b[0m`,
+  );
+  for (const [label, value] of [
+    ['#C7430F', reuseBrand],
+    ['#0B8038', reuseIncome],
+  ]) {
+    if (value >= 4.5) {
+      failures.push({
+        label: `深色下直接复用亮色 ${label} 竟达标，文档的“必须提亮”论断存疑`,
+        actual: value,
+        expected: '<4.5',
+        tol: 0,
+      });
+    }
+  }
+}
+
+// ---------------------------------------------------------------- 8. 旧调色板
+section('8. 旧图表调色板体检（文档 §2.7 要求替换的真实理由）');
+{
+  // 真源：frontend/src/components/RingChart.vue 的 8 色数组
+  const OLD = [
+    '#FF6B35',
+    '#4A90D9',
+    '#F5A623',
+    '#7ED321',
+    '#BD10E0',
+    '#50E3C2',
+    '#9B9B9B',
+    '#FF4081',
+  ];
+  const dl = (a, b) => Math.abs(luminance(a) - luminance(b));
+
+  console.log('  \x1b[2m-- 真正混淆的色对（色盲距离 < 40）--\x1b[0m');
+  expect('品牌橙 #FF6B35 ↔ 琥珀 #F5A623', cvd('#FF6B35', '#F5A623'), 17.1, 0.1);
+  expect('琥珀 #F5A623 ↔ 品红 #FF4081', cvd('#F5A623', '#FF4081'), 23.0, 0.1);
+  expect('品牌橙 #FF6B35 ↔ 品红 #FF4081', cvd('#FF6B35', '#FF4081'), 28.1, 0.1);
+  expect('紫 #BD10E0 ↔ 薄荷 #50E3C2', cvd('#BD10E0', '#50E3C2'), 28.6, 0.1);
+  expect('青柠 #7ED321 ↔ 中性灰 #9B9B9B', cvd('#7ED321', '#9B9B9B'), 33.4, 0.1);
+
+  const worst = pairsOf(OLD).reduce((w, p) => (cvd(...p) < cvd(...w) ? p : w));
+  const confusable = pairsOf(OLD).filter(([a, b]) => cvd(a, b) < 40);
+  console.log(
+    `  \x1b[2m旧 ${OLD.length} 色里共有 ${confusable.length} 对在色盲下不可靠，最差一对 ${worst.join(' ↔ ')}\x1b[0m`,
+  );
+  if (confusable.length < 4) {
+    failures.push({
+      label: '旧调色板混淆色对应不少于 4 对（文档论断）',
+      actual: confusable.length,
+      expected: '>=4',
+      tol: 0,
+    });
+  }
+
+  console.log('  \x1b[2m-- 灰度不可辨的色对（ΔL < 0.05）--\x1b[0m');
+  expect('链接蓝 #4A90D9 ↔ 品红 #FF4081 的 ΔL', dl('#4A90D9', '#FF4081'), 0.001, 0.002);
+  expect('品牌橙 #FF6B35 ↔ 中性灰 #9B9B9B 的 ΔL', dl('#FF6B35', '#9B9B9B'), 0.007, 0.002);
+  expect('琥珀 #F5A623 ↔ 青柠 #7ED321 的 ΔL', dl('#F5A623', '#7ED321'), 0.043, 0.002);
+
+  console.log('  \x1b[2m-- 已推翻的旧结论（回归防护：文档不得再声称它们混淆）--\x1b[0m');
+  const greenPair = cvd('#7ED321', '#50E3C2');
+  console.log(
+    `  \x1b[2m   青柠 #7ED321 ↔ 薄荷 #50E3C2 = ${greenPair.toFixed(1)}（旧文档称"色盲下几乎同色"，实为误判）\x1b[0m`,
+  );
+  if (greenPair < 40) {
+    failures.push({
+      label: '青柠↔薄荷 实测应可区分（≥40），否则文档修订有误',
+      actual: greenPair,
+      expected: '>=40',
+      tol: 0,
+    });
+  }
+}
+
+// ---------------------------------------------------------------- 汇总
+console.log(`\n${'─'.repeat(72)}`);
+if (failures.length === 0) {
+  console.log(`\x1b[32m\x1b[1m全部通过\x1b[0m：${passed} 项断言与文档一致。`);
+  console.log('文档中的数值可复现，配色改动后重跑本脚本即可验证。');
+} else {
+  console.log(`\x1b[31m\x1b[1m发现 ${failures.length} 处不一致\x1b[0m（已通过 ${passed} 项）：`);
+  for (const f of failures) {
+    console.log(`  · ${f.label}`);
+    console.log(
+      `      实测 ${typeof f.actual === 'number' ? f.actual.toFixed(2) : f.actual}，文档/预期 ${f.expected}`,
+    );
+  }
+  console.log('\n以上不一致必须二选一处理：改文档，或改色值 —— 不能放着不管。');
+  process.exitCode = 1;
+}

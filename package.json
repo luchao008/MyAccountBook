@@ -18,6 +18,7 @@
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/data-source.ts",
     "seed": "ts-node src/seed/index.ts",
     "seed:all": "ts-node src/seed/index.ts --all",
+    "check:contrast": "node scripts/check-contrast.mjs",
     "postinstall": "patch-package"
   },
   "dependencies": {
