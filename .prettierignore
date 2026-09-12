@@ -1,0 +1,7 @@
+dist
+node_modules
+coverage
+package-lock.json
+*.md
+# frontend/ 是独立的 uni-app 项目，有自己的格式化配置
+frontend

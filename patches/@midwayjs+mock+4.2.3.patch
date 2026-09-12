@@ -1,0 +1,14 @@
+diff --git a/node_modules/@midwayjs/mock/package.json b/node_modules/@midwayjs/mock/package.json
+index 7d18bdd..dae3589 100644
+--- a/node_modules/@midwayjs/mock/package.json
++++ b/node_modules/@midwayjs/mock/package.json
+@@ -23,7 +23,8 @@
+       "types": "./dist/rspack.d.ts",
+       "require": "./dist/rspack.js",
+       "import": "./dist/rspack.js"
+-    }
++    },
++    "./package.json": "./package.json"
+   },
+   "scripts": {
+     "build": "tsc",

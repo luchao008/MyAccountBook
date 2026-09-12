@@ -1,0 +1,17 @@
+node_modules/
+dist/
+logs/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+*.tsbuildinfo
+
+# uni-app 构建输出（旧版 CLI 产物目录）
+unpackage/
+
+# 智能体工作目录：内容与 memo/ 重复，项目记忆以 memo/ 为准
+.workbuddy/
