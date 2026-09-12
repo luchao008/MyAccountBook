@@ -21,6 +21,8 @@
  * 零依赖，纯 Node ESM。
  */
 
+import { readFileSync, readdirSync } from 'fs';
+
 // ---------------------------------------------------------------- 基础计算
 
 /** '#RGB' 或 '#RRGGBB' → [r, g, b] */
@@ -294,6 +296,197 @@ section('8. 旧图表调色板体检（文档 §2.7 要求替换的真实理由�
       expected: '>=40',
       tol: 0,
     });
+  }
+}
+
+// ---------------------------------------------------------------- 9. token 文件自洽
+section('9. token 文件自洽性（frontend/src/styles/tokens.scss）');
+{
+  const tokensPath = new URL('../frontend/src/styles/tokens.scss', import.meta.url);
+  const tokenLines = readFileSync(tokensPath, 'utf8').split('\n');
+
+  /**
+   * 逐条校验三类事实，缺一不可：
+   *   ① 变量声明的色值 == 预期；② 行尾注释里写的对比度 == 预期；③ 重算结果 == 预期
+   * 只查①会漏掉「数字陈旧」，只查③会漏掉「注释是假的」——本项目两种都踩过。
+   */
+  const TOKEN_CHECKS = [
+    ['$brand-400', '#ff8552', 2.41, WHITE],
+    ['$brand-500', '#ff6b35', 2.84, WHITE],
+    ['$brand-600', '#cf4a12', 4.52, WHITE],
+    ['$brand-700', '#c7430f', 4.95, WHITE],
+    ['$brand-800', '#b33a0c', 5.95, WHITE],
+    ['$brand-900', '#8f2e08', 8.2, WHITE],
+    ['$brand-ink', '#3d1200', 5.76, '#ff6b35'],
+    ['$info', '#1d63b8', 5.95, WHITE],
+    ['$success', '#0b8038', 5.05, WHITE],
+    ['$warning', '#b45309', 5.02, WHITE],
+    ['$danger', '#d92d20', 4.83, WHITE],
+    ['$badge-income-text', '#0b6b33', 5.94, '#e7f6ed'],
+    ['$badge-expense-text', '#b42318', 5.75, '#fdecea'],
+    ['$badge-brand-text', '#b33a0c', 5.4, '#fff1eb'],
+    ['$badge-neutral-text', '#4a5563', 6.69, '#eef1f5'],
+    ['$border-input', '#8a94a6', 3.06, WHITE],
+    ['$text-primary', '#1f2329', 15.78, WHITE],
+    ['$text-secondary', '#5a6472', 6.0, WHITE],
+    ['$text-tertiary', '#6e7787', 4.51, WHITE],
+    ['$text-disabled', '#a8b0bd', 2.19, WHITE],
+    ['$income', '#0b8038', 5.05, WHITE],
+    ['$expense', '#d92d20', 4.83, WHITE],
+    ['$dark-bg-card', '#24272e', 1.21, '#14161a'],
+    ['$dark-divider', '#31363e', 1.23, '#24272e'],
+    ['$dark-border-input', '#6b7484', 3.17, '#24272e'],
+    ['$dark-text-primary', '#e8eaed', 12.4, '#24272e'],
+    ['$dark-text-secondary', '#b4bcc8', 7.81, '#24272e'],
+    ['$dark-text-tertiary', '#98a1af', 5.73, '#24272e'],
+    ['$dark-text-disabled', '#5a6270', 2.43, '#24272e'],
+    ['$dark-brand', '#ff8a5b', 6.43, '#24272e'],
+    ['$dark-income', '#3dd68c', 7.97, '#24272e'],
+    ['$dark-expense', '#ff6b6b', 5.39, '#24272e'],
+  ];
+
+  for (const [varName, hex, claimed, bg] of TOKEN_CHECKS) {
+    const idx = tokenLines.findIndex((l) =>
+      new RegExp('^' + varName.replace('$', '\\$') + ':').test(l.trim()),
+    );
+    const line = idx >= 0 ? tokenLines[idx] : null;
+    if (!line) {
+      failures.push({ label: `tokens.scss 缺少 ${varName}`, actual: 'missing', expected: hex, tol: 0 });
+      console.log(`  \x1b[31m❌ MISMATCH\x1b[0m  ${varName.padEnd(24)} 未找到声明`);
+      continue;
+    }
+    const hexOk = (line.match(/#[0-9a-fA-F]{6}/) || [''])[0].toLowerCase() === hex;
+    // 对比度可以写在同一行，也可以写在上一行的说明注释里
+    const sameLine = (line.match(/(\d+\.\d+):1/) || [])[1];
+    const prevLine = idx > 0 ? (tokenLines[idx - 1].match(/(\d+\.\d+):1/) || [])[1] : undefined;
+    const comment = sameLine ?? prevLine;
+    const commentOk = comment !== undefined && Math.abs(Number(comment) - claimed) <= 0.005;
+    const real = contrast(hex, bg);
+    const realOk = Math.abs(real - claimed) <= 0.005;
+    const ok = hexOk && commentOk && realOk;
+    if (!ok) {
+      failures.push({
+        label: `${varName} 自洽性（色值/注释/实测）`,
+        actual: `hex=${hexOk ? 'ok' : 'NG'} 注释=${comment ?? '无'} 实测=${real.toFixed(2)}`,
+        expected: `${hex} / ${claimed}`,
+        tol: 0,
+      });
+    } else {
+      passed += 1;
+    }
+    console.log(
+      `  ${ok ? '\x1b[32m✅\x1b[0m' : '\x1b[31m❌ MISMATCH\x1b[0m'}  ${varName.padEnd(24)} ${hex}  注释 ${String(
+        comment ?? '—',
+      ).padStart(5)}  实测 ${real.toFixed(2)}`,
+    );
+  }
+}
+
+// ---------------------------------------------------------------- 10. 跨文件重复
+section('10. 图表配色跨文件一致性（SCSS 变量 ↔ TS 常量）');
+{
+  const tokensSrc = readFileSync(
+    new URL('../frontend/src/styles/tokens.scss', import.meta.url),
+    'utf8',
+  );
+  const chartSrc = readFileSync(
+    new URL('../frontend/src/constants/chart.ts', import.meta.url),
+    'utf8',
+  );
+
+  const seriesBlock = tokensSrc.match(/\$chart-series:\s*\(([\s\S]*?)\);/);
+  const scssSeries = (seriesBlock ? seriesBlock[1].match(/#[0-9a-fA-F]{6}/g) : []).map((c) =>
+    c.toLowerCase(),
+  );
+  const tsSeries = (chartSrc.match(/'#[0-9a-fA-F]{6}'/g) || []).map((c) =>
+    c.replace(/'/g, '').toLowerCase(),
+  );
+
+  console.log(`  \x1b[2mSCSS $chart-series 共 ${scssSeries.length} 色；TS CHART_SERIES 共 ${tsSeries.length} 色\x1b[0m`);
+  const same =
+    scssSeries.length > 0 && scssSeries.length === tsSeries.length && scssSeries.every((c, i) => c === tsSeries[i]);
+  if (same) passed += 1;
+  else
+    failures.push({
+      label: 'SCSS $chart-series 与 TS CHART_SERIES 不一致（双写必须同步）',
+      actual: scssSeries.join(',') || '(未解析到)',
+      expected: tsSeries.join(','),
+      tol: 0,
+    });
+  console.log(`  ${same ? '\x1b[32m✅\x1b[0m' : '\x1b[31m❌ MISMATCH\x1b[0m'}  两处色序完全一致`);
+
+  // 序列的「可承载白字」契约：前 6 色成立、第 7 色（中性灰）不成立
+  const solid = tsSeries.slice(0, 6).map((c) => contrast(c, WHITE));
+  const muted = contrast(tsSeries[6] ?? '#8a94a6', WHITE);
+  const solidMin = Math.min(...solid);
+  expect('可承载白字的实心序列最低值（首页区间图标依赖）', solidMin, 5.18, 0.01);
+  expect('中性灰（仅供图表填充，禁放白字）', muted, 3.06, 0.01);
+  console.log(
+    `  \x1b[2m   实心序列：${solid.map((v) => v.toFixed(2)).join(' / ')}\x1b[0m`,
+  );
+}
+
+// ---------------------------------------------------------------- 11. 旧色值残留
+section('11. 旧色值残留扫描（迁移回归防护）');
+{
+  const LEGACY = [
+    '#ff6b35',
+    '#52c41a',
+    '#ff4d4f',
+    '#4a90d9',
+    '#ff9563',
+    '#ffb347',
+    '#ffb98a',
+    '#fff1eb',
+    '#f5f5f5',
+    '#f2f3f5',
+    '#f0f0f0',
+    '#f7f8fa',
+    '#f7f7f8',
+    '#fafafa',
+    '#eee',
+    '#eceff3',
+    '#e55a28',
+    '#c0c4cc',
+    '#ddd',
+    '#bbb',
+    '#ccc',
+    '#999',
+    '#666',
+    '#333',
+  ];
+  const root = new URL('../frontend/src/', import.meta.url);
+  const walk = (dir) =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = new URL(e.name + (e.isDirectory() ? '/' : ''), dir);
+      if (e.isDirectory()) return walk(p);
+      return e.name.endsWith('.vue') ? [p] : [];
+    });
+
+  const hits = [];
+  for (const file of walk(root)) {
+    const text = readFileSync(file, 'utf8');
+    text.split('\n').forEach((line, i) => {
+      for (const m of line.match(/#[0-9a-fA-F]{3,8}\b/g) || []) {
+        if (LEGACY.includes(m.toLowerCase())) {
+          hits.push(`${file.pathname.split('/frontend/src/')[1]}:${i + 1}  ${m}`);
+        }
+      }
+    });
+  }
+
+  if (hits.length === 0) {
+    passed += 1;
+    console.log('  \x1b[32m✅\x1b[0m  .vue 文件中旧色值零残留（全部走 token / 常量）');
+  } else {
+    failures.push({
+      label: `.vue 中残留旧色值 ${hits.length} 处`,
+      actual: hits.slice(0, 8).join(' | '),
+      expected: '0（应改走 token 或 constants/chart.ts）',
+      tol: 0,
+    });
+    console.log(`  \x1b[31m❌ MISMATCH\x1b[0m  残留 ${hits.length} 处：`);
+    for (const h of hits.slice(0, 12)) console.log(`      ${h}`);
   }
 }
 

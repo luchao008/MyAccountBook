@@ -38,7 +38,7 @@
       <!-- 时刻开关 -->
       <view class="time-row">
         <text class="time-label">时刻</text>
-        <switch :checked="timeEnabled" color="#FF6B35" @change="onTimeSwitch" />
+        <switch :checked="timeEnabled" color="#CF4A12" @change="onTimeSwitch" />
       </view>
 
       <!-- 时分滚轮 -->
@@ -193,7 +193,7 @@ watch(
 );
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .mask {
   position: fixed;
   inset: 0;
@@ -205,7 +205,7 @@ watch(
 }
 
 .sheet {
-  background: #fff;
+  background: $bg-card;
   border-radius: 16px 16px 0 0;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
 }
@@ -219,7 +219,7 @@ watch(
 
 .done {
   font-size: 15px;
-  color: #ff6b35;
+  color: $brand-700;
   font-weight: 500;
   padding: 4px 8px;
 }
@@ -240,7 +240,7 @@ watch(
   width: 40px;
   text-align: center;
   font-size: 20px;
-  color: #999;
+  color: $text-tertiary;
   padding: 2px 0;
 }
 
@@ -249,7 +249,7 @@ watch(
   text-align: center;
   font-size: 16px;
   font-weight: 600;
-  color: #333;
+  color: $text-primary;
 }
 
 .week-row {
@@ -261,7 +261,7 @@ watch(
   flex: 1;
   text-align: center;
   font-size: 12px;
-  color: #999;
+  color: $text-tertiary;
 }
 
 .day-grid {
@@ -287,31 +287,31 @@ watch(
 }
 
 .day:active {
-  background: #f5f5f5;
+  background: $bg-subtle;
 }
 
 .day-text {
   font-size: 15px;
-  color: #333;
+  color: $text-primary;
 }
 
 /* 今天：橙色圆底白字（未选中时） */
 .today {
-  background: #ffb98a;
+  background: $brand-100;
 }
 
 .today .day-text {
-  color: #fff;
+  color: $brand-800;
 }
 
 /* 选中：实心橙 */
 .selected {
-  background: #ff6b35;
-  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.35);
+  background: $brand-600;
+  box-shadow: 0 2px 8px $shadow-brand-soft;
 }
 
 .selected .day-text {
-  color: #fff;
+  color: $text-inverse;
   font-weight: 600;
 }
 
@@ -321,13 +321,13 @@ watch(
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  border-top: 1px solid #f5f5f5;
+  border-top: 1px solid $divider;
   margin-top: 8px;
 }
 
 .time-label {
   font-size: 15px;
-  color: #333;
+  color: $text-primary;
 }
 
 .wheel {
@@ -339,6 +339,6 @@ watch(
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  color: #333;
+  color: $text-primary;
 }
 </style>

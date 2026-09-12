@@ -264,22 +264,22 @@ async function execMerge(source: AccountItem, target: AccountItem) {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .page {
   min-height: 100vh;
-  background: #f5f6f8;
+  background: $bg-page;
   padding: 16px;
 }
 
 .list {
-  background: #fff;
+  background: $bg-card;
   border-radius: 12px;
   overflow: hidden;
 }
 
 .list-item {
   padding: 14px 16px;
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid $divider;
 }
 
 .list-item:last-child {
@@ -293,15 +293,15 @@ async function execMerge(source: AccountItem, target: AccountItem) {
 
 .item-name {
   font-size: 16px;
-  color: #333;
+  color: $text-primary;
   font-weight: 500;
 }
 
 .badge {
   margin-left: 8px;
   font-size: 11px;
-  color: #ff6b35;
-  background: #fff1eb;
+  color: $badge-brand-text;
+  background: $badge-brand-bg;
   border-radius: 8px;
   padding: 1px 8px;
 }
@@ -309,7 +309,7 @@ async function execMerge(source: AccountItem, target: AccountItem) {
 .item-meta {
   display: block;
   font-size: 12px;
-  color: #bbb;
+  color: $text-tertiary;
   margin-top: 4px;
 }
 
@@ -321,18 +321,18 @@ async function execMerge(source: AccountItem, target: AccountItem) {
 
 .action {
   font-size: 13px;
-  color: #4a90d9;
+  color: $info;
   margin-right: 16px;
   padding: 2px 0;
 }
 
 .danger {
-  color: #ff4d4f;
+  color: $expense;
 }
 
 .add-box {
   margin-top: 16px;
-  background: #fff;
+  background: $bg-card;
   border-radius: 12px;
   padding: 16px;
 }
@@ -345,7 +345,7 @@ async function execMerge(source: AccountItem, target: AccountItem) {
 .input {
   flex: 1;
   height: 40px;
-  background: #f7f8fa;
+  background: $bg-subtle;
   border-radius: 8px;
   padding: 0 12px;
   font-size: 15px;
@@ -356,8 +356,8 @@ async function execMerge(source: AccountItem, target: AccountItem) {
   padding: 0 16px;
   height: 40px;
   line-height: 40px;
-  background: #ff6b35;
-  color: #fff;
+  background: $brand-600;
+  color: $text-inverse;
   border-radius: 8px;
   font-size: 14px;
 }
@@ -366,20 +366,20 @@ async function execMerge(source: AccountItem, target: AccountItem) {
   display: block;
   margin-top: 12px;
   font-size: 12px;
-  color: #bbb;
+  color: $text-tertiary;
   line-height: 1.6;
 }
 
 .rules {
   margin-top: 16px;
-  background: #fff;
+  background: $bg-card;
   border-radius: 12px;
   padding: 16px;
 }
 
 .rules-title {
   font-size: 14px;
-  color: #333;
+  color: $text-primary;
   font-weight: 500;
 }
 
@@ -387,7 +387,7 @@ async function execMerge(source: AccountItem, target: AccountItem) {
   display: block;
   margin-top: 8px;
   font-size: 12px;
-  color: #999;
+  color: $text-tertiary;
   line-height: 1.7;
 }
 </style>

@@ -231,16 +231,16 @@ function onDelete() {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .page {
   min-height: 100vh;
-  background: #f5f6f8;
+  background: $bg-page;
   padding: 16px 16px 280px;
 }
 
 .type-switch {
   display: flex;
-  background: #fff;
+  background: $bg-card;
   border-radius: 12px;
   padding: 4px;
   margin-bottom: 16px;
@@ -251,18 +251,18 @@ function onDelete() {
   text-align: center;
   padding: 10px 0;
   font-size: 15px;
-  color: #666;
+  color: $text-secondary;
   border-radius: 8px;
 }
 
 .type-btn.active {
-  background: #ff6b35;
-  color: #fff;
+  background: $brand-600;
+  color: $text-inverse;
   font-weight: 500;
 }
 
 .amount-box {
-  background: #fff;
+  background: $bg-card;
   border-radius: 12px;
   padding: 24px 20px;
   display: flex;
@@ -272,18 +272,18 @@ function onDelete() {
 
 .currency {
   font-size: 20px;
-  color: #333;
+  color: $text-primary;
   margin-right: 4px;
 }
 
 .amount {
   font-size: 36px;
   font-weight: 600;
-  color: #333;
+  color: $text-primary;
 }
 
 .panel {
-  background: #fff;
+  background: $bg-card;
   border-radius: 12px;
   padding: 4px 16px;
   margin-top: 16px;
@@ -293,7 +293,7 @@ function onDelete() {
   display: flex;
   align-items: center;
   padding: 14px 0;
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid $divider;
 }
 
 .row:last-child {
@@ -303,40 +303,40 @@ function onDelete() {
 .row-label {
   width: 56px;
   font-size: 15px;
-  color: #333;
+  color: $text-primary;
   flex-shrink: 0;
 }
 
 .row-value {
   flex: 1;
   font-size: 15px;
-  color: #333;
+  color: $text-primary;
 }
 
 .placeholder {
-  color: #bbb;
+  color: $text-tertiary;
 }
 
 .row-arrow {
-  color: #ccc;
+  color: $text-tertiary;
   font-size: 18px;
   margin-left: 6px;
 }
 
 .picker {
   font-size: 15px;
-  color: #4a90d9;
+  color: $info;
 }
 
 .note-input {
   flex: 1;
   font-size: 15px;
-  color: #333;
+  color: $text-primary;
 }
 
 .delete-box {
   margin-top: 16px;
-  background: #fff;
+  background: $bg-card;
   border-radius: 12px;
   padding: 16px;
   text-align: center;
@@ -344,7 +344,7 @@ function onDelete() {
 
 .delete-text {
   font-size: 15px;
-  color: #ff4d4f;
+  color: $expense;
 }
 
 .keyboard-fixed {

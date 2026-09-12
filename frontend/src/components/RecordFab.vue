@@ -22,7 +22,7 @@ function go() {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .fab-wrap {
   position: fixed;
   left: 50%;
@@ -40,20 +40,20 @@ function go() {
   width: 54px;
   height: 54px;
   border-radius: 50%;
-  background: #ff6b35;
-  border: 3px solid #ffffff;
+  background: $brand-600;
+  border: 3px solid $bg-card;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
+  box-shadow: 0 4px 12px $shadow-brand-glow;
 }
 
 .fab:active {
-  background: #e55a28;
+  background: $brand-800;
 }
 
 .fab-plus {
-  color: #fff;
+  color: $text-inverse;
   font-size: 28px;
   line-height: 1;
   margin-top: -2px;
@@ -61,7 +61,7 @@ function go() {
 
 .fab-label {
   font-size: 11px;
-  color: #ff6b35;
+  color: $brand-700;
   margin-top: 1px;
 }
 </style>

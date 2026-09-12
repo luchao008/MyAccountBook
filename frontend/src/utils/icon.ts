@@ -44,8 +44,14 @@ export function iconOf(key?: string | null): string {
   return ICON_MAP[key] || DEFAULT_ICON;
 }
 
-/** 记账应用主色 */
-export const THEME_COLOR = '#FF6B35';
+/**
+ * 记账应用主色。
+ * ⚠️ 取实心按钮底（白字 4.52:1）。装饰用色是 #ff6b35，可承载文字的深阶是 #c7430f，
+ *    三档职责见 docs/移动端配色与字体方案.md §2.2。
+ * ⚠️ 实测：以下三个常量**当前全项目无引用**（历史遗留）。保留是为了不破坏对外导出，
+ *    但它们与 tokens.scss 是重复定义，将来要加「主色」相关常量请优先从 token 取。
+ */
+export const THEME_COLOR = '#CF4A12';
 /** 支出红、收入绿（符合国内记账习惯） */
-export const COLOR_EXPENSE = '#FF4D4F';
-export const COLOR_INCOME = '#52C41A';
+export const COLOR_EXPENSE = '#D92D20';
+export const COLOR_INCOME = '#0B8038';

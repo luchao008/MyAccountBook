@@ -76,21 +76,21 @@ function onLogout() {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .page {
   min-height: 100vh;
-  background: #f5f6f8;
+  background: $bg-page;
   padding: 16px;
   padding-bottom: calc(80px + env(safe-area-inset-bottom));
 }
 
 .user-card {
-  background: linear-gradient(135deg, #ff6b35, #ff9563);
+  background: $gradient-banner;
   border-radius: 16px;
   padding: 24px 20px;
   display: flex;
   align-items: center;
-  color: #fff;
+  color: $text-inverse;
 }
 
 .avatar {
@@ -121,13 +121,12 @@ function onLogout() {
 
 .user-id {
   font-size: 12px;
-  opacity: 0.85;
   margin-top: 4px;
 }
 
 .menu {
   margin-top: 16px;
-  background: #fff;
+  background: $bg-card;
   border-radius: 12px;
 }
 
@@ -135,7 +134,7 @@ function onLogout() {
   display: flex;
   align-items: center;
   padding: 16px;
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid $divider;
 }
 
 .menu-item:last-child {
@@ -150,17 +149,17 @@ function onLogout() {
   flex: 1;
   margin-left: 12px;
   font-size: 15px;
-  color: #333;
+  color: $text-primary;
 }
 
 .menu-hint {
   font-size: 13px;
-  color: #bbb;
+  color: $text-tertiary;
   margin-right: 6px;
 }
 
 .menu-arrow {
-  color: #ccc;
+  color: $text-tertiary;
   font-size: 18px;
 }
 
@@ -169,8 +168,8 @@ function onLogout() {
 }
 
 .logout {
-  background: #fff;
-  color: #ff4d4f;
+  background: $bg-card;
+  color: $expense;
   font-size: 16px;
   border-radius: 24px;
   height: 48px;

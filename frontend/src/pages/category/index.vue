@@ -163,17 +163,17 @@ function onDelete(item: CategoryItem, childCount: number) {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .page {
   min-height: 100vh;
-  background: #f5f6f8;
+  background: $bg-page;
   padding: 16px;
   padding-bottom: calc(24px + env(safe-area-inset-bottom));
 }
 
 .type-switch {
   display: flex;
-  background: #fff;
+  background: $bg-card;
   border-radius: 12px;
   padding: 4px;
   margin-bottom: 16px;
@@ -184,18 +184,18 @@ function onDelete(item: CategoryItem, childCount: number) {
   text-align: center;
   padding: 10px 0;
   font-size: 15px;
-  color: #666;
+  color: $text-secondary;
   border-radius: 8px;
 }
 
 .type-btn.active {
-  background: #ff6b35;
-  color: #fff;
+  background: $brand-600;
+  color: $text-inverse;
   font-weight: 500;
 }
 
 .group {
-  background: #fff;
+  background: $bg-card;
   border-radius: 14px;
   margin-bottom: 12px;
   overflow: hidden;
@@ -210,7 +210,7 @@ function onDelete(item: CategoryItem, childCount: number) {
 .caret {
   width: 18px;
   font-size: 14px;
-  color: #bbb;
+  color: $text-tertiary;
   transition: transform 0.2s;
 }
 
@@ -227,14 +227,14 @@ function onDelete(item: CategoryItem, childCount: number) {
   flex: 1;
   margin-left: 10px;
   font-size: 15px;
-  color: #333;
+  color: $text-primary;
   font-weight: 500;
 }
 
 .group-count {
   font-size: 12px;
-  color: #bbb;
-  background: #f5f5f5;
+  color: $badge-neutral-text;
+  background: $badge-neutral-bg;
   border-radius: 9px;
   padding: 1px 8px;
   margin-right: 10px;
@@ -242,14 +242,14 @@ function onDelete(item: CategoryItem, childCount: number) {
 
 .children {
   padding: 0 16px 8px 38px;
-  border-top: 1px solid #f7f7f8;
+  border-top: 1px solid $divider;
 }
 
 .child-row {
   display: flex;
   align-items: center;
   padding: 12px 0;
-  border-bottom: 1px solid #fafafa;
+  border-bottom: 1px solid $divider;
 }
 
 .child-icon {
@@ -260,12 +260,12 @@ function onDelete(item: CategoryItem, childCount: number) {
   flex: 1;
   margin-left: 10px;
   font-size: 14px;
-  color: #555;
+  color: $text-secondary;
 }
 
 .action {
   font-size: 13px;
-  color: #ff4d4f;
+  color: $expense;
   padding: 2px 0;
 }
 
@@ -278,18 +278,18 @@ function onDelete(item: CategoryItem, childCount: number) {
 
 .add-child-icon {
   font-size: 14px;
-  color: #ff6b35;
+  color: $brand-700;
   margin-right: 4px;
 }
 
 .add-child-text {
   font-size: 13px;
-  color: #ff6b35;
+  color: $brand-700;
 }
 
 .add-box {
   margin-top: 16px;
-  background: #fff;
+  background: $bg-card;
   border-radius: 14px;
   padding: 16px;
 }
@@ -302,7 +302,7 @@ function onDelete(item: CategoryItem, childCount: number) {
 .input {
   flex: 1;
   height: 40px;
-  background: #f7f8fa;
+  background: $bg-subtle;
   border-radius: 8px;
   padding: 0 12px;
   font-size: 15px;
@@ -313,8 +313,8 @@ function onDelete(item: CategoryItem, childCount: number) {
   padding: 0 16px;
   height: 40px;
   line-height: 40px;
-  background: #ff6b35;
-  color: #fff;
+  background: $brand-600;
+  color: $text-inverse;
   border-radius: 8px;
   font-size: 14px;
 }
@@ -323,7 +323,7 @@ function onDelete(item: CategoryItem, childCount: number) {
   display: block;
   margin-top: 12px;
   font-size: 12px;
-  color: #bbb;
+  color: $text-tertiary;
   line-height: 1.6;
 }
 </style>

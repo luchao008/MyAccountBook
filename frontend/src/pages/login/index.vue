@@ -81,10 +81,10 @@ async function submit() {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .page {
   min-height: 100vh;
-  background: linear-gradient(180deg, #fff1eb 0%, #f5f6f8 40%);
+  background: linear-gradient(180deg, $brand-50 0%, $bg-page 40%);
   padding: 0 32px;
 }
 
@@ -103,18 +103,18 @@ async function submit() {
 .title {
   font-size: 28px;
   font-weight: 600;
-  color: #333;
+  color: $text-primary;
   margin-top: 12px;
 }
 
 .subtitle {
   font-size: 14px;
-  color: #999;
+  color: $text-secondary;
   margin-top: 8px;
 }
 
 .form {
-  background: #fff;
+  background: $bg-card;
   border-radius: 16px;
   padding: 24px 20px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
@@ -126,8 +126,8 @@ async function submit() {
 
 .submit {
   margin-top: 12px;
-  background: #ff6b35;
-  color: #fff;
+  background: $brand-600;
+  color: $text-inverse;
   border-radius: 24px;
   font-size: 16px;
   height: 48px;
@@ -145,7 +145,7 @@ async function submit() {
 
 .switch-text {
   font-size: 14px;
-  color: #4a90d9;
+  color: $info;
 }
 
 .tip {
@@ -155,6 +155,6 @@ async function submit() {
 
 .tip-text {
   font-size: 12px;
-  color: #bbb;
+  color: $text-secondary;
 }
 </style>

@@ -117,8 +117,8 @@ const loadMoreText = {
 };
 
 const swipeOptions = [
-  { text: '编辑', style: { backgroundColor: '#4A90D9' } },
-  { text: '删除', style: { backgroundColor: '#FF4D4F' } },
+  { text: '编辑', style: { backgroundColor: '#1D63B8' } },
+  { text: '删除', style: { backgroundColor: '#D92D20' } },
 ];
 
 function currentMonth(): string {
@@ -239,10 +239,10 @@ onReachBottom(() => {
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .page {
   min-height: 100vh;
-  background: #f5f6f8;
+  background: $bg-page;
   padding-bottom: calc(72px + env(safe-area-inset-bottom));
 }
 
@@ -250,25 +250,25 @@ onReachBottom(() => {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: #fff;
+  background: $bg-card;
   padding: 12px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid $divider;
 }
 
 .filter-item {
   display: flex;
   align-items: center;
   font-size: 15px;
-  color: #333;
+  color: $text-primary;
   font-weight: 500;
 }
 
 .arrow {
   font-size: 12px;
-  color: #999;
+  color: $text-tertiary;
   margin-left: 4px;
 }
 
@@ -280,40 +280,40 @@ onReachBottom(() => {
   padding: 4px 12px;
   margin-left: 8px;
   font-size: 13px;
-  color: #666;
-  background: #f5f5f5;
+  color: $text-secondary;
+  background: $bg-subtle;
   border-radius: 12px;
 }
 
 .tab.active {
-  background: #ff6b35;
-  color: #fff;
+  background: $brand-600;
+  color: $text-inverse;
 }
 
 .summary {
   padding: 12px 16px;
-  background: #fff;
+  background: $bg-card;
   margin-bottom: 8px;
 }
 
 .summary-text {
   font-size: 13px;
-  color: #666;
+  color: $text-secondary;
 }
 
 .list-item {
   display: flex;
   align-items: center;
   padding: 14px 16px;
-  background: #fff;
-  border-bottom: 1px solid #f5f5f5;
+  background: $bg-card;
+  border-bottom: 1px solid $divider;
 }
 
 .item-icon {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #f7f8fa;
+  background: $bg-subtle;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -329,12 +329,12 @@ onReachBottom(() => {
 
 .item-name {
   font-size: 15px;
-  color: #333;
+  color: $text-primary;
 }
 
 .item-meta {
   font-size: 12px;
-  color: #999;
+  color: $text-tertiary;
   margin-top: 2px;
 }
 
@@ -344,17 +344,17 @@ onReachBottom(() => {
 }
 
 .income {
-  color: #52c41a;
+  color: $income;
 }
 
 .expense {
-  color: #ff4d4f;
+  color: $expense;
 }
 
 .tip {
   text-align: center;
   padding: 24px 0;
-  color: #999;
+  color: $text-secondary;
   font-size: 13px;
 }
 </style>

@@ -6,15 +6,14 @@ onLaunch(() => {
 });
 </script>
 
-<style>
+<style lang="scss">
 /* 全局样式（不加 scoped，作用于所有页面） */
 
 page {
-  background-color: #f5f6f8;
-  color: #333;
-  font-size: 15px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC',
-    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background-color: $bg-page;
+  color: $text-primary;
+  font-size: $font-body;
+  font-family: $font-family-base;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -34,7 +33,7 @@ button::after {
 
 /* 输入框占位符颜色统一 */
 input::-webkit-input-placeholder {
-  color: #c0c4cc;
+  color: $text-tertiary;
 }
 
 /* #ifdef H5 */

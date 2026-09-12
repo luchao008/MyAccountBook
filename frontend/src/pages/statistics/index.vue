@@ -86,19 +86,11 @@ import EmptyState from '@/components/EmptyState.vue';
 import RecordFab from '@/components/RecordFab.vue';
 import { useAccountStore } from '@/store/account';
 import { getMonthlyStat, getCategoryStat, type CategoryStatItem } from '@/api/statistics';
+import { CHART_SERIES } from '@/constants/chart';
 
 const accountStore = useAccountStore();
 
-const palette = [
-  '#FF6B35',
-  '#4A90D9',
-  '#F5A623',
-  '#7ED321',
-  '#BD10E0',
-  '#50E3C2',
-  '#9B9B9B',
-  '#FF4081',
-];
+const palette = [...CHART_SERIES];
 
 const month = ref(currentMonth());
 const type = ref<'income' | 'expense'>('expense');
@@ -165,10 +157,10 @@ onShow(async () => {
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .page {
   min-height: 100vh;
-  background: #f5f6f8;
+  background: $bg-page;
   padding: 16px;
   padding-bottom: calc(80px + env(safe-area-inset-bottom));
 }
@@ -177,7 +169,7 @@ onShow(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #fff;
+  background: $bg-card;
   border-radius: 12px;
   padding: 12px;
   margin-bottom: 16px;
@@ -187,7 +179,7 @@ onShow(async () => {
   width: 40px;
   text-align: center;
   font-size: 22px;
-  color: #999;
+  color: $text-tertiary;
 }
 
 .month-text {
@@ -195,12 +187,12 @@ onShow(async () => {
   text-align: center;
   font-size: 16px;
   font-weight: 500;
-  color: #333;
+  color: $text-primary;
 }
 
 .summary {
   display: flex;
-  background: #fff;
+  background: $bg-card;
   border-radius: 12px;
   padding: 20px 0;
   margin-bottom: 16px;
@@ -212,7 +204,7 @@ onShow(async () => {
 
 .account-line-text {
   font-size: 13px;
-  color: #666;
+  color: $text-secondary;
 }
 
 .summary-item {
@@ -224,26 +216,26 @@ onShow(async () => {
 
 .label {
   font-size: 12px;
-  color: #999;
+  color: $text-tertiary;
 }
 
 .value {
   font-size: 18px;
   font-weight: 600;
-  color: #333;
+  color: $text-primary;
   margin-top: 4px;
 }
 
 .income {
-  color: #52c41a;
+  color: $income;
 }
 
 .expense {
-  color: #ff4d4f;
+  color: $expense;
 }
 
 .panel {
-  background: #fff;
+  background: $bg-card;
   border-radius: 12px;
   padding: 16px;
 }
@@ -258,7 +250,7 @@ onShow(async () => {
 .panel-title {
   font-size: 16px;
   font-weight: 600;
-  color: #333;
+  color: $text-primary;
 }
 
 .type-tabs {
@@ -269,14 +261,14 @@ onShow(async () => {
   padding: 4px 12px;
   margin-left: 8px;
   font-size: 13px;
-  color: #666;
-  background: #f5f5f5;
+  color: $text-secondary;
+  background: $bg-subtle;
   border-radius: 12px;
 }
 
 .tab.active {
-  background: #ff6b35;
-  color: #fff;
+  background: $brand-600;
+  color: $text-inverse;
 }
 
 .chart-area {
@@ -294,7 +286,7 @@ onShow(async () => {
   display: flex;
   align-items: center;
   padding: 8px 0;
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid $divider;
 }
 
 .legend-item:last-child {
@@ -311,12 +303,12 @@ onShow(async () => {
 .legend-name {
   flex: 1;
   font-size: 14px;
-  color: #333;
+  color: $text-primary;
 }
 
 .legend-sum {
   font-size: 14px;
-  color: #666;
+  color: $text-secondary;
   margin-right: 12px;
 }
 
@@ -324,13 +316,13 @@ onShow(async () => {
   width: 56px;
   text-align: right;
   font-size: 13px;
-  color: #999;
+  color: $text-tertiary;
 }
 
 .empty {
   text-align: center;
   padding: 40px 0;
-  color: #999;
+  color: $text-tertiary;
   font-size: 13px;
 }
 </style>

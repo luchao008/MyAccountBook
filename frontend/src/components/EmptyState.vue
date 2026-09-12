@@ -27,7 +27,7 @@ const emit = defineEmits<{
 }>();
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .empty {
   display: flex;
   flex-direction: column;
@@ -43,7 +43,9 @@ const emit = defineEmits<{
 
 .text {
   font-size: 14px;
-  color: #999;
+  // 用 secondary 而非 tertiary：本组件是复用的，父容器可能是白卡也可能是页面底
+  // （detail 页就挂在页面底上），tertiary 压页面底只有 4.17:1，不达标
+  color: $text-secondary;
   margin-top: 12px;
   text-align: center;
   line-height: 1.6;
@@ -52,12 +54,12 @@ const emit = defineEmits<{
 .btn {
   margin-top: 20px;
   padding: 8px 24px;
-  background: #ff6b35;
+  background: $brand-600;
   border-radius: 20px;
 }
 
 .btn-text {
   font-size: 14px;
-  color: #fff;
+  color: $text-inverse;
 }
 </style>

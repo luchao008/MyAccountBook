@@ -1,3 +1,5 @@
+@use '@/styles/tokens.scss' as *;
+
 /**
  * 这里是uni-app内置的常用样式变量
  *
@@ -14,34 +16,42 @@
 
 /* 颜色变量 */
 
-/* 行为相关颜色 */
-$uni-color-primary: #007aff;
-$uni-color-success: #4cd964;
-$uni-color-warning: #f0ad4e;
-$uni-color-error: #dd524d;
+/* 行为相关颜色（对齐设计 token，见 docs/移动端配色与字体方案.md）
+ * ⚠️ 实测：uni-ui 各组件会在自己的样式块里重新声明 $uni-* 且**不带 !default**，
+ *    那种情况下本文件的赋值会被组件覆盖，改这里对它们无效（uni-ui 的已知限制）。
+ *    只有带 !default 的变量（如 uni-easyinput 的 $uni-border-1）才吃得到这里的值。 */
+$uni-color-primary: $brand-600;
+$uni-color-success: $success;
+$uni-color-warning: $warning;
+$uni-color-error: $danger;
 
 /* 文字基本颜色 */
-$uni-text-color: #333; // 基本色
-$uni-text-color-inverse: #fff; // 反色
-$uni-text-color-grey: #999; // 辅助灰色，如加载更多的提示信息
-$uni-text-color-placeholder: #808080;
-$uni-text-color-disable: #c0c0c0;
+$uni-text-color: $text-primary; // 基本色
+$uni-text-color-inverse: $text-inverse; // 反色
+$uni-text-color-grey: $text-tertiary; // 辅助灰色，如加载更多的提示信息
+$uni-text-color-placeholder: $text-tertiary;
+$uni-text-color-disable: $text-disabled;
 
 /* 背景颜色 */
-$uni-bg-color: #fff;
-$uni-bg-color-grey: #f8f8f8;
-$uni-bg-color-hover: #f1f1f1; // 点击状态颜色
-$uni-bg-color-mask: rgba(0, 0, 0, 0.4); // 遮罩颜色
+$uni-bg-color: $bg-card;
+$uni-bg-color-grey: $bg-page;
+$uni-bg-color-hover: $bg-subtle; // 点击状态颜色
+$uni-bg-color-mask: $bg-mask; // 遮罩颜色
 
 /* 边框颜色 */
-$uni-border-color: #c8c7cc;
+$uni-border-color: $border-card;
+
+/* 表单控件边界：uni-easyinput 声明的是 $uni-border-1: #dcdfe6 !default，
+ * 原值对白底仅约 1.3:1，输入框边界在弱视用户眼里等于不存在。
+ * WCAG 1.4.11 要求控件边界 ≥3:1，$border-input (#8a94a6) 实测 3.06:1 ✅ */
+$uni-border-1: $border-input;
 
 /* 尺寸变量 */
 
 /* 文字尺寸 */
 $uni-font-size-sm: 12px;
 $uni-font-size-base: 14px;
-$uni-font-size-lg: 16;
+$uni-font-size-lg: 16px;
 
 /* 图片尺寸 */
 $uni-img-size-sm: 20px;

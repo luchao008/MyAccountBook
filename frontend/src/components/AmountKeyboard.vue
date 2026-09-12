@@ -71,9 +71,9 @@ function clear() {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .keyboard {
-  background: #f7f8fa;
+  background: $bg-page;
   padding: 6px;
 }
 
@@ -86,13 +86,13 @@ function clear() {
   flex: 1;
   height: 48px;
   margin-right: 8px;
-  background: #fff;
+  background: $bg-card;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  color: #333;
+  color: $text-primary;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
@@ -101,7 +101,7 @@ function clear() {
 }
 
 .key:active {
-  background: #eee;
+  background: $bg-subtle;
 }
 
 .zero {
@@ -110,17 +110,17 @@ function clear() {
 
 .fn {
   font-size: 15px;
-  color: #666;
-  background: #eceff3;
+  color: $text-secondary;
+  background: $bg-subtle;
 }
 
 .confirm {
-  background: #ff6b35;
-  color: #fff;
+  background: $brand-600;
+  color: $text-inverse;
   font-size: 16px;
 }
 
 .confirm:active {
-  background: #e55a28;
+  background: $brand-800;
 }
 </style>

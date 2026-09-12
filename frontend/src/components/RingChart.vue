@@ -7,7 +7,7 @@
         :cy="center"
         :r="radius"
         fill="none"
-        stroke="#F0F0F0"
+        stroke="#EDEFF3"
         :stroke-width="thickness"
       />
       <!-- 数据段：用 stroke-dasharray 画圆弧，旋转 -90° 让起点在 12 点方向 -->
@@ -37,6 +37,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { CHART_SERIES } from '@/constants/chart';
 
 interface RingItem {
   name: string;
@@ -58,16 +59,7 @@ const props = withDefaults(
     thickness: 24,
     centerLabel: '',
     centerValue: '',
-    palette: () => [
-      '#FF6B35',
-      '#4A90D9',
-      '#F5A623',
-      '#7ED321',
-      '#BD10E0',
-      '#50E3C2',
-      '#9B9B9B',
-      '#FF4081',
-    ],
+    palette: () => [...CHART_SERIES],
   }
 );
 
@@ -104,7 +96,7 @@ const segments = computed<Segment[]>(() => {
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .ring-wrap {
   position: relative;
   display: flex;
@@ -122,13 +114,13 @@ const segments = computed<Segment[]>(() => {
 
 .center-label {
   font-size: 12px;
-  color: #999;
+  color: $text-tertiary;
 }
 
 .center-value {
   font-size: 20px;
   font-weight: 600;
-  color: #333;
+  color: $text-primary;
   margin-top: 2px;
 }
 </style>

@@ -105,6 +105,7 @@ import { useCategoryStore } from '@/store/category';
 import { getOverview, getCategoryStat, type CategoryStatItem } from '@/api/statistics';
 import { iconOf } from '@/utils/icon';
 import { formatMoney } from '@/utils/format';
+import { SOLID_SERIES } from '@/constants/chart';
 
 const userStore = useUserStore();
 const accountStore = useAccountStore();
@@ -123,7 +124,13 @@ const monthRange = computed(() => overview.ranges.find((r) => r.key === 'month')
 const monthExpense = computed(() => monthRange.value?.expense || '0.00');
 const monthCount = computed(() => monthRange.value?.count || 0);
 
-const iconColors = ['#4A90D9', '#50E3C2', '#F5A623', '#FF6B35', '#BD10E0', '#7ED321'];
+/**
+ * 区间图标 / 排行进度条底色。
+ * 图标上压着 14px 白字，所以只能取「可承载白字的实心序列」
+ * （白字压其上实测均 ≥5.18:1；序列末位的中性灰仅 3.06:1，不能用于此）。
+ * 真源见 src/constants/chart.ts。
+ */
+const iconColors = [...SOLID_SERIES];
 const iconTexts = ['日', '周', '月', '¥', '年'];
 
 /** 进度条宽度：占比过小的也给 2% 保证可见 */
@@ -197,10 +204,10 @@ onPullDownRefresh(async () => {
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .page {
   min-height: 100vh;
-  background: #f5f6f8;
+  background: $bg-page;
   padding: 12px 12px 0;
   /* 给底部的凸起按钮与 tabBar 留空间 */
   padding-bottom: calc(80px + env(safe-area-inset-bottom));
@@ -208,10 +215,10 @@ onPullDownRefresh(async () => {
 
 /* ===== 顶部 banner ===== */
 .banner {
-  background: linear-gradient(135deg, #ff6b35 0%, #ff9563 55%, #ffb347 100%);
+  background: $gradient-banner;
   border-radius: 16px;
   padding: 16px 18px 18px;
-  color: #fff;
+  color: $text-inverse;
   position: relative;
   overflow: hidden;
 }
@@ -261,7 +268,6 @@ onPullDownRefresh(async () => {
 
 .banner-label {
   font-size: 13px;
-  opacity: 0.9;
 }
 
 .banner-expense {
@@ -287,7 +293,6 @@ onPullDownRefresh(async () => {
 
 .sub-label {
   font-size: 12px;
-  opacity: 0.9;
   margin-right: 6px;
 }
 
@@ -298,7 +303,7 @@ onPullDownRefresh(async () => {
 
 /* ===== 通用卡片 ===== */
 .card {
-  background: #fff;
+  background: $bg-card;
   border-radius: 16px;
   margin-top: 12px;
 }
@@ -312,7 +317,7 @@ onPullDownRefresh(async () => {
   display: flex;
   align-items: center;
   padding: 14px 16px;
-  border-bottom: 1px solid #f7f7f8;
+  border-bottom: 1px solid $divider;
 }
 
 .range-row:last-child {
@@ -330,7 +335,7 @@ onPullDownRefresh(async () => {
 }
 
 .range-icon-text {
-  color: #fff;
+  color: $text-inverse;
   font-size: 14px;
   font-weight: 500;
 }
@@ -344,13 +349,13 @@ onPullDownRefresh(async () => {
 
 .range-label {
   font-size: 15px;
-  color: #333;
+  color: $text-primary;
   font-weight: 500;
 }
 
 .range-period {
   font-size: 11px;
-  color: #bbb;
+  color: $text-tertiary;
   margin-top: 2px;
 }
 
@@ -367,7 +372,7 @@ onPullDownRefresh(async () => {
 
 .amount-key {
   font-size: 11px;
-  color: #999;
+  color: $text-tertiary;
   margin-right: 6px;
 }
 
@@ -379,11 +384,11 @@ onPullDownRefresh(async () => {
 }
 
 .income {
-  color: #52c41a;
+  color: $income;
 }
 
 .expense {
-  color: #ff4d4f;
+  color: $expense;
 }
 
 /* ===== 分类排行 ===== */
@@ -398,7 +403,7 @@ onPullDownRefresh(async () => {
 .rank-title {
   font-size: 16px;
   font-weight: 600;
-  color: #333;
+  color: $text-primary;
 }
 
 .rank-summary {
@@ -408,7 +413,7 @@ onPullDownRefresh(async () => {
 
 .summary-item {
   font-size: 12px;
-  color: #999;
+  color: $text-tertiary;
   margin-right: 14px;
 }
 
@@ -421,7 +426,7 @@ onPullDownRefresh(async () => {
 .rank-no {
   width: 18px;
   font-size: 13px;
-  color: #bbb;
+  color: $text-tertiary;
   padding-top: 2px;
 }
 
@@ -437,7 +442,7 @@ onPullDownRefresh(async () => {
 
 .rank-name {
   font-size: 14px;
-  color: #333;
+  color: $text-primary;
 }
 
 .rank-right {
@@ -447,24 +452,24 @@ onPullDownRefresh(async () => {
 
 .rank-ratio {
   font-size: 13px;
-  color: #999;
+  color: $text-tertiary;
 }
 
 .rank-dot {
   font-size: 12px;
-  color: #ddd;
+  color: $text-disabled;
   margin: 0 6px;
 }
 
 .rank-amount {
   font-size: 14px;
-  color: #333;
+  color: $text-primary;
   font-weight: 500;
 }
 
 .bar-bg {
   height: 4px;
-  background: #f2f3f5;
+  background: $bg-subtle;
   border-radius: 2px;
   margin-top: 8px;
   overflow: hidden;

@@ -36,7 +36,7 @@ function onPick(id: string) {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .grid {
   display: flex;
   flex-wrap: wrap;
@@ -55,7 +55,7 @@ function onPick(id: string) {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: #f5f5f5;
+  background: $bg-subtle;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -63,8 +63,8 @@ function onPick(id: string) {
 }
 
 .icon-active {
-  background: #fff1eb;
-  border: 2px solid #ff6b35;
+  background: $brand-100;
+  border: 2px solid $brand-600;
 }
 
 .icon {
@@ -73,19 +73,19 @@ function onPick(id: string) {
 
 .name {
   font-size: 12px;
-  color: #666;
+  color: $text-secondary;
   margin-top: 6px;
 }
 
 .active .name {
-  color: #ff6b35;
+  color: $brand-700;
   font-weight: 500;
 }
 
 .empty {
   width: 100%;
   text-align: center;
-  color: #999;
+  color: $text-tertiary;
   font-size: 13px;
   padding: 24px 0;
 }

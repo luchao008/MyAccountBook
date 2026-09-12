@@ -417,7 +417,7 @@ watch(
 );
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .mask {
   position: fixed;
   inset: 0;
@@ -429,7 +429,7 @@ watch(
 }
 
 .sheet {
-  background: #fff;
+  background: $bg-card;
   border-radius: 16px 16px 0 0;
   height: 70vh;
   display: flex;
@@ -443,7 +443,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid $divider;
   flex-shrink: 0;
 }
 
@@ -463,28 +463,28 @@ watch(
 }
 
 .tool:active {
-  background: #f5f5f5;
+  background: $bg-subtle;
 }
 
 .tool-icon {
   font-size: 18px;
-  color: #666;
+  color: $text-secondary;
 }
 
 .collapse {
   font-size: 22px;
-  color: #999;
+  color: $text-tertiary;
 }
 
 .search-bar {
   padding: 8px 16px;
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid $divider;
   flex-shrink: 0;
 }
 
 .search-input {
   height: 36px;
-  background: #f7f8fa;
+  background: $bg-subtle;
   border-radius: 8px;
   padding: 0 12px;
   font-size: 14px;
@@ -505,7 +505,7 @@ watch(
 
 .sidebar {
   width: 92px;
-  background: #f7f8fa;
+  background: $bg-subtle;
   height: 100%;
   flex-shrink: 0;
   /* 隐藏滚动条（Firefox / 旧 IE） */
@@ -541,7 +541,7 @@ watch(
 }
 
 .side-item.active {
-  background: #fff;
+  background: $bg-card;
 }
 
 .side-item.active::before {
@@ -551,17 +551,17 @@ watch(
   top: 13px;
   bottom: 13px;
   width: 3px;
-  background: #ff6b35;
+  background: $brand-500;
   border-radius: 0 2px 2px 0;
 }
 
 .side-text {
   font-size: 13px;
-  color: #666;
+  color: $text-secondary;
 }
 
 .side-item.active .side-text {
-  color: #ff6b35;
+  color: $brand-700;
   font-weight: 500;
 }
 
@@ -577,7 +577,7 @@ watch(
 
 .group-title {
   font-size: 13px;
-  color: #999;
+  color: $text-tertiary;
   display: block;
   margin-bottom: 10px;
 }
@@ -599,7 +599,7 @@ watch(
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  background: #f7f8fa;
+  background: $bg-subtle;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -607,8 +607,8 @@ watch(
 }
 
 .icon-picked {
-  background: #fff1eb;
-  border: 2px solid #ff6b35;
+  background: $brand-100;
+  border: 2px solid $brand-600;
 }
 
 .icon {
@@ -617,14 +617,14 @@ watch(
 
 .name {
   font-size: 11px;
-  color: #666;
+  color: $text-secondary;
   margin-top: 6px;
   text-align: center;
   line-height: 1.3;
 }
 
 .picked .name {
-  color: #ff6b35;
+  color: $brand-700;
   font-weight: 500;
 }
 
@@ -640,7 +640,7 @@ watch(
 
 .empty-text {
   font-size: 12px;
-  color: #bbb;
+  color: $text-tertiary;
   line-height: 1.6;
 }
 </style>

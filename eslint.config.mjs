@@ -56,6 +56,8 @@ export default tseslint.config(
       globals: {
         console: 'readonly',
         process: 'readonly',
+        // Node 全局，脚本里用 new URL('../x', import.meta.url) 拼路径
+        URL: 'readonly',
       },
     },
     rules: {
