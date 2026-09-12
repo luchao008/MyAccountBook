@@ -292,14 +292,16 @@ async function execMerge(source: AccountItem, target: AccountItem) {
 }
 
 .item-name {
-  font-size: 16px;
+  font-size: $font-body-lg;
+  line-height: $lh-body-lg;
   color: $text-primary;
-  font-weight: 500;
+  font-weight: $weight-medium;
 }
 
 .badge {
   margin-left: 8px;
-  font-size: 11px;
+  font-size: $font-caption;
+  line-height: $lh-caption;
   color: $badge-brand-text;
   background: $badge-brand-bg;
   border-radius: 8px;
@@ -308,7 +310,8 @@ async function execMerge(source: AccountItem, target: AccountItem) {
 
 .item-meta {
   display: block;
-  font-size: 12px;
+  font-size: $font-caption;
+  line-height: $lh-caption;
   color: $text-tertiary;
   margin-top: 4px;
 }
@@ -320,10 +323,12 @@ async function execMerge(source: AccountItem, target: AccountItem) {
 }
 
 .action {
-  font-size: 13px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   color: $info;
   margin-right: 16px;
-  padding: 2px 0;
+  /* 22px 行盒 + 上下各 8px = 38（原 padding: 2px 0 只有 26） */
+  padding: 8px 0;
 }
 
 .danger {
@@ -348,7 +353,8 @@ async function execMerge(source: AccountItem, target: AccountItem) {
   background: $bg-subtle;
   border-radius: 8px;
   padding: 0 12px;
-  font-size: 15px;
+  font-size: $font-body;
+  line-height: $lh-body;
 }
 
 .add-btn {
@@ -359,15 +365,16 @@ async function execMerge(source: AccountItem, target: AccountItem) {
   background: $brand-600;
   color: $text-inverse;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: $font-body-sm;
 }
 
 .hint {
   display: block;
   margin-top: 12px;
-  font-size: 12px;
+  font-size: $font-caption;
+  line-height: $lh-caption;
   color: $text-tertiary;
-  line-height: 1.6;
+  line-height: $lh-caption;
 }
 
 .rules {
@@ -378,16 +385,18 @@ async function execMerge(source: AccountItem, target: AccountItem) {
 }
 
 .rules-title {
-  font-size: 14px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   color: $text-primary;
-  font-weight: 500;
+  font-weight: $weight-medium;
 }
 
 .rules-item {
   display: block;
   margin-top: 8px;
-  font-size: 12px;
+  font-size: $font-caption;
+  line-height: $lh-caption;
   color: $text-tertiary;
-  line-height: 1.7;
+  line-height: $lh-caption;
 }
 </style>

@@ -97,18 +97,20 @@ async function submit() {
 }
 
 .logo {
-  font-size: 64px;
+  font-size: $icon-4xl;
 }
 
 .title {
-  font-size: 28px;
-  font-weight: 600;
+  font-size: $font-display;
+  line-height: $lh-display;
+  font-weight: $weight-semibold;
   color: $text-primary;
   margin-top: 12px;
 }
 
 .subtitle {
-  font-size: 14px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   color: $text-secondary;
   margin-top: 8px;
 }
@@ -129,7 +131,7 @@ async function submit() {
   background: $brand-600;
   color: $text-inverse;
   border-radius: 24px;
-  font-size: 16px;
+  font-size: $font-body-lg;
   height: 48px;
   line-height: 48px;
 }
@@ -141,10 +143,13 @@ async function submit() {
 .switch {
   text-align: center;
   margin-top: 16px;
+  /* 触控目标：22px 行盒 + 上下各 11px = 44×44（WCAG 2.2 SC 2.5.8 建议值，非硬性 24） */
+  padding: 11px 0;
 }
 
 .switch-text {
-  font-size: 14px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   color: $info;
 }
 
@@ -154,7 +159,8 @@ async function submit() {
 }
 
 .tip-text {
-  font-size: 12px;
+  font-size: $font-caption;
+  line-height: $lh-caption;
   color: $text-secondary;
 }
 </style>

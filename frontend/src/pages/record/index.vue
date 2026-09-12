@@ -250,7 +250,8 @@ function onDelete() {
   flex: 1;
   text-align: center;
   padding: 10px 0;
-  font-size: 15px;
+  font-size: $font-body;
+  line-height: $lh-body;
   color: $text-secondary;
   border-radius: 8px;
 }
@@ -258,7 +259,7 @@ function onDelete() {
 .type-btn.active {
   background: $brand-600;
   color: $text-inverse;
-  font-weight: 500;
+  font-weight: $weight-medium;
 }
 
 .amount-box {
@@ -271,14 +272,17 @@ function onDelete() {
 }
 
 .currency {
-  font-size: 20px;
+  font-size: $font-h1;
+  line-height: $lh-h1;
   color: $text-primary;
   margin-right: 4px;
 }
 
 .amount {
-  font-size: 36px;
-  font-weight: 600;
+  @include tabular-nums;
+  font-size: $font-display-lg;
+  line-height: $lh-display-lg;
+  font-weight: $weight-semibold;
   color: $text-primary;
 }
 
@@ -302,14 +306,16 @@ function onDelete() {
 
 .row-label {
   width: 56px;
-  font-size: 15px;
+  font-size: $font-body;
+  line-height: $lh-body;
   color: $text-primary;
   flex-shrink: 0;
 }
 
 .row-value {
   flex: 1;
-  font-size: 15px;
+  font-size: $font-body;
+  line-height: $lh-body;
   color: $text-primary;
 }
 
@@ -319,18 +325,20 @@ function onDelete() {
 
 .row-arrow {
   color: $text-tertiary;
-  font-size: 18px;
+  font-size: $icon-lg;
   margin-left: 6px;
 }
 
 .picker {
-  font-size: 15px;
+  font-size: $font-body;
+  line-height: $lh-body;
   color: $info;
 }
 
 .note-input {
   flex: 1;
-  font-size: 15px;
+  font-size: $font-body;
+  line-height: $lh-body;
   color: $text-primary;
 }
 
@@ -343,7 +351,8 @@ function onDelete() {
 }
 
 .delete-text {
-  font-size: 15px;
+  font-size: $font-body;
+  line-height: $lh-body;
   color: $expense;
 }
 

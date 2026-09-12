@@ -467,12 +467,12 @@ watch(
 }
 
 .tool-icon {
-  font-size: 18px;
+  font-size: $icon-lg;
   color: $text-secondary;
 }
 
 .collapse {
-  font-size: 22px;
+  font-size: $icon-xl;
   color: $text-tertiary;
 }
 
@@ -487,7 +487,8 @@ watch(
   background: $bg-subtle;
   border-radius: 8px;
   padding: 0 12px;
-  font-size: 14px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
 }
 
 .search-result {
@@ -556,13 +557,14 @@ watch(
 }
 
 .side-text {
-  font-size: 13px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   color: $text-secondary;
 }
 
 .side-item.active .side-text {
   color: $brand-700;
-  font-weight: 500;
+  font-weight: $weight-medium;
 }
 
 .main {
@@ -576,7 +578,8 @@ watch(
 }
 
 .group-title {
-  font-size: 13px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   color: $text-tertiary;
   display: block;
   margin-bottom: 10px;
@@ -612,20 +615,21 @@ watch(
 }
 
 .icon {
-  font-size: 22px;
+  font-size: $icon-xl;
 }
 
 .name {
-  font-size: 11px;
+  font-size: $font-caption;
+  line-height: $lh-caption;
   color: $text-secondary;
   margin-top: 6px;
   text-align: center;
-  line-height: 1.3;
+  line-height: $lh-caption;
 }
 
 .picked .name {
   color: $brand-700;
-  font-weight: 500;
+  font-weight: $weight-medium;
 }
 
 .empty,
@@ -639,8 +643,9 @@ watch(
 }
 
 .empty-text {
-  font-size: 12px;
+  font-size: $font-caption;
+  line-height: $lh-caption;
   color: $text-tertiary;
-  line-height: 1.6;
+  line-height: $lh-caption;
 }
 </style>

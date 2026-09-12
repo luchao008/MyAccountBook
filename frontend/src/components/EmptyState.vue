@@ -37,18 +37,19 @@ const emit = defineEmits<{
 }
 
 .icon {
-  font-size: 48px;
+  font-size: $icon-3xl;
   opacity: 0.5;
 }
 
 .text {
-  font-size: 14px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   // 用 secondary 而非 tertiary：本组件是复用的，父容器可能是白卡也可能是页面底
   // （detail 页就挂在页面底上），tertiary 压页面底只有 4.17:1，不达标
   color: $text-secondary;
   margin-top: 12px;
   text-align: center;
-  line-height: 1.6;
+  line-height: $lh-body-sm;
 }
 
 .btn {
@@ -59,7 +60,8 @@ const emit = defineEmits<{
 }
 
 .btn-text {
-  font-size: 14px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   color: $text-inverse;
 }
 </style>

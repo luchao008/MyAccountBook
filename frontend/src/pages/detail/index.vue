@@ -261,13 +261,17 @@ onReachBottom(() => {
 .filter-item {
   display: flex;
   align-items: center;
-  font-size: 15px;
+  /* 月份筛选是本页主控件：原为 24px（刚好卡在 SC 2.5.8 的 AA 下限），
+     上下各加 6px 后 36px —— 未达 44 的建议值，理由与实测值见方案 §7.3 */
+  padding: 6px 0;
+  font-size: $font-body;
+  line-height: $lh-body;
   color: $text-primary;
-  font-weight: 500;
+  font-weight: $weight-medium;
 }
 
 .arrow {
-  font-size: 12px;
+  font-size: $icon-xs;
   color: $text-tertiary;
   margin-left: 4px;
 }
@@ -277,9 +281,11 @@ onReachBottom(() => {
 }
 
 .tab {
-  padding: 4px 12px;
+  /* 22px 行盒 + 上下各 8px = 38 */
+  padding: 8px 12px;
   margin-left: 8px;
-  font-size: 13px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   color: $text-secondary;
   background: $bg-subtle;
   border-radius: 12px;
@@ -297,7 +303,8 @@ onReachBottom(() => {
 }
 
 .summary-text {
-  font-size: 13px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   color: $text-secondary;
 }
 
@@ -317,7 +324,7 @@ onReachBottom(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: $icon-lg;
 }
 
 .item-main {
@@ -328,19 +335,27 @@ onReachBottom(() => {
 }
 
 .item-name {
-  font-size: 15px;
+  font-size: $font-body;
+  line-height: $lh-body;
   color: $text-primary;
 }
 
 .item-meta {
-  font-size: 12px;
+  font-size: $font-caption;
+  line-height: $lh-caption;
   color: $text-tertiary;
   margin-top: 2px;
 }
 
 .item-amount {
-  font-size: 16px;
-  font-weight: 500;
+  // 等宽数字 + 定宽右对齐：让各行的「+1,234.56」「-12.00」小数点竖直对齐。
+  // 只写 text-align 是没用的 —— 这一格宽度由内容决定，
+  // 必须先给 min-width 撑出固定宽度，右对齐才有对象可言。
+  @include amount;
+  min-width: 80px;
+  font-size: $font-body-lg;
+  line-height: $lh-body-lg;
+  font-weight: $weight-medium;
 }
 
 .income {
@@ -355,6 +370,7 @@ onReachBottom(() => {
   text-align: center;
   padding: 24px 0;
   color: $text-secondary;
-  font-size: 13px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
 }
 </style>

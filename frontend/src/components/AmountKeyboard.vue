@@ -91,7 +91,8 @@ function clear() {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: $font-h1;
+  line-height: $lh-h1;
   color: $text-primary;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
@@ -109,7 +110,8 @@ function clear() {
 }
 
 .fn {
-  font-size: 15px;
+  font-size: $font-body;
+  line-height: $lh-body;
   color: $text-secondary;
   background: $bg-subtle;
 }
@@ -117,7 +119,8 @@ function clear() {
 .confirm {
   background: $brand-600;
   color: $text-inverse;
-  font-size: 16px;
+  font-size: $font-body-lg;
+  line-height: $lh-body-lg;
 }
 
 .confirm:active {

@@ -68,8 +68,14 @@ $divider: #edeff3;      // 卡片内分隔线（纯装饰，豁免对比度）
 $border-card: #e3e7ee;  // 卡片描边（装饰）
 $border-input: #8a94a6; // 表单控件边界（3.06:1 ✅ 满足 WCAG 1.4.11）
 
-// 焦点环：4.95:1 ✅。禁止使用 outline: none 而不给替代
-$focus-ring: 0 0 0 2px #ffffff, 0 0 0 4px #c7430f;
+// 焦点环：2px 实线 + 2px 外扩，压白底 4.95:1 ✅（方案 §2.4）
+// ⚠️ 用 outline 而不是 box-shadow：outline 不参与布局、也不会被祖先的
+//    `overflow: hidden` 裁掉 —— 本项目的卡片 / 弹窗 / 列表项几乎全是 overflow:hidden，
+//    用阴影做焦点环会经常只剩半圈。阴影版留作个别容器的备选。
+// ⚠️ 禁止写 `outline: none` 一刀切：那等于把键盘用户彻底锁在门外（WCAG 2.4.7）。
+$focus-ring: 2px solid $brand-700;
+$focus-ring-offset: 2px;
+$focus-ring-shadow: 0 0 0 2px #ffffff, 0 0 0 4px $brand-700;
 
 // ==========================================================================
 // 4. 文字色阶
@@ -135,8 +141,8 @@ $font-family-base:
   'Helvetica Neue', Arial, sans-serif;
 
 // 字号 / 行高（单位用 px 而非 rpx：rpx 随屏宽等比放大，会让大屏上的金额撑破布局）
-$font-display-lg: 36px; $lh-display-lg: 44px;  // 记一笔页金额输入
-$font-display:    28px; $lh-display:    36px;  // 首页资产总额
+$font-display-lg: 36px; $lh-display-lg: 44px;  // 首页 banner 总支出（hero 金额）/ 记一笔页金额输入
+$font-display:    28px; $lh-display:    36px;  // 登录页标题
 $font-h1:         20px; $lh-h1:         28px;  // 页面 / 卡片主标题
 $font-h2:         17px; $lh-h2:         24px;  // 区块标题
 $font-body-lg:    16px; $lh-body-lg:    24px;  // 列表金额、主要动作
@@ -150,6 +156,26 @@ $font-caption:    12px; $lh-caption:    18px;  // 辅助说明（中文硬下限
 $weight-regular: 400;
 $weight-medium: 500;
 $weight-semibold: 600;
+
+// --------------------------------------------------------------------------
+// 图标 / 字形尺寸（emoji、箭头 ‹ › ▾、+ 号等「图形」，**不属于上面的字号阶梯**）
+//
+// 为什么分开：文字尺寸决定「一行能放几个字」，图标尺寸决定「图形多大」。
+// 上面 20px 是 h1 标题，下面 20px 是列表图标 —— 值相同，语义无关，
+// 所以不能合并成一套 token，否则改标题字号会连带把所有图标改大。
+//
+// 硬约束：**不得小于 12px**（低于 12px 的图形在手机上不可辨）。
+// 这 8 档就是全部允许值 —— `npm run check:contrast` 第 13 节会扫描所有 .vue，
+// 出现阶梯外的 font-size 直接报 MISMATCH。
+// --------------------------------------------------------------------------
+$icon-xs:  12px;  // 行内箭头（▾ 账本切换）
+$icon-sm:  14px;  // 行内小图标（caret、+、账本 emoji）
+$icon-md:  16px;  // 次级图标（子分类 emoji）
+$icon-lg:  20px;  // 列表图标、日历/统计页导航箭头
+$icon-xl:  24px;  // 九宫格 emoji、头像文字
+$icon-2xl: 28px;  // FAB 的 + 号、banner 装饰
+$icon-3xl: 48px;  // 空状态插画
+$icon-4xl: 64px;  // 登录页 Logo
 
 // 触控目标最小尺寸（WCAG 2.2 SC 2.5.8 要求 ≥24px，这里取舒适值）
 $touch-target-min: 44px;
@@ -174,8 +200,8 @@ $touch-target-min: 44px;
 
 // 焦点可见环（键盘用户无障碍必需）
 @mixin focus-visible-ring {
-  outline: none;
-  box-shadow: $focus-ring;
+  outline: $focus-ring;
+  outline-offset: $focus-ring-offset;
 }
 
 // 长文本防溢出（配合 WCAG 1.4.4 文字缩放 200% 场景）

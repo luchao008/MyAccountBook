@@ -183,7 +183,8 @@ function onDelete(item: CategoryItem, childCount: number) {
   flex: 1;
   text-align: center;
   padding: 10px 0;
-  font-size: 15px;
+  font-size: $font-body;
+  line-height: $lh-body;
   color: $text-secondary;
   border-radius: 8px;
 }
@@ -191,7 +192,7 @@ function onDelete(item: CategoryItem, childCount: number) {
 .type-btn.active {
   background: $brand-600;
   color: $text-inverse;
-  font-weight: 500;
+  font-weight: $weight-medium;
 }
 
 .group {
@@ -209,7 +210,7 @@ function onDelete(item: CategoryItem, childCount: number) {
 
 .caret {
   width: 18px;
-  font-size: 14px;
+  font-size: $icon-sm;
   color: $text-tertiary;
   transition: transform 0.2s;
 }
@@ -219,20 +220,22 @@ function onDelete(item: CategoryItem, childCount: number) {
 }
 
 .group-icon {
-  font-size: 20px;
+  font-size: $icon-lg;
   margin-left: 4px;
 }
 
 .group-name {
   flex: 1;
   margin-left: 10px;
-  font-size: 15px;
+  font-size: $font-body;
+  line-height: $lh-body;
   color: $text-primary;
-  font-weight: 500;
+  font-weight: $weight-medium;
 }
 
 .group-count {
-  font-size: 12px;
+  font-size: $font-caption;
+  line-height: $lh-caption;
   color: $badge-neutral-text;
   background: $badge-neutral-bg;
   border-radius: 9px;
@@ -253,20 +256,23 @@ function onDelete(item: CategoryItem, childCount: number) {
 }
 
 .child-icon {
-  font-size: 17px;
+  font-size: $icon-md;
 }
 
 .child-name {
   flex: 1;
   margin-left: 10px;
-  font-size: 14px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   color: $text-secondary;
 }
 
 .action {
-  font-size: 13px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   color: $expense;
-  padding: 2px 0;
+  /* 22px 行盒 + 上下各 8px = 38（原 padding: 2px 0 只有 26） */
+  padding: 8px 0;
 }
 
 .add-child {
@@ -277,13 +283,14 @@ function onDelete(item: CategoryItem, childCount: number) {
 }
 
 .add-child-icon {
-  font-size: 14px;
+  font-size: $icon-sm;
   color: $brand-700;
   margin-right: 4px;
 }
 
 .add-child-text {
-  font-size: 13px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   color: $brand-700;
 }
 
@@ -305,7 +312,8 @@ function onDelete(item: CategoryItem, childCount: number) {
   background: $bg-subtle;
   border-radius: 8px;
   padding: 0 12px;
-  font-size: 15px;
+  font-size: $font-body;
+  line-height: $lh-body;
 }
 
 .add-btn {
@@ -316,14 +324,15 @@ function onDelete(item: CategoryItem, childCount: number) {
   background: $brand-600;
   color: $text-inverse;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: $font-body-sm;
 }
 
 .hint {
   display: block;
   margin-top: 12px;
-  font-size: 12px;
+  font-size: $font-caption;
+  line-height: $lh-caption;
   color: $text-tertiary;
-  line-height: 1.6;
+  line-height: $lh-caption;
 }
 </style>

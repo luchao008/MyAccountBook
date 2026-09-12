@@ -114,7 +114,7 @@ const BRAND = {
 console.log('\x1b[1m配色校验 —— 对照 docs/移动端配色与字体方案.md\x1b[0m');
 
 // ---------------------------------------------------------------- 1. 现状体检
-section('1. 现状体检（文档 §1.2 的 9 处不达标，必须复现出来）');
+section('1. 现状体检（文档 §1.2 的 11 处不达标，必须复现出来）');
 expect('#333 正文 on 白', contrast('#333333', WHITE), 12.63);
 expect('#666 次要 on 白', contrast('#666666', WHITE), 5.74);
 expect('#999 辅助 on 白（不达标）', contrast('#999999', WHITE), 2.85);
@@ -398,11 +398,19 @@ section('10. 图表配色跨文件一致性（SCSS 变量 ↔ TS 常量）');
   const scssSeries = (seriesBlock ? seriesBlock[1].match(/#[0-9a-fA-F]{6}/g) : []).map((c) =>
     c.toLowerCase(),
   );
-  const tsSeries = (chartSrc.match(/'#[0-9a-fA-F]{6}'/g) || []).map((c) =>
+
+  // ⚠️ 必须只解析 CHART_SERIES 这一个数组。
+  // 早先这里扫的是 chart.ts 的**全部** hex 字面量，于是同文件里的 CHART_TRACK /
+  // CHART_TRACK_EMPTY（底环色，#ffffff / #edeff3）被一并抓进来，色序立刻对不上账。
+  // 「解析范围写宽了」和「值不一致」报的是同一条错，排查时极易误判 —— 所以收窄到数组本身。
+  const tsBlock = chartSrc.match(/CHART_SERIES\s*=\s*\[([\s\S]*?)\]\s*as const/);
+  const tsSeries = (tsBlock ? tsBlock[1].match(/'#[0-9a-fA-F]{6}'/g) || [] : []).map((c) =>
     c.replace(/'/g, '').toLowerCase(),
   );
 
   console.log(`  \x1b[2mSCSS $chart-series 共 ${scssSeries.length} 色；TS CHART_SERIES 共 ${tsSeries.length} 色\x1b[0m`);
+  // 先卡住「解析到几条」，否则解析失败退化成空数组时会伪装成「不一致」
+  expect('CHART_SERIES 解析到的色数', tsSeries.length, 7, 0);
   const same =
     scssSeries.length > 0 && scssSeries.length === tsSeries.length && scssSeries.every((c, i) => c === tsSeries[i]);
   if (same) passed += 1;
@@ -511,6 +519,223 @@ section('12. §1.2「不达标处数」与表内 ❌ 行数一致');
     });
     console.log(`  \x1b[31m❌ MISMATCH\x1b[0m  表内 ❌ 行数与文中声明不一致`);
   }
+}
+
+// ---------------------------------------------------------------- 13. 字号阶梯
+section('13. 字号阶梯自洽（文档 §3.2 ↔ tokens.scss ↔ 各 .vue）');
+{
+  const tokensSrc = readFileSync(
+    new URL('../frontend/src/styles/tokens.scss', import.meta.url),
+    'utf8',
+  );
+  const docSrc = readFileSync(new URL('../docs/移动端配色与字体方案.md', import.meta.url), 'utf8');
+
+  // —— ① 文档 §3.2 的字号表：`font-xxx` → [字号, 行高]
+  const sec32 = (docSrc.match(/### 3\.2 [\s\S]*?(?=### 3\.3 )/) || [''])[0];
+  const docScale = {};
+  for (const line of sec32.split('\n')) {
+    const tok = line.match(/`(font-[a-z0-9-]+)`/);
+    if (!tok) continue;
+    const size = line.match(/\|\s*(\d+)px\s*\|/);
+    const lh = line.match(/\|\s*(\d+)\s*\(\d/);
+    if (size && lh) docScale[tok[1]] = [Number(size[1]), Number(lh[1])];
+  }
+  expect('文档 §3.2 表内字号档数', Object.keys(docScale).length, 8, 0);
+
+  // —— ② tokens.scss 的声明
+  const declared = {};
+  for (const m of tokensSrc.matchAll(/\$(font-[a-z0-9-]+):\s*(\d+)px/g)) {
+    if (m[1] === 'font-family-base') continue;
+    declared[m[1]] = (declared[m[1]] || []).concat(Number(m[2]));
+  }
+  const declaredLh = {};
+  for (const m of tokensSrc.matchAll(/\$(lh-[a-z0-9-]+):\s*(\d+)px/g)) {
+    declaredLh[m[1]] = Number(m[2]);
+  }
+
+  const scaleMismatch = [];
+  for (const [tok, [size, lh]] of Object.entries(docScale)) {
+    const gotSize = (declared[tok] || [])[0];
+    const gotLh = declaredLh['lh-' + tok.replace(/^font-/, '')];
+    if (gotSize !== size || gotLh !== lh) {
+      scaleMismatch.push(`${tok}: 文档 ${size}/${lh}，tokens ${gotSize ?? '缺失'}/${gotLh ?? '缺失'}`);
+    }
+  }
+  if (Object.keys(docScale).length === 8 && scaleMismatch.length === 0) {
+    passed += 1;
+    console.log('  \x1b[32m✅\x1b[0m  8 档字号 / 行高：文档 §3.2 == tokens.scss');
+  } else {
+    failures.push({
+      label: '字号阶梯在文档与 tokens.scss 之间不一致',
+      actual: scaleMismatch.join(' | ') || '（档数不为 8）',
+      expected: '文档 §3.2 的 8 档与 tokens.scss 逐条相等',
+      tol: 0,
+    });
+    console.log(`  \x1b[31m❌ MISMATCH\x1b[0m  ${scaleMismatch.join(' | ')}`);
+  }
+
+  // —— ③ 允许出现的 token 全集
+  const srcRoot = new URL('../frontend/src/', import.meta.url);
+  const vueList = [];
+  const collectVue = (dir) =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = new URL(e.name + (e.isDirectory() ? '/' : ''), dir);
+      if (e.isDirectory()) return collectVue(p);
+      return e.name.endsWith('.vue') ? [p] : [];
+    });
+  vueList.push(...collectVue(srcRoot));
+
+  const allowedFont = new Set();
+  for (const m of tokensSrc.matchAll(/\$(font-(?!family)[a-z0-9-]+)\s*:/g)) allowedFont.add('$' + m[1]);
+  const allowedIcon = new Set();
+  for (const m of tokensSrc.matchAll(/\$(icon-[a-z0-9-]+)\s*:/g)) allowedIcon.add('$' + m[1]);
+  const allowedWeight = new Set();
+  for (const m of tokensSrc.matchAll(/\$(weight-[a-z0-9-]+)\s*:/g)) allowedWeight.add('$' + m[1]);
+
+  expect('字号 token 档数（$font-*）', allowedFont.size, 8, 0);
+  expect('图标 token 档数（$icon-*）', allowedIcon.size, 8, 0);
+  expect('字重 token 档数（$weight-*）', allowedWeight.size, 3, 0);
+
+  const straySize = [];
+  const strayWeight = [];
+  const weight700 = [];
+  const missingLh = [];
+  for (const f of vueList) {
+    const rel = f.pathname.split('/frontend/src/')[1];
+    const sm = readFileSync(f, 'utf8').match(/<style[\s\S]*?<\/style>/);
+    if (!sm) continue;
+    const block = sm[0];
+
+    for (const m of block.matchAll(/font-size:\s*([^;\n]+);/g)) {
+      const v = m[1].trim();
+      if (!allowedFont.has(v) && !allowedIcon.has(v)) straySize.push(`${rel}  font-size: ${v}`);
+    }
+    for (const m of block.matchAll(/font-weight:\s*([^;\n]+);/g)) {
+      const v = m[1].trim();
+      if (/^700\b/.test(v)) weight700.push(`${rel}  font-weight: ${v}`);
+      if (!allowedWeight.has(v)) strayWeight.push(`${rel}  font-weight: ${v}`);
+    }
+    // 规则级：凡声明「文字字号」的规则，必须同时声明行高（图标与控件居中特例除外）
+    for (const chunk of block.split('}')) {
+      if (!chunk.includes('{')) continue;
+      const fm = chunk.match(/font-size:\s*(\$font-[a-z0-9-]+);/);
+      if (!fm) continue;
+      if (!chunk.includes('line-height')) {
+        const sel = chunk.split('{')[0].trim().split('\n').pop().trim();
+        missingLh.push(`${rel}  ${sel}  (${fm[1]})`);
+      }
+    }
+  }
+
+  const checkList = (list, label, expected) => {
+    if (list.length === 0) {
+      passed += 1;
+      console.log(`  \x1b[32m✅\x1b[0m  ${label}`);
+    } else {
+      failures.push({ label, actual: list.slice(0, 6).join(' | '), expected, tol: 0 });
+      console.log(`  \x1b[31m❌ MISMATCH\x1b[0m  ${label}（${list.length} 处）`);
+      for (const x of list.slice(0, 8)) console.log(`      ${x}`);
+    }
+  };
+  checkList(straySize, '.vue 中不存在阶梯外的 font-size', '只允许 $font-* / $icon-*');
+  checkList(weight700, '不存在被禁用的 font-weight: 700', '只允许 400/500/600');
+  checkList(strayWeight, '.vue 中的 font-weight 全部走 token', '只允许 $weight-*');
+  checkList(
+    missingLh,
+    '所有声明文字字号的规则都显式声明了 line-height',
+    'WCAG 1.4.12：行高必须显式声明',
+  );
+
+  // —— ④ 计数自洽（第十九次新增）
+  //
+  // 为什么要专门断言「计数」：本项目已经**两次**栽在同一个坑上 ——
+  //   · §1.2 的「9 处不达标」从方案初版一直错到第十八次（实际 11 处）；
+  //   · §1.3 的「共 8 档 / 11px 出现 3 处」错到第十九次（实际 17 档 / 11px 出现 6 处）。
+  // 两次的共同点：**校验器只断言"数值"，没有任何人检查"计数"**。
+  // 所以这里的做法是——把计数本身也变成断言。改字号就必然要同步改这里，
+  // 否则脚本直接报 MISMATCH，不会像前两次那样悄悄漂过去。
+  //
+  // 这三个数字对应的文档位置：方案 §1.3「迁移后」那段。
+  let nText = 0;
+  let nIcon = 0;
+  let nLiteral = 0;
+  for (const f of vueList) {
+    const sm = readFileSync(f, 'utf8').match(/<style[\s\S]*?<\/style>/);
+    if (!sm) continue;
+    for (const m of sm[0].matchAll(/font-size:\s*([^;\n]+);/g)) {
+      const v = m[1].trim();
+      if (v.startsWith('$font-')) nText += 1;
+      else if (v.startsWith('$icon-')) nIcon += 1;
+      else nLiteral += 1;
+    }
+  }
+  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 114, 0);
+  expect('  其中文字字号 $font-*', nText, 91, 0);
+  expect('  其中图标尺寸 $icon-*', nIcon, 23, 0);
+  expect('  其中字面量（必须为 0）', nLiteral, 0, 0);
+}
+
+// ---------------------------------------------------------------- 14. 焦点可见性
+section('14. 焦点可见性（WCAG 2.4.7）');
+{
+  const srcRoot = new URL('../frontend/src/', import.meta.url);
+  const collectVue = (dir) =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = new URL(e.name + (e.isDirectory() ? '/' : ''), dir);
+      if (e.isDirectory()) return collectVue(p);
+      return e.name.endsWith('.vue') ? [p] : [];
+    });
+
+  const appSrc = readFileSync(new URL('../frontend/src/App.vue', import.meta.url), 'utf8');
+  const hasRule = /:focus-visible\s*\{/.test(appSrc) && /outline-offset/.test(appSrc);
+  if (hasRule) passed += 1;
+  else
+    failures.push({
+      label: 'App.vue 缺少 :focus-visible 焦点环',
+      actual: '未找到 :focus-visible / outline-offset',
+      expected: ':focus-visible 规则 + outline-offset',
+      tol: 0,
+    });
+  console.log(
+    `  ${hasRule ? '\x1b[32m✅\x1b[0m' : '\x1b[31m❌ MISMATCH\x1b[0m'}  App.vue 定义了 :focus-visible 焦点环`,
+  );
+
+  // 「禁止 outline: none 一刀切」——这是全项目最容易把无障碍做废的一行
+  const killed = [];
+  for (const f of collectVue(srcRoot)) {
+    const t = readFileSync(f, 'utf8');
+    if (/outline\s*:\s*none/.test(t)) killed.push(f.pathname.split('/frontend/src/')[1]);
+  }
+  if (killed.length === 0) {
+    passed += 1;
+    console.log('  \x1b[32m✅\x1b[0m  全项目没有 outline: none（焦点环不会被一刀切掉）');
+  } else {
+    failures.push({
+      label: '存在 outline: none，键盘焦点环被抹掉',
+      actual: killed.join(' | '),
+      expected: '0 处',
+      tol: 0,
+    });
+    console.log(`  \x1b[31m❌ MISMATCH\x1b[0m  ${killed.join(' | ')}`);
+  }
+
+  // 焦点环必须用达标色（$brand-700 = 4.95:1，已在 §2 断言过色值，这里断言「用的是它」）
+  const tokensSrc = readFileSync(
+    new URL('../frontend/src/styles/tokens.scss', import.meta.url),
+    'utf8',
+  );
+  const ringOk = /\$focus-ring:\s*[^;]*\$brand-700/.test(tokensSrc);
+  if (ringOk) passed += 1;
+  else
+    failures.push({
+      label: '$focus-ring 未使用 $brand-700（4.95:1）',
+      actual: (tokensSrc.match(/\$focus-ring:[^;]*;/) || ['未找到'])[0],
+      expected: '$focus-ring 基于 $brand-700',
+      tol: 0,
+    });
+  console.log(
+    `  ${ringOk ? '\x1b[32m✅\x1b[0m' : '\x1b[31m❌ MISMATCH\x1b[0m'}  $focus-ring 基于 $brand-700（4.95:1）`,
+  );
 }
 
 // ---------------------------------------------------------------- 汇总

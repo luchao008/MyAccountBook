@@ -218,10 +218,12 @@ watch(
 }
 
 .done {
-  font-size: 15px;
+  font-size: $font-body;
+  line-height: $lh-body;
   color: $brand-700;
-  font-weight: 500;
-  padding: 4px 8px;
+  font-weight: $weight-medium;
+  /* 24px 行盒 + 上下各 10px = 44（原 padding: 4px 8px 只有 32） */
+  padding: 10px 12px;
 }
 
 /* ===== 日历 ===== */
@@ -237,18 +239,20 @@ watch(
 }
 
 .cal-nav {
-  width: 40px;
+  /* 44×44：翻月是日历里唯一的高频点击目标 */
+  width: $touch-target-min;
   text-align: center;
-  font-size: 20px;
+  font-size: $icon-lg;
   color: $text-tertiary;
-  padding: 2px 0;
+  padding: 10px 0;
 }
 
 .cal-title {
   min-width: 130px;
   text-align: center;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: $font-body-lg;
+  line-height: $lh-body-lg;
+  font-weight: $weight-semibold;
   color: $text-primary;
 }
 
@@ -260,7 +264,8 @@ watch(
 .week-label {
   flex: 1;
   text-align: center;
-  font-size: 12px;
+  font-size: $font-caption;
+  line-height: $lh-caption;
   color: $text-tertiary;
 }
 
@@ -291,7 +296,8 @@ watch(
 }
 
 .day-text {
-  font-size: 15px;
+  font-size: $font-body;
+  line-height: $lh-body;
   color: $text-primary;
 }
 
@@ -312,7 +318,7 @@ watch(
 
 .selected .day-text {
   color: $text-inverse;
-  font-weight: 600;
+  font-weight: $weight-semibold;
 }
 
 /* ===== 时刻 ===== */
@@ -326,7 +332,8 @@ watch(
 }
 
 .time-label {
-  font-size: 15px;
+  font-size: $font-body;
+  line-height: $lh-body;
   color: $text-primary;
 }
 
@@ -338,7 +345,8 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: $font-h1;
+  line-height: $lh-h1;
   color: $text-primary;
 }
 </style>

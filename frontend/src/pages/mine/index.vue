@@ -96,6 +96,7 @@ function onLogout() {
 .avatar {
   width: 56px;
   height: 56px;
+  flex-shrink: 0;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.25);
   display: flex;
@@ -104,24 +105,35 @@ function onLogout() {
 }
 
 .avatar-text {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: $icon-xl;
+  font-weight: $weight-semibold;
 }
 
 .user-info {
+  /* 没有 min-width:0 时这一栏宽度 = max-content。
+     用户名或 ID 一长（ID 是 13 位 BIGINT，天然长）就整块顶出卡片：
+     ×2 实测 R=738 > 视口 320。 */
+  flex: 1;
+  min-width: 0;
   margin-left: 16px;
   display: flex;
   flex-direction: column;
 }
 
 .username {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: $font-h2;
+  line-height: $lh-h2;
+  font-weight: $weight-semibold;
+  /* 用户名是标识符，可能无空格无断点；用 anywhere 折行而不是 ellipsis ——
+     截断等于把用户身份信息吃掉一半（WCAG 1.4.4） */
+  overflow-wrap: anywhere;
 }
 
 .user-id {
-  font-size: 12px;
+  font-size: $font-caption;
+  line-height: $lh-caption;
   margin-top: 4px;
+  overflow-wrap: anywhere;
 }
 
 .menu {
@@ -142,25 +154,27 @@ function onLogout() {
 }
 
 .menu-icon {
-  font-size: 20px;
+  font-size: $icon-lg;
 }
 
 .menu-text {
   flex: 1;
   margin-left: 12px;
-  font-size: 15px;
+  font-size: $font-body;
+  line-height: $lh-body;
   color: $text-primary;
 }
 
 .menu-hint {
-  font-size: 13px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   color: $text-tertiary;
   margin-right: 6px;
 }
 
 .menu-arrow {
   color: $text-tertiary;
-  font-size: 18px;
+  font-size: $icon-lg;
 }
 
 .logout-box {
@@ -170,7 +184,7 @@ function onLogout() {
 .logout {
   background: $bg-card;
   color: $expense;
-  font-size: 16px;
+  font-size: $font-body-lg;
   border-radius: 24px;
   height: 48px;
   line-height: 48px;

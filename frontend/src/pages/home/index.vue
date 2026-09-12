@@ -234,31 +234,33 @@ onPullDownRefresh(async () => {
   align-items: center;
   background: rgba(255, 255, 255, 0.22);
   border-radius: 14px;
-  padding: 4px 12px;
+  /* 22px 行盒 + 上下各 8px = 38 —— 账本切换入口，原来只有 30 */
+  padding: 8px 12px;
   max-width: 70%;
 }
 
 .account-icon {
-  font-size: 13px;
+  font-size: $icon-sm;
   margin-right: 4px;
 }
 
 .account-name {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
+  font-weight: $weight-medium;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
 .account-arrow {
-  font-size: 11px;
+  font-size: $icon-xs;
   margin-left: 4px;
   opacity: 0.9;
 }
 
 .banner-deco {
-  font-size: 26px;
+  font-size: $icon-2xl;
   opacity: 0.85;
 }
 
@@ -267,38 +269,69 @@ onPullDownRefresh(async () => {
 }
 
 .banner-label {
-  font-size: 13px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
 }
 
 .banner-expense {
   display: block;
-  font-size: 36px;
-  font-weight: 700;
+  @include tabular-nums;
+  font-size: $font-display-lg;
+  line-height: $lh-display-lg;
+  font-weight: $weight-semibold;
   margin-top: 2px;
   letter-spacing: -0.5px;
+  /* 200% 字号下 36px→72px，「¥13,918.05」实测需要 394px，而 banner 内宽只有 288px。
+     banner 有 overflow:hidden（为了裁掉装饰 emoji），不管它的话金额右半截直接消失；
+     而 body 也是 overflow-x:hidden，用户连滚都滚不出来（WCAG 1.4.4 内容丢失）。
+     数字本身没有断行点，只能靠 anywhere 显式允许在任意字符间断行：
+     拆成两行是难看，但一位数字都不丢；换成 text-overflow: ellipsis 才是真丢内容。 */
+  overflow-wrap: anywhere;
 }
 
 .banner-sub {
   display: flex;
+  /* ×2 字号下「总收入 32,130.80」+「结余 18,212.75」一行塞不下。
+     flex-wrap 仅在放不下时生效，正常字号下是 no-op。 */
+  flex-wrap: wrap;
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.28);
 }
 
 .sub-item {
-  flex: 1;
+  /* 用 flex-basis: auto（不是 0）—— line-breaking 看的是 hypothetical size：
+     auto → max-content（「总收入 32,130.80」实测约 118px），于是「放不放得下」由内容真实宽度决定。
+     取 0 的话 hypothetical 只剩 min-width，换行阈值变成一个写死的数、与内容脱钩。
+     这里踩过一坑：一度用 flex:1 1 0 + min-width:9em 想把阈值绑到字号上，
+     但把容器内宽算成了 288px（实际 banner 左右各 18px padding，只有 260px），
+     于是正常字号下也被顶成两行，白白改了原设计。改回 basis:auto 后：
+       正常字号：118 × 2 = 236 ≤ 260 → 仍是并排两栏，与改动前完全一致
+       ×2 字号：230 × 2 = 460 > 260 → 换行，各占一行完整显示 */
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
+  /* 标签与数值自己放不下时，数值掉到第二行，而不是被裁掉 */
+  flex-wrap: wrap;
   align-items: baseline;
 }
 
 .sub-label {
-  font-size: 12px;
+  font-size: $font-caption;
+  line-height: $lh-caption;
   margin-right: 6px;
+  /* ×2 实测若不拦，「总收入」会被竖排成「总/收/入」三行 —— 中文没有断行点，必须显式禁止 */
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .sub-value {
-  font-size: 15px;
-  font-weight: 500;
+  @include tabular-nums;
+  font-size: $font-body;
+  line-height: $lh-body;
+  font-weight: $weight-medium;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* ===== 通用卡片 ===== */
@@ -315,6 +348,9 @@ onPullDownRefresh(async () => {
 
 .range-row {
   display: flex;
+  /* ×2 下 32(图标)+12+154(主文案)+215(金额块) = 413px > 内宽 288px。
+     wrap 后金额块整体掉到第二行，而不是把右边界顶出视口被 body 裁掉。 */
+  flex-wrap: wrap;
   align-items: center;
   padding: 14px 16px;
   border-bottom: 1px solid $divider;
@@ -336,25 +372,36 @@ onPullDownRefresh(async () => {
 
 .range-icon-text {
   color: $text-inverse;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
+  font-weight: $weight-medium;
 }
 
 .range-main {
-  flex: 1;
+  /* 必须是 flex: 1 1 auto 而不是 flex: 1 ——
+     `flex: 1` 的简写等价于 `flex: 1 1 0%`，flex-basis 为 0 意味着
+     **换行算法认为这一栏不需要任何空间**，于是金额块永远不会被换到下一行，
+     反过来把主文案挤成 22px 宽（实测 ×2 下 range-label 只有 22px 却要放 30px 的字）。
+     basis 取 auto 后 hypothetical size = max-content（约 180px），
+     32(图标) + 180 + 215(金额块) = 427 > 内宽 288 → 金额块换行，主文案拿回整行。 */
+  flex: 1 1 auto;
+  /* flex 项默认 min-width:auto = 「不许窄于内容」，会让整行顶破容器 */
+  min-width: 0;
   margin-left: 12px;
   display: flex;
   flex-direction: column;
 }
 
 .range-label {
-  font-size: 15px;
+  font-size: $font-body;
+  line-height: $lh-body;
   color: $text-primary;
-  font-weight: 500;
+  font-weight: $weight-medium;
 }
 
 .range-period {
-  font-size: 11px;
+  font-size: $font-caption;
+  line-height: $lh-caption;
   color: $text-tertiary;
   margin-top: 2px;
 }
@@ -363,24 +410,34 @@ onPullDownRefresh(async () => {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  min-width: 0;
+  /* 独占一行时 margin-left:auto 把它推到右侧；与主文案同行时无剩余空间，是 no-op */
+  margin-left: auto;
 }
 
 .amount-line {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
 }
 
 .amount-key {
-  font-size: 11px;
+  font-size: $font-caption;
+  line-height: $lh-caption;
   color: $text-tertiary;
   margin-right: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .amount-val {
-  font-size: 14px;
-  font-weight: 500;
+  @include tabular-nums;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
+  font-weight: $weight-medium;
   min-width: 76px;
   text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .income {
@@ -401,18 +458,22 @@ onPullDownRefresh(async () => {
 }
 
 .rank-title {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: $font-body-lg;
+  line-height: $lh-body-lg;
+  font-weight: $weight-semibold;
   color: $text-primary;
 }
 
 .rank-summary {
   display: flex;
+  flex-wrap: wrap;
   margin-top: 6px;
 }
 
 .summary-item {
-  font-size: 12px;
+  @include tabular-nums;
+  font-size: $font-caption;
+  line-height: $lh-caption;
   color: $text-tertiary;
   margin-right: 14px;
 }
@@ -424,8 +485,12 @@ onPullDownRefresh(async () => {
 }
 
 .rank-no {
-  width: 18px;
-  font-size: 13px;
+  /* 原本写死 width: 18px —— ×2 下「10」要 36px，被卡在 18px 里压到分类名上。
+     按方案 §3.3：固定宽度一律改 min-width，让内容自己撑开。 */
+  min-width: 18px;
+  flex-shrink: 0;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   color: $text-tertiary;
   padding-top: 2px;
 }
@@ -436,35 +501,47 @@ onPullDownRefresh(async () => {
 
 .rank-line {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
 }
 
 .rank-name {
-  font-size: 14px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   color: $text-primary;
+  min-width: 0;
 }
 
 .rank-right {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  min-width: 0;
+  margin-left: auto;
 }
 
 .rank-ratio {
-  font-size: 13px;
+  @include tabular-nums;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   color: $text-tertiary;
 }
 
 .rank-dot {
-  font-size: 12px;
+  font-size: $icon-xs;
   color: $text-disabled;
   margin: 0 6px;
 }
 
 .rank-amount {
-  font-size: 14px;
+  // 定宽右对齐的理由同明细页 .item-amount：宽度不定时 text-align 等于没写
+  @include amount;
+  min-width: 72px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   color: $text-primary;
-  font-weight: 500;
+  font-weight: $weight-medium;
 }
 
 .bar-bg {

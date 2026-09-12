@@ -54,13 +54,14 @@ function go() {
 
 .fab-plus {
   color: $text-inverse;
-  font-size: 28px;
+  font-size: $icon-2xl;
   line-height: 1;
   margin-top: -2px;
 }
 
 .fab-label {
-  font-size: 11px;
+  font-size: $font-caption;
+  line-height: $lh-caption;
   color: $brand-700;
   margin-top: 1px;
 }

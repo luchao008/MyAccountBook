@@ -68,25 +68,27 @@ function onPick(id: string) {
 }
 
 .icon {
-  font-size: 24px;
+  font-size: $icon-xl;
 }
 
 .name {
-  font-size: 12px;
+  font-size: $font-caption;
+  line-height: $lh-caption;
   color: $text-secondary;
   margin-top: 6px;
 }
 
 .active .name {
   color: $brand-700;
-  font-weight: 500;
+  font-weight: $weight-medium;
 }
 
 .empty {
   width: 100%;
   text-align: center;
   color: $text-tertiary;
-  font-size: 13px;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
   padding: 24px 0;
 }
 </style>

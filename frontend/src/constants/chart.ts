@@ -35,3 +35,25 @@ export const SOLID_SERIES = CHART_SERIES.slice(0, 6) as readonly string[];
 export function solidSeriesAt(index: number): string {
   return SOLID_SERIES[index % SOLID_SERIES.length];
 }
+
+/**
+ * 环形图底环色。
+ *
+ * 这里有个反直觉的耦合：**「扇区之间的 2px 白缝」不是画上去的，而是「露出来」的**——
+ * 做法是把每段圆弧在圆周方向各收 2px，露出的底环就是白缝。所以有扇区时底环必须是白色。
+ * （另一种做法是给每段再压一圈更粗的白描边，多一倍 DOM、还会在环内外缘各自多出 2px 白边。）
+ */
+export const CHART_TRACK = '#ffffff';
+
+/** 无数据时的底环：白环压在白色卡片上不可见，所以退回浅灰示意 */
+export const CHART_TRACK_EMPTY = '#edeff3';
+
+/**
+ * 相邻扇区之间的白缝宽度（px，沿圆周方向，两侧各分走一半）。
+ *
+ * 取 2 是为了和方案 §2.7 写的「2px 白色描边」对齐。顺带记一条实测结论：
+ * 文档里那句 `stroke="#FFFFFF" stroke-width="2"` **照抄是没用的**——
+ * 白色描边和彩色圆弧同心同半径，2px 完全被 26px 的彩条盖住，什么也看不见。
+ * 真正能隔开相邻扇区的只有「缩短圆弧、露出底环」这一条路。
+ */
+export const CHART_SEGMENT_GAP = 2;
