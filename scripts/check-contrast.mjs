@@ -490,6 +490,29 @@ section('11. 旧色值残留扫描（迁移回归防护）');
   }
 }
 
+// ---------------------------------------------------------------- 12. §1.2 计数自洽
+section('12. §1.2「不达标处数」与表内 ❌ 行数一致');
+{
+  const docSrc = readFileSync(new URL('../docs/移动端配色与字体方案.md', import.meta.url), 'utf8');
+  const sec = (docSrc.match(/### 1\.2 [\s\S]*?(?=### 1\.3 )/) || [''])[0];
+  const rows = sec.split('\n').filter((l) => l.trim().startsWith('|') && l.includes('❌')).length;
+  const declared = Number((sec.match(/(\d+)\s*处不达标/) || [])[1]);
+
+  console.log(`  \x1b[2m§1.2 表内 ❌ 行数 = ${rows}；文中声明 = ${Number.isFinite(declared) ? declared : '(未找到)'}\x1b[0m`);
+  if (rows > 0 && rows === declared) {
+    passed += 1;
+    console.log(`  \x1b[32m✅\x1b[0m  声明值 ${declared} == 表内 ❌ 行数 ${rows}`);
+  } else {
+    failures.push({
+      label: '§1.2 声明的「不达标处数」与表内 ❌ 行数不一致',
+      actual: `表内 ❌ ${rows} 行 / 文中声明 ${Number.isFinite(declared) ? declared : '未找到'}`,
+      expected: '两者必须相等',
+      tol: 0,
+    });
+    console.log(`  \x1b[31m❌ MISMATCH\x1b[0m  表内 ❌ 行数与文中声明不一致`);
+  }
+}
+
 // ---------------------------------------------------------------- 汇总
 console.log(`\n${'─'.repeat(72)}`);
 if (failures.length === 0) {
