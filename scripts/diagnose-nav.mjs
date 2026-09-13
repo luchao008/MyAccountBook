@@ -92,9 +92,19 @@ async function snap(tag) {
        * 不能只看 `.uni-page-head-hd` 是否存在 —— 那个容器恒在（哪怕是空的），
        * 上一版探针就因此一直误报"有"。要数它里面真正的按钮元素。
        */
+      /*
+       * 返回入口有两种形态，**都要认**：
+       *   ① 原生导航栏（`navigationStyle: default`）→ uni-app 渲染 `.uni-page-head-btn`；
+       *   ② 自绘顶栏（`navigationStyle: custom`，如报表页）→ 页面自己画 `.nav-back` 之类。
+       *
+       * 只认 ① 会把"换成自绘顶栏"误报成"没有返回路径" —— 实测踩过：
+       * 报表页改版后 backBtn 恒为 0，脚本连报两轮 ✗，而页面其实有返回按钮。
+       * ⚠️ 匹配串不要写 `[class*="back"]`，会命中 `background` 这类无关类名。
+       */
       backBtn:
         document.querySelectorAll('.uni-page-head-hd .uni-page-head-btn').length +
-        document.querySelectorAll('.uni-page-head-hd uni-page-head-btn').length,
+        document.querySelectorAll('.uni-page-head-hd uni-page-head-btn').length +
+        document.querySelectorAll('.nav-back, [class*="nav-back"], [class*="back-btn"]').length,
       headHdHtml: (document.querySelector('.uni-page-head-hd')?.innerHTML || '')
         .replace(/\s+/g, ' ')
         .slice(0, 120),
@@ -105,8 +115,16 @@ async function snap(tag) {
       // 各视图的特征元素，判断"哪个视图正显示"
       viewHits: {
         home: visible('.banner') + visible('.rank-card'),
-        // 「明细」已下线；「统计」改为独立页「报表」（pages/statistics）
-        report: visible('.chart-area') + visible('.legend'),
+        /*
+         * 报表页的内容检测**刻意不绑定具体类名**。
+         *
+         * 报表实现换过一版（StatisticsView → ReportView，`viewHits` 里的
+         * `.chart-area` / `.legend` 随之全部失效），表现为
+         * **"页面明明渲染得很好，脚本却报命中 0"** —— 假报警比漏报更伤信任。
+         * 这里改用"可见文本长度"判断这一页不是空白，与实现细节无关。
+         * 取值是字符数（不是元素个数），断言时用阈值 `>= 80`。
+         */
+        report: (document.body.innerText || '').replace(/\s+/g, '').length,
         mine: visible('.user-card') + visible('.logout'),
         账本选择: visible('.account-item') + visible('.manage-entry'),
         记账页: visible('.keyboard'),
@@ -256,7 +274,8 @@ console.log(
   `${afterReport.backBtn > 0 ? '✓' : '✗'} 目标页有返回按钮（${afterReport.backBtn} 个）—— 能原路返回才有"跳转"的意义`,
 );
 console.log(
-  `${afterReport.viewHits.report > 0 ? '✓' : '✗'} 目标页内容已渲染（命中 ${afterReport.viewHits.report}）`,
+  `${afterReport.viewHits.report >= 80 ? '✓' : '✗'} 目标页非空（可见文本 ${afterReport.viewHits.report} 字，` +
+    `阈值 80）—— 用文本量而非类名，避免实现一换就误报`,
 );
 
 // 原路返回：点导航栏返回按钮（真实用法），并确认页面栈复原
