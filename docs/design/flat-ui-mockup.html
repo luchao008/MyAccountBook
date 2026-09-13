@@ -1,0 +1,1005 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>「数字优先 · 通栏扁平」界面设计方案 · 高保真原型</title>
+<!--
+  设计方案配套原型 · 单文件自包含，无构建、无依赖。
+  配套文档：docs/UI设计方案·扁平化.md
+  图标源：docs/design/icons.ts（本文件内的 sprite 与之一一对应）
+
+  本文件里的每一个色值都来自实测（见文档 §4），不是"看起来差不多"的近似色。
+  浅色主题（与当前 IDE 主题一致）。
+-->
+<style>
+/* ══════════════════════════════════════════════════════════════════════════
+   Token 层 —— 与 frontend/src/styles/tokens.scss 的对应关系写在注释里。
+   本原型刻意把 token 放成 CSS 变量，方便"对着看"。
+   ══════════════════════════════════════════════════════════════════════════ */
+:root{
+  /* ── 表面三层（扁平化的地基：页面是白的，靠线分层，不靠阴影）
+     新增 --canvas 与 --line，是本次设计最大的结构变化 */
+  --canvas:#FFFFFF;        /* 新增：页面底（原来页面底是灰的，卡片是白的） */
+  --subtle:#F5F6F8;        /* 降级为「次级分区底」 */
+  --sunken:#EEF1F5;        /* 输入框底 / 进度槽 */
+  --line:#E6E9EF;          /* 新增：发丝分隔线（压白底 ΔL 0.187，比现状 #EDEFF3 的 0.138 明显） */
+  --line-strong:#D6DAE3;   /* 新增：需要强调的分隔 */
+
+  /* ── 文字（实测对比度见文档 §4.3）
+     ⚠️ ink-3 压白底 4.51 ✅，但压 subtle 只剩 4.17、压 sunken 3.98 → 只能上白底 */
+  --ink-1:#1F2329;  /* 白底 15.78 */
+  --ink-2:#5A6472;  /* 白底  6.00 */
+  --ink-3:#6E7787;  /* 白底  4.51（仅白底） */
+  --ink-4:#A8B0BD;  /* 白底  2.19（仅装饰/禁用） */
+
+  /* ── 品牌（保留品牌橙：品牌资产 + 已通过全部对比度实测，换色等于全部重测）
+     策略变化是「面积」：橙色用量从 ~15% 压到 ~5% */
+  --brand-50:#FFF3EE;   /* 选中行底 */
+  --brand-100:#FFE3D6;  /* 次级底 */
+  --brand-600:#CF4A12;  /* 实心底，白字 4.52 ✅ */
+  --brand-700:#C7430F;  /* 橙字/焦点环，白底 4.95 ✅ */
+  --brand-ink:#3D1200;  /* 压品牌橙的深墨字 5.76 ✅ */
+
+  /* ── 语义（实测：支出红压 subtle 只剩 4.47 ❌ → 金额一律落在白底上） */
+  --income:#0B8038;   /* 白底 5.05 ✅ */
+  --expense:#D92D20;  /* 白底 4.83 ✅ */
+  --info:#1D63B8;
+  --warn:#B45309;
+  --danger-bg:#FDECEA;
+  --danger-text:#B42318;
+
+  /* ── 图表 7 色（已按"闭环相邻"重排：最小相邻可区分度 74.98 → 90.15） */
+  --c1:#C2410C; --c2:#1D63B8; --c3:#C2185B; --c4:#0E7490;
+  --c5:#7C3AED; --c6:#0E7C42; --c7:#8A94A6;
+
+  /* ── 间距：8px 栅格，4px 为半格。现状是 12/14/16/20 混用 */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s8:32px;
+
+  /* ── 圆角：收紧。现状 12/16/24 偏"软" */
+  --r-sm:6px; --r-md:10px; --r-lg:14px; --r-pill:999px;
+
+  /* ── 行高：全部显式声明（WCAG 1.4.12） */
+  --f-display-lg:36px; --lh-display-lg:44px;
+  --f-display:28px;    --lh-display:36px;
+  --f-h1:20px;         --lh-h1:28px;
+  --f-h2:17px;         --lh-h2:24px;
+  --f-body-lg:16px;    --lh-body-lg:24px;
+  --f-body:15px;       --lh-body:24px;
+  --f-body-sm:14px;    --lh-body-sm:22px;
+  --f-caption:12px;    --lh-caption:18px;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--subtle); color:var(--ink-1);
+  font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','HarmonyOS Sans SC','Microsoft YaHei',sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:var(--s8) var(--s6) 80px}
+
+/* ── 文档自身的排印（不属于 App UI） */
+h1{font-size:28px;line-height:40px;letter-spacing:-0.4px}
+h2{font-size:20px;line-height:28px;margin:var(--s8) 0 var(--s2)}
+h3{font-size:15px;line-height:24px;color:var(--ink-2);font-weight:600;margin:var(--s6) 0 var(--s3)}
+.lede{font-size:15px;line-height:26px;color:var(--ink-2);margin-top:var(--s2)}
+.note{font-size:13px;line-height:22px;color:var(--ink-2);background:var(--brand-50);
+      border-left:3px solid var(--brand-600);padding:10px 14px;border-radius:0 var(--r-sm) var(--r-sm) 0;margin:var(--s3) 0}
+.note.warn{background:#FFF8E6;border-left-color:var(--warn)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+     background:var(--sunken);padding:1px 5px;border-radius:4px;color:var(--ink-1)}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   图标：sprite + 24×24 / 1.75px 描边 / round。单色 currentColor → 状态可切换
+   ══════════════════════════════════════════════════════════════════════════ */
+.i{width:24px;height:24px;flex:none;fill:none;stroke:currentColor;
+   stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;display:block}
+.i.s{width:16px;height:16px}
+.i.m{width:20px;height:20px}
+.i.l{width:28px;height:28px}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   手机框
+   ══════════════════════════════════════════════════════════════════════════ */
+.phones{display:flex;flex-wrap:wrap;gap:var(--s6)}
+.phone{width:375px;flex:none}
+.screen{
+  width:375px;height:748px;background:var(--canvas);border:1px solid var(--line-strong);
+  border-radius:28px;overflow:hidden;display:flex;flex-direction:column;position:relative;
+}
+.statusbar{height:28px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 var(--s5);font-size:12px;line-height:18px;color:var(--ink-2);flex:none}
+.navbar{height:44px;display:flex;align-items:center;justify-content:center;flex:none;
+  font-size:17px;line-height:24px;font-weight:600}
+.content{flex:1;overflow:hidden;position:relative}
+figcaption{font-size:13px;line-height:20px;color:var(--ink-2);text-align:center;margin-top:var(--s2)}
+figcaption b{color:var(--ink-1)}
+
+/* TabBar：扁平化 —— 去掉凸起 FAB，中央改为与 Tab 同高的实心方块 */
+.tabbar{height:52px;flex:none;display:flex;align-items:stretch;
+  border-top:1px solid var(--line);background:var(--canvas)}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;font-size:10px;line-height:14px;color:var(--ink-3)}
+.tab.on{color:var(--brand-700)}
+.tab.mid{flex:none;width:56px}
+.tab.mid .btn-add{
+  width:40px;height:32px;border-radius:var(--r-md);background:var(--brand-600);
+  display:flex;align-items:center;justify-content:center;color:#fff;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   页面内通用零件（扁平：通栏 + 发丝线，不用卡片)
+   ══════════════════════════════════════════════════════════════════════════ */
+.pad{padding:0 var(--s4)}
+.row{display:flex;align-items:center;gap:var(--s3);padding:var(--s3) var(--s4);min-height:56px}
+.row + .row{border-top:1px solid var(--line)}
+.row.tight{min-height:48px;padding:10px var(--s4)}
+.hairline{height:1px;background:var(--line);margin:0}
+.sec-title{font-size:12px;line-height:18px;color:var(--ink-3);padding:var(--s5) var(--s4) var(--s2);
+  letter-spacing:.4px}
+.muted{color:var(--ink-3);font-size:12px;line-height:18px}
+.sub{color:var(--ink-2);font-size:14px;line-height:20px}
+.grow{flex:1;min-width:0}
+.ellip{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 图标色块底：分类图标的体量感来源（替代 emoji 的"花哨"） */
+.ibox{width:40px;height:40px;border-radius:var(--r-md);background:var(--sunken);
+  display:flex;align-items:center;justify-content:center;color:var(--ink-1);flex:none}
+.ibox.sm{width:28px;height:28px;border-radius:var(--r-sm)}
+.ibox.sm .i{width:16px;height:16px}
+.ibox.lg{width:48px;height:48px;border-radius:var(--r-lg)}
+.ibox.on{background:var(--brand-600);color:#fff}
+
+/* 分段控件 */
+.seg{display:flex;background:var(--sunken);border-radius:var(--r-sm);padding:2px;gap:2px}
+.seg span{flex:1;text-align:center;font-size:13px;line-height:26px;border-radius:4px;color:var(--ink-2)}
+.seg span.on{background:var(--canvas);color:var(--ink-1);font-weight:600}
+
+/* 药丸标签 */
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;line-height:18px;
+  padding:2px 8px;border-radius:var(--r-pill);background:var(--brand-50);color:var(--brand-700)}
+.pill.g{background:#E7F6ED;color:#0B6B33}
+.pill.r{background:var(--danger-bg);color:var(--danger-text)}
+.pill.n{background:var(--sunken);color:var(--ink-2)}
+
+/* 进度条 */
+.bar{height:4px;border-radius:2px;background:var(--sunken);overflow:hidden}
+.bar>i{display:block;height:100%;border-radius:2px}
+
+/* 按钮（扁平：实心色块 / 描边 / 文字 三档，靠形状与底色区分层级，不靠阴影） */
+.btn{display:flex;align-items:center;justify-content:center;gap:var(--s2);
+  height:44px;border-radius:var(--r-md);font-size:16px;line-height:24px;font-weight:600}
+.btn.primary{background:var(--brand-600);color:#fff}
+.btn.secondary{background:var(--brand-50);color:var(--brand-700)}
+.btn.ghost{background:transparent;color:var(--ink-2);border:1px solid var(--line-strong)}
+.btn.danger{background:var(--danger-bg);color:var(--danger-text)}
+.btn[disabled]{background:var(--sunken);color:var(--ink-4)}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   规范展示区
+   ══════════════════════════════════════════════════════════════════════════ */
+.grid{display:grid;gap:var(--s3)}
+.g-auto{grid-template-columns:repeat(auto-fill,minmax(132px,1fr))}
+.card{background:var(--canvas);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s4)}
+.swatch{border-radius:var(--r-md);padding:var(--s3);min-height:96px;display:flex;
+  flex-direction:column;justify-content:flex-end;border:1px solid var(--line)}
+.swatch b{font-size:13px;line-height:20px;display:block}
+.swatch em{font-style:normal;font-size:11px;line-height:16px;opacity:.85;display:block}
+.tier{display:flex;align-items:baseline;gap:var(--s4);padding:6px 0;border-bottom:1px solid var(--line)}
+.tier:last-child{border-bottom:none}
+.tier .k{font-size:12px;line-height:18px;color:var(--ink-3);width:118px;flex:none}
+
+table{border-collapse:collapse;width:100%;font-size:13px;line-height:20px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--ink-2);font-weight:600;background:var(--subtle)}
+td.ok{color:var(--income);font-weight:600}
+td.warn{color:var(--warn);font-weight:600}
+td.bad{color:var(--expense);font-weight:600}
+
+.icogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:var(--s2)}
+.icocell{background:var(--canvas);border:1px solid var(--line);border-radius:var(--r-md);
+  padding:var(--s3) 4px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.icocell code{font-size:9px;background:none;padding:0;color:var(--ink-3)}
+.icocell .pair{display:flex;gap:var(--s2);align-items:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>「数字优先 · 通栏扁平」界面设计方案</h1>
+<p class="lede">
+  目标端 <b>移动端 H5</b>（uni-app，主要目标 375px，最低 320px）。配套设计文档：
+  <code>docs/UI设计方案·扁平化.md</code>；图标源：<code>docs/design/icons.ts</code>。
+  本原型里的每个色值都是实测值，不是目测近似色。
+</p>
+<div class="note">
+  <b>扁平化不是"把阴影删掉"。</b> 真正的取舍是三条：
+  ① 大面积中性 + 小面积强调（品牌橙用量从 ~15% 压到 ~5%）；
+  ② <b>用分隔线分层，而不是用卡片</b>（页面底从灰改成白，取消"每块都浮在灰底上"的碎片感）；
+  ③ 零阴影，唯一例外是模态浮层（它必须表达"我在你之上"）。
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     图标 sprite（与 docs/design/icons.ts 一一对应）
+     ═══════════════════════════════════════════════════════════════════════ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-receipt" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12.5h6"/></symbol>
+<symbol id="i-chart-bar" viewBox="0 0 24 24"><path d="M4 20h16M7 20v-6.5M12 20V5M17 20v-9.5"/></symbol>
+<symbol id="i-user" viewBox="0 0 24 24"><path d="M12 4a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7M5 20c1-3.5 3.7-5.5 7-5.5s6 2 7 5.5"/></symbol>
+<symbol id="i-wallet" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM15 12h3"/></symbol>
+<symbol id="i-tag" viewBox="0 0 24 24"><path d="M4 10.5V5h5.5L20 15.5 15.5 20zM8.1 8.1h-.01"/></symbol>
+<symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 8h9.5M17.5 8H20M13.5 8a2 2 0 1 1 4 0 2 2 0 0 1-4 0M4 16h3.5M11.5 16H20M5.5 16a2 2 0 1 1 4 0 2 2 0 0 1-4 0"/></symbol>
+<symbol id="i-card" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 10h18M6.5 15h3"/></symbol>
+<symbol id="i-logout" viewBox="0 0 24 24"><path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><path d="M11 5a6 6 0 1 1 0 12 6 6 0 0 1 0-12M16.2 16.2 20 20"/></symbol>
+<symbol id="i-pencil" viewBox="0 0 24 24"><path d="M15 5l4 4L8 20H4v-4zM13 7l4 4"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M9.5 7V5h5v2M7 7l1 13h8l1-13M11 11v6M15 11v6"/></symbol>
+<symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 6h16l-6 7v6l-4-2v-4z"/></symbol>
+<symbol id="i-sort" viewBox="0 0 24 24"><path d="M4 7h16M7 12h10M10 17h4"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M4.5 10a7.5 7.5 0 0 1 12.8-3.3M19.5 14a7.5 7.5 0 0 1-12.8 3.3M17.3 3.5v3.5h-3.5M6.7 20.5V17h3.5"/></symbol>
+<symbol id="i-more" viewBox="0 0 24 24"><path d="M6 12h.01M12 12h.01M18 12h.01"/></symbol>
+<symbol id="i-calendar" viewBox="0 0 24 24"><path d="M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM3 10h18M8 3v4M16 3v4"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><path d="M12 4a8 8 0 1 1 0 16 8 8 0 0 1 0-16M12 8v4.5l3 1.8"/></symbol>
+<symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M14 6l-6 6 6 6"/></symbol>
+<symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M10 6l6 6-6 6"/></symbol>
+<symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="M6 10l6 6 6-6"/></symbol>
+<symbol id="i-chevron-up" viewBox="0 0 24 24"><path d="M6 14l6-6 6 6"/></symbol>
+<symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></symbol>
+<symbol id="i-check-circle" viewBox="0 0 24 24"><path d="M12 4a8 8 0 1 1 0 16 8 8 0 0 1 0-16M8.5 12.5l2.6 2.6 4.4-5"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><path d="M12 4a8 8 0 1 1 0 16 8 8 0 0 1 0-16M12 11.5v4.5M12.1 8h-.01"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l8.5 15H3.5zM12 10v4M12.1 17.5h-.01"/></symbol>
+<symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h4.5l1.5 3h6l1.5-3H21M5 5h14l2 8v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/></symbol>
+<symbol id="i-pie" viewBox="0 0 24 24"><path d="M12 4a8 8 0 1 1 0 16 8 8 0 0 1 0-16M12 12V4M12 12l7 4"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><path d="M6 11h12v7.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 18.5zM9 11V8a3 3 0 0 1 6 0v3"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></symbol>
+<!-- 一级分类 -->
+<symbol id="cat-housing" viewBox="0 0 24 24"><path d="M4 11l8-6.5 8 6.5M6.5 10v9h11v-9M10 19v-4.5h4V19"/></symbol>
+<symbol id="cat-transport" viewBox="0 0 24 24"><path d="M4 15.5h16V12l-1.6-4H5.6L4 12zM4 12h16M7.5 15.5v2.2M16.5 15.5v2.2"/></symbol>
+<symbol id="cat-telecom" viewBox="0 0 24 24"><path d="M4 8a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v5a3 3 0 0 1-3 3h-6l-4 3v-3a3 3 0 0 1-3-3z"/></symbol>
+<symbol id="cat-leisure" viewBox="0 0 24 24"><path d="M12 4l1.8 4.7 4.7 1.8-4.7 1.8L12 17l-1.8-4.7L5.5 10.5l4.7-1.8z"/></symbol>
+<symbol id="cat-finance" viewBox="0 0 24 24"><path d="M12 4l7 2.5v5c0 3.8-2.9 6.9-7 8-4.1-1.1-7-4.2-7-8v-5z"/></symbol>
+<symbol id="cat-misc" viewBox="0 0 24 24"><path d="M4 8l8-3.5 8 3.5v8L12 19.5 4 16zM4 8l8 3.5 8-3.5M12 11.5v8"/></symbol>
+<symbol id="cat-device" viewBox="0 0 24 24"><path d="M4 6h16v10H4zM9 20h6M12 16v4"/></symbol>
+<symbol id="cat-farm" viewBox="0 0 24 24"><path d="M20.5 3.5C9 3.5 3.5 9 3.5 20.5c11.5 0 17-5.5 17-17M8.5 15.5 18.5 5.5"/></symbol>
+<symbol id="cat-medical" viewBox="0 0 24 24"><path d="M12 4a8 8 0 1 1 0 16 8 8 0 0 1 0-16M12 8.5v7M8.5 12h7"/></symbol>
+<symbol id="cat-social" viewBox="0 0 24 24"><path d="M4 11h16v8H4zM3.5 8h17v3h-17zM12 8v11M12 8c-1.6-4-6-3.5-6-1.2S9 8 12 8zM12 8c1.6-4 6-3.5 6-1.2S15 8 12 8z"/></symbol>
+<symbol id="cat-apparel" viewBox="0 0 24 24"><path d="M8.5 4 12 6l3.5-2 4.5 3-2 3-1.5-1v9h-9v-9L6 10 4 7z"/></symbol>
+<symbol id="cat-food" viewBox="0 0 24 24"><path d="M4 12h16c0 4.4-3.6 8-8 8s-8-3.6-8-8zM9 4.5v5M12 3.5v6M15 4.5v5"/></symbol>
+<symbol id="cat-study" viewBox="0 0 24 24"><path d="M4.5 5.5c3.3 0 5.9.9 7.5 2.5 1.6-1.6 4.2-2.5 7.5-2.5v11c-3.3 0-5.9.9-7.5 2.5-1.6-1.6-4.2-2.5-7.5-2.5zM12 8v11"/></symbol>
+<symbol id="cat-salary" viewBox="0 0 24 24"><path d="M4 9h16v9.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5zM9 9V6.5A1.5 1.5 0 0 1 10.5 5h3A1.5 1.5 0 0 1 15 6.5V9M4 13.5h16"/></symbol>
+<symbol id="cat-income" viewBox="0 0 24 24"><path d="M12 5.5c-3.9 0-7 1.1-7 2.5s3.1 2.5 7 2.5 7-1.1 7-2.5-3.1-2.5-7-2.5zM5 8v8c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V8M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></symbol>
+</defs></svg>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     一、四个主页面
+     ═══════════════════════════════════════════════════════════════════════ -->
+<h2>一、四个主页面（375×748 内容区）</h2>
+<p class="lede">
+  共同改造：<b>页面底改白</b>、取消卡片改用发丝线分区、渐变 banner 换纯色 + 深墨大数字、
+  去掉凸起 FAB 改为 Tab 栏内等高的主按钮。
+</p>
+
+<div class="phones" style="margin-top:var(--s4)">
+
+  <!-- ════════ 首页 ════════ -->
+  <figure class="phone">
+    <div class="screen">
+      <div class="statusbar"><span>9:41</span><span>···· ▮</span></div>
+      <div class="content">
+        <!-- 账本切换：不再压在彩色渐变上，独立成一条 -->
+        <div class="row tight" style="min-height:44px">
+          <div class="ibox sm"><svg class="i"><use href="#i-wallet"/></svg></div>
+          <span style="font-size:14px;line-height:22px;font-weight:600">默认账本</span>
+          <svg class="i s" style="color:var(--ink-3)"><use href="#i-chevron-down"/></svg>
+          <span class="grow"></span>
+          <svg class="i m" style="color:var(--ink-3)"><use href="#i-search"/></svg>
+        </div>
+        <div class="hairline"></div>
+
+        <!-- Hero：数字优先 —— 36px 深墨压白底 15.78:1（原方案是白字压彩色渐变 4.52:1） -->
+        <div class="pad" style="padding-top:var(--s5);padding-bottom:var(--s5)">
+          <div class="muted">本月支出</div>
+          <div class="num" style="font-size:36px;line-height:44px;font-weight:600;letter-spacing:-0.5px;margin-top:2px">¥13,918.05</div>
+          <div style="display:flex;gap:var(--s6);margin-top:var(--s3)">
+            <div><span class="muted">收入</span> <span class="num" style="font-size:14px;line-height:20px;color:var(--income);font-weight:600">+32,130.80</span></div>
+            <div><span class="muted">结余</span> <span class="num" style="font-size:14px;line-height:20px;color:var(--ink-1);font-weight:600">18,212.75</span></div>
+          </div>
+        </div>
+        <div class="hairline"></div>
+
+        <div class="sec-title">区间支出</div>
+        <div class="row tight"><span class="grow sub">今天</span><span class="num" style="font-size:14px">0.00</span></div>
+        <div class="row tight"><span class="grow sub">本周</span><span class="num" style="font-size:14px">0.00</span></div>
+        <div class="row tight"><span class="grow sub">本月</span><span class="num" style="font-size:14px">13,918.05</span></div>
+        <div class="row tight"><span class="grow sub">本年</span><span class="num" style="font-size:14px">32,130.80</span></div>
+        <div class="hairline"></div>
+
+        <div class="sec-title" style="display:flex;align-items:baseline">
+          本月分类支出 <span class="muted" style="margin-left:auto">32 笔 · ¥13,918.05</span>
+        </div>
+        <!-- 排行：色点承担"分类"，不再用 emoji -->
+        <div class="pad" style="padding-bottom:var(--s3)">
+          <div style="display:flex;align-items:center;gap:var(--s3);padding:10px 0">
+            <div class="ibox sm"><svg class="i"><use href="#cat-housing"/></svg></div>
+            <div class="grow">
+              <div style="display:flex;align-items:baseline">
+                <span class="sub grow">居家物业</span>
+                <span class="muted num">40.26%</span>
+                <span class="num" style="font-size:14px;margin-left:10px;min-width:76px;text-align:right">¥5,603.40</span>
+              </div>
+              <div class="bar" style="margin-top:6px"><i style="width:40.26%;background:var(--c1)"></i></div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--s3);padding:10px 0">
+            <div class="ibox sm"><svg class="i"><use href="#cat-food"/></svg></div>
+            <div class="grow">
+              <div style="display:flex;align-items:baseline">
+                <span class="sub grow">食品酒水</span>
+                <span class="muted num">19.99%</span>
+                <span class="num" style="font-size:14px;margin-left:10px;min-width:76px;text-align:right">¥2,782.30</span>
+              </div>
+              <div class="bar" style="margin-top:6px"><i style="width:19.99%;background:var(--c2)"></i></div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--s3);padding:10px 0">
+            <div class="ibox sm"><svg class="i"><use href="#cat-transport"/></svg></div>
+            <div class="grow">
+              <div style="display:flex;align-items:baseline">
+                <span class="sub grow">行车交通</span>
+                <span class="muted num">14.28%</span>
+                <span class="num" style="font-size:14px;margin-left:10px;min-width:76px;text-align:right">¥1,987.40</span>
+              </div>
+              <div class="bar" style="margin-top:6px"><i style="width:14.28%;background:var(--c3)"></i></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <nav class="tabbar">
+        <div class="tab on"><svg class="i m"><use href="#i-chart-bar"/></svg>记账</div>
+        <div class="tab"><svg class="i m"><use href="#i-receipt"/></svg>明细</div>
+        <div class="tab mid"><span class="btn-add"><svg class="i m" style="color:#fff"><use href="#i-plus"/></svg></span></div>
+        <div class="tab"><svg class="i m"><use href="#i-pie"/></svg>统计</div>
+        <div class="tab"><svg class="i m"><use href="#i-user"/></svg>我的</div>
+      </nav>
+    </div>
+    <figcaption><b>首页</b>　白底大数字 ／ 通栏区间行 ／ 色块分类图标</figcaption>
+  </figure>
+
+  <!-- ════════ 明细 ════════ -->
+  <figure class="phone">
+    <div class="screen">
+      <div class="statusbar"><span>9:41</span><span>···· ▮</span></div>
+      <div class="navbar">明细</div>
+      <div class="content">
+        <!-- 吸顶筛选条：扁平化后不再是一条"白卡片浮着"，而是与内容同白的粘性条 + 下边线 -->
+        <div style="display:flex;align-items:center;gap:var(--s3);padding:var(--s2) var(--s4);border-bottom:1px solid var(--line)">
+          <svg class="i m" style="color:var(--ink-2)"><use href="#i-chevron-left"/></svg>
+          <span style="font-size:15px;line-height:24px;font-weight:600">2026年9月</span>
+          <svg class="i m" style="color:var(--ink-2)"><use href="#i-chevron-right"/></svg>
+          <span class="grow"></span>
+          <div class="seg" style="width:112px"><span class="on">支出</span><span>收入</span></div>
+        </div>
+        <div class="row tight" style="min-height:44px">
+          <span class="grow muted">本月支出合计</span>
+          <span class="num" style="font-size:16px;font-weight:600;color:var(--expense)">-13,918.05</span>
+        </div>
+        <div class="hairline"></div>
+
+        <!-- 按日分组：日期头（小字 + 灰底）→ 通栏行 -->
+        <div style="background:var(--subtle);padding:6px var(--s4);display:flex;align-items:baseline">
+          <span style="font-size:12px;line-height:18px;font-weight:600">9月12日 周六</span>
+          <span class="grow"></span>
+          <span class="num muted">支出 ¥245.80</span>
+        </div>
+        <div class="row">
+          <div class="ibox"><svg class="i m"><use href="#cat-food"/></svg></div>
+          <div class="grow">
+            <div class="ellip" style="font-size:15px;line-height:24px">早午晚餐</div>
+            <div class="muted">12:30 · 食品酒水</div>
+          </div>
+          <span class="num" style="font-size:16px;line-height:24px;font-weight:600;min-width:84px;text-align:right;color:var(--expense)">-42.00</span>
+        </div>
+        <div class="row">
+          <div class="ibox"><svg class="i m"><use href="#cat-transport"/></svg></div>
+          <div class="grow">
+            <div class="ellip" style="font-size:15px;line-height:24px">打车租车</div>
+            <div class="muted">08:15 · 行车交通</div>
+          </div>
+          <span class="num" style="font-size:16px;line-height:24px;font-weight:600;min-width:84px;text-align:right;color:var(--expense)">-203.80</span>
+        </div>
+        <div style="background:var(--subtle);padding:6px var(--s4);display:flex;align-items:baseline">
+          <span style="font-size:12px;line-height:18px;font-weight:600">9月11日 周五</span>
+          <span class="grow"></span>
+          <span class="num muted">支出 ¥1,286.30</span>
+        </div>
+        <div class="row">
+          <div class="ibox"><svg class="i m"><use href="#cat-housing"/></svg></div>
+          <div class="grow">
+            <div class="ellip" style="font-size:15px;line-height:24px">水电煤气宽带</div>
+            <div class="muted">20:04 · 居家物业</div>
+          </div>
+          <span class="num" style="font-size:16px;line-height:24px;font-weight:600;min-width:84px;text-align:right;color:var(--expense)">-1,286.30</span>
+        </div>
+        <div class="row">
+          <div class="ibox"><svg class="i m"><use href="#cat-apparel"/></svg></div>
+          <div class="grow">
+            <div class="ellip" style="font-size:15px;line-height:24px">鞋帽包包</div>
+            <div class="muted">15:22 · 衣服饰品</div>
+          </div>
+          <span class="num" style="font-size:16px;line-height:24px;font-weight:600;min-width:84px;text-align:right;color:var(--expense)">-469.00</span>
+        </div>
+        <div style="text-align:center;padding:var(--s5) 0" class="muted">— 没有更多了 —</div>
+      </div>
+      <nav class="tabbar">
+        <div class="tab"><svg class="i m"><use href="#i-chart-bar"/></svg>记账</div>
+        <div class="tab on"><svg class="i m"><use href="#i-receipt"/></svg>明细</div>
+        <div class="tab mid"><span class="btn-add"><svg class="i m" style="color:#fff"><use href="#i-plus"/></svg></span></div>
+        <div class="tab"><svg class="i m"><use href="#i-pie"/></svg>统计</div>
+        <div class="tab"><svg class="i m"><use href="#i-user"/></svg>我的</div>
+      </nav>
+    </div>
+    <figcaption><b>明细</b>　吸顶筛选条 ／ 日期分组粘性头 ／ 定宽右对齐金额</figcaption>
+  </figure>
+
+  <!-- ════════ 统计 ════════ -->
+  <figure class="phone">
+    <div class="screen">
+      <div class="statusbar"><span>9:41</span><span>···· ▮</span></div>
+      <div class="navbar">统计</div>
+      <div class="content">
+        <div style="display:flex;align-items:center;justify-content:center;gap:var(--s4);padding:var(--s2) 0;border-bottom:1px solid var(--line)">
+          <svg class="i m" style="color:var(--ink-2)"><use href="#i-chevron-left"/></svg>
+          <span style="font-size:16px;line-height:24px;font-weight:600">2026年9月</span>
+          <svg class="i m" style="color:var(--ink-2)"><use href="#i-chevron-right"/></svg>
+        </div>
+        <!-- 数字优先：结余大（28px）＋ 收支小（14px）。避免三栏 20px 长金额互相压字 -->
+        <div style="display:flex;align-items:flex-end;gap:var(--s4);padding:var(--s5) var(--s4)">
+          <div class="grow">
+            <div class="muted">结余</div>
+            <div class="num" style="font-size:28px;line-height:36px;font-weight:600;letter-spacing:-0.3px">¥18,212.75</div>
+          </div>
+          <div style="text-align:right">
+            <div class="muted">收入 <span class="num" style="color:var(--income);font-weight:600">+32,130.80</span></div>
+            <div class="muted" style="margin-top:2px">支出 <span class="num" style="color:var(--expense);font-weight:600">-13,918.05</span></div>
+          </div>
+        </div>
+        <div class="hairline"></div>
+        <div class="sec-title">支出构成</div>
+        <div style="display:flex;justify-content:center;padding:var(--s2) 0 var(--s5)">
+          <svg width="180" height="180" viewBox="0 0 180 180" style="flex:none">
+            <!-- 底环 = 白色：扇区之间留 2px 缺口露出的就是它（文档原写的白色描边实测无效） -->
+            <circle cx="90" cy="90" r="78" fill="none" stroke="#fff" stroke-width="24"/>
+            <g transform="rotate(-90 90 90)" stroke-width="24" fill="none">
+              <circle cx="90" cy="90" r="78" stroke="var(--c1)" stroke-dasharray="195.31 490.09" stroke-dashoffset="-1"/>
+              <circle cx="90" cy="90" r="78" stroke="var(--c2)" stroke-dasharray="95.97 490.09" stroke-dashoffset="-198.31"/>
+              <circle cx="90" cy="90" r="78" stroke="var(--c3)" stroke-dasharray="67.98 490.09" stroke-dashoffset="-296.28"/>
+              <circle cx="90" cy="90" r="78" stroke="var(--c4)" stroke-dasharray="49.48 490.09" stroke-dashoffset="-366.26"/>
+              <circle cx="90" cy="90" r="78" stroke="var(--c7)" stroke-dasharray="71.35 490.09" stroke-dashoffset="-417.74"/>
+            </g>
+            <text x="90" y="86" text-anchor="middle" font-size="12" fill="var(--ink-3)">支出</text>
+            <text x="90" y="108" text-anchor="middle" font-size="20" font-weight="600" fill="var(--ink-1)"
+                  style="font-variant-numeric:tabular-nums">¥13,918.05</text>
+          </svg>
+        </div>
+        <div class="hairline"></div>
+        <!-- 图例：名称 + 金额 + 占比 三通道，颜色不承担唯一区分职责（WCAG 1.4.1） -->
+        <div class="pad" style="padding-bottom:var(--s4)">
+          <div style="display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)">
+            <span style="width:10px;height:10px;border-radius:3px;background:var(--c1);margin-right:10px"></span>
+            <span class="sub grow">居家物业</span>
+            <span class="num" style="font-size:14px;color:var(--ink-2);min-width:80px;text-align:right">¥5,603.40</span>
+            <span class="num muted" style="width:52px;text-align:right">40.26%</span>
+          </div>
+          <div style="display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)">
+            <span style="width:10px;height:10px;border-radius:3px;background:var(--c2);margin-right:10px"></span>
+            <span class="sub grow">食品酒水</span>
+            <span class="num" style="font-size:14px;color:var(--ink-2);min-width:80px;text-align:right">¥2,782.30</span>
+            <span class="num muted" style="width:52px;text-align:right">19.99%</span>
+          </div>
+          <div style="display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)">
+            <span style="width:10px;height:10px;border-radius:3px;background:var(--c3);margin-right:10px"></span>
+            <span class="sub grow">行车交通</span>
+            <span class="num" style="font-size:14px;color:var(--ink-2);min-width:80px;text-align:right">¥1,987.40</span>
+            <span class="num muted" style="width:52px;text-align:right">14.28%</span>
+          </div>
+          <div style="display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)">
+            <span style="width:10px;height:10px;border-radius:3px;background:var(--c4);margin-right:10px"></span>
+            <span class="sub grow">人情往来</span>
+            <span class="num" style="font-size:14px;color:var(--ink-2);min-width:80px;text-align:right">¥1,462.00</span>
+            <span class="num muted" style="width:52px;text-align:right">10.50%</span>
+          </div>
+          <div style="display:flex;align-items:center;padding:9px 0">
+            <span style="width:10px;height:10px;border-radius:3px;background:var(--c7);margin-right:10px"></span>
+            <span class="sub grow">其他</span>
+            <span class="num" style="font-size:14px;color:var(--ink-2);min-width:80px;text-align:right">¥2,082.95</span>
+            <span class="num muted" style="width:52px;text-align:right">14.97%</span>
+          </div>
+        </div>
+      </div>
+      <nav class="tabbar">
+        <div class="tab"><svg class="i m"><use href="#i-chart-bar"/></svg>记账</div>
+        <div class="tab"><svg class="i m"><use href="#i-receipt"/></svg>明细</div>
+        <div class="tab mid"><span class="btn-add"><svg class="i m" style="color:#fff"><use href="#i-plus"/></svg></span></div>
+        <div class="tab on"><svg class="i m"><use href="#i-pie"/></svg>统计</div>
+        <div class="tab"><svg class="i m"><use href="#i-user"/></svg>我的</div>
+      </nav>
+    </div>
+    <figcaption><b>统计</b>　结余大 + 收支小 ／ 环内白色间隙 ／ 图例三通道</figcaption>
+  </figure>
+
+  <!-- ════════ 我的 ════════ -->
+  <figure class="phone">
+    <div class="screen">
+      <div class="statusbar"><span>9:41</span><span>···· ▮</span></div>
+      <div class="navbar">我的</div>
+      <div class="content">
+        <!-- 用户区：去掉渐变，改白底 + 深墨；头像是色块不是 emoji -->
+        <div style="display:flex;align-items:center;gap:var(--s4);padding:var(--s5) var(--s4)">
+          <div class="ibox lg" style="background:var(--brand-600);color:#fff">
+            <span style="font-size:20px;font-weight:600">L</span>
+          </div>
+          <div class="grow">
+            <div class="ellip" style="font-size:17px;line-height:24px;font-weight:600">demo_user</div>
+            <div class="muted ellip" style="margin-top:2px">ID 1789184747673</div>
+          </div>
+          <svg class="i m" style="color:var(--ink-3)"><use href="#i-chevron-right"/></svg>
+        </div>
+        <div class="hairline"></div>
+        <div class="sec-title">账本与分类</div>
+        <div class="row">
+          <div class="ibox sm"><svg class="i"><use href="#i-wallet"/></svg></div>
+          <span class="grow sub">账本管理</span>
+          <span class="muted">3 个</span>
+          <svg class="i s" style="color:var(--ink-3)"><use href="#i-chevron-right"/></svg>
+        </div>
+        <div class="row">
+          <div class="ibox sm"><svg class="i"><use href="#i-tag"/></svg></div>
+          <span class="grow sub">分类管理</span>
+          <svg class="i s" style="color:var(--ink-3)"><use href="#i-chevron-right"/></svg>
+        </div>
+        <div class="sec-title">偏好</div>
+        <div class="row">
+          <div class="ibox sm"><svg class="i"><use href="#i-moon"/></svg></div>
+          <span class="grow sub">深色模式</span>
+          <span class="pill n">预留</span>
+        </div>
+        <div class="row">
+          <div class="ibox sm"><svg class="i"><use href="#i-info"/></svg></div>
+          <span class="grow sub">关于</span>
+          <svg class="i s" style="color:var(--ink-3)"><use href="#i-chevron-right"/></svg>
+        </div>
+        <div class="pad" style="padding-top:var(--s6)">
+          <div class="btn danger" style="background:transparent;border:1px solid #F3C9C4">
+            <svg class="i m"><use href="#i-logout"/></svg>退出登录
+          </div>
+        </div>
+      </div>
+      <nav class="tabbar">
+        <div class="tab"><svg class="i m"><use href="#i-chart-bar"/></svg>记账</div>
+        <div class="tab"><svg class="i m"><use href="#i-receipt"/></svg>明细</div>
+        <div class="tab mid"><span class="btn-add"><svg class="i m" style="color:#fff"><use href="#i-plus"/></svg></span></div>
+        <div class="tab"><svg class="i m"><use href="#i-pie"/></svg>统计</div>
+        <div class="tab on"><svg class="i m"><use href="#i-user"/></svg>我的</div>
+      </nav>
+    </div>
+    <figcaption><b>我的</b>　去渐变 ／ 分组通栏列表 ／ 图标色块</figcaption>
+  </figure>
+
+  <!-- ════════ 记一笔（核心流程）════════ -->
+  <figure class="phone">
+    <div class="screen">
+      <div class="statusbar"><span>9:41</span><span>···· ▮</span></div>
+      <div style="height:48px;display:flex;align-items:center;padding:0 var(--s4);gap:var(--s3);flex:none">
+        <svg class="i m" style="color:var(--ink-2)"><use href="#i-close"/></svg>
+        <span class="grow" style="text-align:center;font-size:17px;line-height:24px;font-weight:600">记一笔</span>
+        <span style="font-size:15px;color:var(--brand-700);font-weight:600">保存</span>
+      </div>
+      <div class="content" style="display:flex;flex-direction:column">
+        <div class="pad" style="padding-bottom:var(--s3)">
+          <div class="seg"><span>支出</span><span class="on">收入</span></div>
+        </div>
+        <div class="row">
+          <div class="ibox on"><svg class="i m"><use href="#cat-salary"/></svg></div>
+          <div class="grow">
+            <div class="sub" style="font-weight:600">职业收入 / 工资收入</div>
+            <div class="muted">点此更换分类</div>
+          </div>
+          <svg class="i s" style="color:var(--ink-3)"><use href="#i-chevron-right"/></svg>
+        </div>
+        <div class="row">
+          <svg class="i m" style="color:var(--ink-2)"><use href="#i-calendar"/></svg>
+          <span class="grow sub">2026-09-12</span>
+          <svg class="i s" style="color:var(--ink-3)"><use href="#i-chevron-right"/></svg>
+        </div>
+        <div class="row">
+          <svg class="i m" style="color:var(--ink-2)"><use href="#i-clock"/></svg>
+          <span class="grow sub">12:30</span>
+          <svg class="i s" style="color:var(--ink-3)"><use href="#i-chevron-right"/></svg>
+        </div>
+        <div class="hairline"></div>
+        <!-- 金额右对齐 + 等宽数字：输入中的金额也需要"小数点竖直成列" -->
+        <div class="pad" style="text-align:right;padding-top:var(--s4);padding-bottom:var(--s4)">
+          <span class="num" style="font-size:36px;line-height:44px;font-weight:600">32,130.80</span>
+        </div>
+        <div class="hairline"></div>
+        <!-- 金额键盘：扁平化后按键无阴影、只靠底色与留白 -->
+        <div style="margin-top:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line)">
+          <span style="background:var(--canvas);text-align:center;padding:14px 0;font-size:20px">1</span>
+          <span style="background:var(--canvas);text-align:center;padding:14px 0;font-size:20px">2</span>
+          <span style="background:var(--canvas);text-align:center;padding:14px 0;font-size:20px">3</span>
+          <span style="background:var(--sunken);text-align:center;padding:14px 0;font-size:16px;color:var(--ink-2)">今天</span>
+          <span style="background:var(--canvas);text-align:center;padding:14px 0;font-size:20px">4</span>
+          <span style="background:var(--canvas);text-align:center;padding:14px 0;font-size:20px">5</span>
+          <span style="background:var(--canvas);text-align:center;padding:14px 0;font-size:20px">6</span>
+          <span style="background:var(--sunken);text-align:center;padding:14px 0;font-size:16px;color:var(--ink-2)">+</span>
+          <span style="background:var(--canvas);text-align:center;padding:14px 0;font-size:20px">7</span>
+          <span style="background:var(--canvas);text-align:center;padding:14px 0;font-size:20px">8</span>
+          <span style="background:var(--canvas);text-align:center;padding:14px 0;font-size:20px">9</span>
+          <span style="background:var(--sunken);text-align:center;padding:14px 0;font-size:16px;color:var(--ink-2)">−</span>
+          <span style="background:var(--canvas);text-align:center;padding:14px 0;font-size:20px">.</span>
+          <span style="background:var(--canvas);text-align:center;padding:14px 0;font-size:20px">0</span>
+          <span style="background:var(--canvas);text-align:center;padding:14px 0;color:var(--ink-2)"><svg class="i m" style="margin:0 auto"><use href="#i-close"/></svg></span>
+          <span style="background:var(--brand-600);color:#fff;text-align:center;padding:14px 0;font-size:16px;font-weight:600">完成</span>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>记一笔</b>　金额键盘常驻 ／ 无阴影按键 ／ 主操作在拇指区</figcaption>
+  </figure>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     二、图标系统
+     ═══════════════════════════════════════════════════════════════════════ -->
+<h2>二、图标系统（替换全部 emoji）</h2>
+<p class="lede">
+  规格：<b>24×24 网格 ／ 1.75px 描边 ／ round cap+join ／ 单色 <code>currentColor</code></b>。
+  单色是关键 —— emoji 自带颜色、不受 <code>color</code> 影响，所以<b>无法表达选中态与禁用态</b>。
+  源文件：<code>docs/design/icons.ts</code>（31 个功能图标 + 15 个一级分类图标，可直接落进 <code>src/constants/</code>）。
+</p>
+
+<h3>2.1 一级分类图标（15 个，每个都独一无二）</h3>
+<div class="icogrid">
+  <div class="icocell"><div class="pair"><span class="ibox"><svg class="i m"><use href="#cat-housing"/></svg></span><span class="ibox on"><svg class="i m"><use href="#cat-housing"/></svg></span></div><code>居家物业</code></div>
+  <div class="icocell"><div class="pair"><span class="ibox"><svg class="i m"><use href="#cat-transport"/></svg></span><span class="ibox on"><svg class="i m"><use href="#cat-transport"/></svg></span></div><code>行车交通</code></div>
+  <div class="icocell"><div class="pair"><span class="ibox"><svg class="i m"><use href="#cat-telecom"/></svg></span><span class="ibox on"><svg class="i m"><use href="#cat-telecom"/></svg></span></div><code>交流通讯</code></div>
+  <div class="icocell"><div class="pair"><span class="ibox"><svg class="i m"><use href="#cat-leisure"/></svg></span><span class="ibox on"><svg class="i m"><use href="#cat-leisure"/></svg></span></div><code>休闲娱乐</code></div>
+  <div class="icocell"><div class="pair"><span class="ibox"><svg class="i m"><use href="#cat-finance"/></svg></span><span class="ibox on"><svg class="i m"><use href="#cat-finance"/></svg></span></div><code>金融保险</code></div>
+  <div class="icocell"><div class="pair"><span class="ibox"><svg class="i m"><use href="#cat-misc"/></svg></span><span class="ibox on"><svg class="i m"><use href="#cat-misc"/></svg></span></div><code>其他杂项</code></div>
+  <div class="icocell"><div class="pair"><span class="ibox"><svg class="i m"><use href="#cat-device"/></svg></span><span class="ibox on"><svg class="i m"><use href="#cat-device"/></svg></span></div><code>电子产品</code></div>
+  <div class="icocell"><div class="pair"><span class="ibox"><svg class="i m"><use href="#cat-farm"/></svg></span><span class="ibox on"><svg class="i m"><use href="#cat-farm"/></svg></span></div><code>养殖</code></div>
+  <div class="icocell"><div class="pair"><span class="ibox"><svg class="i m"><use href="#cat-medical"/></svg></span><span class="ibox on"><svg class="i m"><use href="#cat-medical"/></svg></span></div><code>医疗保健</code></div>
+  <div class="icocell"><div class="pair"><span class="ibox"><svg class="i m"><use href="#cat-social"/></svg></span><span class="ibox on"><svg class="i m"><use href="#cat-social"/></svg></span></div><code>人情往来</code></div>
+  <div class="icocell"><div class="pair"><span class="ibox"><svg class="i m"><use href="#cat-apparel"/></svg></span><span class="ibox on"><svg class="i m"><use href="#cat-apparel"/></svg></span></div><code>衣服饰品</code></div>
+  <div class="icocell"><div class="pair"><span class="ibox"><svg class="i m"><use href="#cat-food"/></svg></span><span class="ibox on"><svg class="i m"><use href="#cat-food"/></svg></span></div><code>食品酒水</code></div>
+  <div class="icocell"><div class="pair"><span class="ibox"><svg class="i m"><use href="#cat-study"/></svg></span><span class="ibox on"><svg class="i m"><use href="#cat-study"/></svg></span></div><code>学习进修</code></div>
+  <div class="icocell"><div class="pair"><span class="ibox"><svg class="i m"><use href="#cat-salary"/></svg></span><span class="ibox on"><svg class="i m"><use href="#cat-salary"/></svg></span></div><code>职业收入</code></div>
+  <div class="icocell"><div class="pair"><span class="ibox"><svg class="i m"><use href="#cat-income"/></svg></span><span class="ibox on"><svg class="i m"><use href="#cat-income"/></svg></span></div><code>其他收入</code></div>
+</div>
+<div class="note">
+  左：默认态（<code>bg-sunken</code> 底 + <code>ink-1</code> 字形，13.93:1）；右：选中态（<code>brand-600</code> 底 + 白字形，4.52:1）。
+  <b>刻意不给 15 个分类各配一色</b> —— 那是视觉噪音，还会与"收支红绿""图表序列"抢语义。
+  扁平体系的规则是「一色一义」：中性底承载 90% 的图标，颜色只留给"当前选中"这一件事。
+</div>
+
+<h3>2.2 功能图标（31 个）</h3>
+<div class="icogrid">
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-plus"/></svg><code>plus</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-receipt"/></svg><code>receipt</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-chart-bar"/></svg><code>chart-bar</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-pie"/></svg><code>pie</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-user"/></svg><code>user</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-wallet"/></svg><code>wallet</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-tag"/></svg><code>tag</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-sliders"/></svg><code>sliders</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-card"/></svg><code>card</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-logout"/></svg><code>logout</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-search"/></svg><code>search</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-pencil"/></svg><code>pencil</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-trash"/></svg><code>trash</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-filter"/></svg><code>filter</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-sort"/></svg><code>sort</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-refresh"/></svg><code>refresh</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-more"/></svg><code>more</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-calendar"/></svg><code>calendar</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-clock"/></svg><code>clock</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-chevron-left"/></svg><code>chevron-left</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-chevron-right"/></svg><code>chevron-right</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-chevron-down"/></svg><code>chevron-down</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-close"/></svg><code>close</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-check"/></svg><code>check</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--income)"><use href="#i-check-circle"/></svg><code>check-circle</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-info"/></svg><code>info</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--warn)"><use href="#i-alert"/></svg><code>alert</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-inbox"/></svg><code>inbox</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-lock"/></svg><code>lock</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-moon"/></svg><code>moon</code></div>
+  <div class="icocell"><svg class="i" style="color:var(--ink-1)"><use href="#i-chevron-up"/></svg><code>chevron-up</code></div>
+</div>
+<div class="note warn">
+  <b>二级分类不逐个精绘</b>，走三级回退（<code>resolveCategoryIcon</code>）：
+  ① 图标名 → ② 老数据 emoji 查表 → ③ 按分类名继承其一级图标 → ④ 兜底 <code>cat-misc</code>。
+  二级永远出现在它的一级分组标题下方，<b>上下文已经给了分组信息</b>，图标只需承担"个体差异"。
+  15 张精绘图 + 一张映射表即可覆盖全部 88 个分类，且<b>永不出现空图标</b>。
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     三、配色规范
+     ═══════════════════════════════════════════════════════════════════════ -->
+<h2>三、配色规范（全部为实测值）</h2>
+<h3>3.1 表面三层与分隔线</h3>
+<div class="grid g-auto">
+  <div class="swatch" style="background:var(--canvas)"><b>canvas</b><em>#FFFFFF　页面底（新）</em></div>
+  <div class="swatch" style="background:var(--subtle)"><b>subtle</b><em>#F5F6F8　分区底</em></div>
+  <div class="swatch" style="background:var(--sunken)"><b>sunken</b><em>#EEF1F5　输入/进度槽</em></div>
+  <div class="swatch" style="background:var(--line)"><b>line</b><em>#E6E9EF　发丝线（新）</em></div>
+  <div class="swatch" style="background:var(--line-strong)"><b>line-strong</b><em>#D6DAE3　强调分隔（新）</em></div>
+  <div class="swatch" style="background:#EDEFF3"><b>旧 divider</b><em>#EDEFF3　实测压 sunken ΔL 0.015</em></div>
+</div>
+<div class="note warn">
+  现状分隔线 <code>#EDEFF3</code> 压在 <code>#EDEFF3</code> 相近的浅底上 <b>ΔL 仅 0.015，等于看不见</b>；
+  换成 <code>#E6E9EF</code> 后压白底 ΔL 0.187（比现状 0.138 更实），且在 sunken 上仍有 0.063。
+</div>
+
+<h3>3.2 文字与语义色 ×「哪一档能上哪一层底」（实测对比度）</h3>
+<table>
+  <thead><tr><th>前景</th><th>canvas 白底</th><th>subtle #F5F6F8</th><th>sunken #EEF1F5</th><th>结论</th></tr></thead>
+  <tbody>
+    <tr><td><code>ink-1</code> #1F2329</td><td class="ok">15.78 ✅</td><td class="ok">14.59 ✅</td><td class="ok">13.93 ✅</td><td>全部可用</td></tr>
+    <tr><td><code>ink-2</code> #5A6472</td><td class="ok">6.00 ✅</td><td class="ok">5.55 ✅</td><td class="ok">5.30 ✅</td><td>全部可用（非白底上的安全下限）</td></tr>
+    <tr><td><code>ink-3</code> #6E7787</td><td class="ok">4.51 ✅</td><td class="warn">4.17 ⚠️</td><td class="warn">3.98 ⚠️</td><td><b>仅白底</b></td></tr>
+    <tr><td><code>ink-4</code> #A8B0BD</td><td class="bad">2.19 ❌</td><td class="bad">2.02 ❌</td><td class="bad">1.93 ❌</td><td>仅装饰/禁用（WCAG 豁免）</td></tr>
+    <tr><td>支出 <code>#D92D20</code></td><td class="ok">4.83 ✅</td><td class="bad">4.47 ❌</td><td class="bad">4.26 ❌</td><td><b>金额必须落白底</b></td></tr>
+    <tr><td>收入 <code>#0B8038</code></td><td class="ok">5.05 ✅</td><td class="ok">4.67 ✅</td><td class="bad">4.46 ❌</td><td>避免 sunken</td></tr>
+    <tr><td>输入框边界 <code>#8A94A6</code></td><td class="ok">3.06 ✅</td><td class="bad">2.83 ❌</td><td class="bad">2.70 ❌</td><td>输入框必须坐白底（1.4.11 要求 ≥3:1）</td></tr>
+  </tbody>
+</table>
+<div class="note">
+  这张表是本设计方案的<b>前置约束</b>，不是事后核对：它直接决定了「页面底改白」这个结构决策 ——
+  浅灰底会让 <code>ink-3</code>、支出红、输入框边界<b>同时失效</b>。
+</div>
+
+<h3>3.3 品牌与语义</h3>
+<div class="grid g-auto">
+  <div class="swatch" style="background:var(--brand-600);color:#fff"><b>brand-600</b><em>#CF4A12　白字 4.52 ✅</em></div>
+  <div class="swatch" style="background:var(--brand-700);color:#fff"><b>brand-700</b><em>#C7430F　白字 4.95 ✅</em></div>
+  <div class="swatch" style="background:var(--brand-50)"><b>brand-50</b><em>#FFF3EE　选中底</em></div>
+  <div class="swatch" style="background:#fff"><b>支出 expense</b><em>#D92D20　白底 4.83</em></div>
+  <div class="swatch" style="background:#fff"><b>收入 income</b><em>#0B8038　白底 5.05</em></div>
+  <div class="swatch" style="background:#fff"><b>警告 warn</b><em>#B45309　白底 5.02</em></div>
+</div>
+
+<h3>3.4 图表序列（按「闭环相邻」重排）</h3>
+<div class="grid g-auto">
+  <div class="swatch" style="background:var(--c1);color:#fff"><b>1 品牌橙红</b><em>#C2410C</em></div>
+  <div class="swatch" style="background:var(--c2);color:#fff"><b>2 蓝</b><em>#1D63B8</em></div>
+  <div class="swatch" style="background:var(--c3);color:#fff"><b>3 品红</b><em>#C2185B</em></div>
+  <div class="swatch" style="background:var(--c4);color:#fff"><b>4 青</b><em>#0E7490</em></div>
+  <div class="swatch" style="background:var(--c5);color:#fff"><b>5 紫</b><em>#7C3AED</em></div>
+  <div class="swatch" style="background:var(--c6);color:#fff"><b>6 翠绿</b><em>#0E7C42</em></div>
+  <div class="swatch" style="background:var(--c7)"><b>7 中性灰</b><em>#8A94A6　「其他」专用</em></div>
+</div>
+<div class="note warn">
+  <b>发现一个校验漏洞：环形图是闭环，首尾两段也相邻，但既有校验只比对了 i 与 i+1。</b>
+  实测闭环对（中性灰↔橙红）= 90.15，恰好达标，所以没出事 —— 但那是运气。
+  把青与翠绿换位后，<b>最小相邻可区分度从 74.98 提升到 90.15</b>（色盲模拟距离，阈值 ≥70）。
+  顺序：橙红 → 蓝 → 品红 → <b>青</b> → 紫 → <b>翠绿</b> → 中性灰。
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     四、版式规范
+     ═══════════════════════════════════════════════════════════════════════ -->
+<h2>四、版式与间距</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--s6);align-items:start">
+  <div class="card">
+    <h3 style="margin-top:0">字号阶梯（复用已验证的 8 档，不推翻）</h3>
+    <div class="tier"><span class="k">display-lg / 36</span><span style="font-size:36px;line-height:44px;font-weight:600">¥13,918.05</span></div>
+    <div class="tier"><span class="k">display / 28</span><span style="font-size:28px;line-height:36px;font-weight:600">¥18,212.75</span></div>
+    <div class="tier"><span class="k">h1 / 20</span><span style="font-size:20px;line-height:28px;font-weight:600">页面主标题</span></div>
+    <div class="tier"><span class="k">h2 / 17</span><span style="font-size:17px;line-height:24px;font-weight:600">区块标题</span></div>
+    <div class="tier"><span class="k">body-lg / 16</span><span style="font-size:16px;line-height:24px">列表金额、主要动作</span></div>
+    <div class="tier"><span class="k">body / 15</span><span style="font-size:15px;line-height:24px">正文（基准字号）</span></div>
+    <div class="tier"><span class="k">body-sm / 14</span><span style="font-size:14px;line-height:22px">次要正文</span></div>
+    <div class="tier"><span class="k">caption / 12</span><span style="font-size:12px;line-height:18px">辅助说明（中文硬下限）</span></div>
+  </div>
+  <div>
+    <div class="card">
+      <h3 style="margin-top:0">间距：8px 栅格</h3>
+      <div style="display:flex;gap:var(--s2);align-items:flex-end;margin-bottom:var(--s3)">
+        <span style="width:4px;height:20px;background:var(--brand-600)"></span>
+        <span style="width:8px;height:36px;background:var(--brand-600)"></span>
+        <span style="width:12px;height:52px;background:var(--brand-600)"></span>
+        <span style="width:16px;height:68px;background:var(--brand-600)"></span>
+        <span style="width:20px;height:84px;background:var(--brand-600)"></span>
+        <span style="width:24px;height:100px;background:var(--brand-600)"></span>
+        <span style="width:32px;height:116px;background:var(--brand-600)"></span>
+      </div>
+      <div class="muted">4 / 8 / 12 / 16 / 20 / 24 / 32　现状是 12/14/16/20 混用，无栅格</div>
+    </div>
+    <div class="card" style="margin-top:var(--s3)">
+      <h3 style="margin-top:0">圆角：收紧</h3>
+      <div style="display:flex;gap:var(--s3);align-items:center">
+        <span style="width:44px;height:44px;background:var(--sunken);border-radius:6px"></span>
+        <span style="width:44px;height:44px;background:var(--sunken);border-radius:10px"></span>
+        <span style="width:44px;height:44px;background:var(--sunken);border-radius:14px"></span>
+        <span style="width:72px;height:32px;background:var(--sunken);border-radius:999px"></span>
+      </div>
+      <div class="muted" style="margin-top:var(--s2)">6 控件 / 10 图标色块 / 14 卡片 / 999 药丸。现状 12/16/24 偏软</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     五、组件状态
+     ═══════════════════════════════════════════════════════════════════════ -->
+<h2>五、关键组件与状态</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--s3)">
+  <div class="card">
+    <h3 style="margin-top:0">按钮 · 4 档 × 4 态</h3>
+    <div class="btn primary">主操作（实心）</div>
+    <div class="btn secondary" style="margin-top:8px">次操作（浅底）</div>
+    <div class="btn ghost" style="margin-top:8px">第三级（描边）</div>
+    <div class="btn danger" style="margin-top:8px">危险（浅红底）</div>
+    <div class="btn primary" style="margin-top:8px;background:#B33A0C">按下态（加深一阶）</div>
+    <div class="btn primary" disabled style="margin-top:8px">禁用（无对比度要求）</div>
+    <div class="muted" style="margin-top:8px">
+      扁平体系里按钮<b>不靠阴影表达层级</b>，靠"底色饱和度"分四级。触控目标一律 44px 高。
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">输入框 · 3 态</h3>
+    <div style="display:flex;align-items:center;gap:var(--s3);border:1px solid var(--line-strong);border-radius:var(--r-md);padding:10px var(--s3);background:var(--canvas)">
+      <svg class="i m" style="color:var(--ink-3)"><use href="#i-user"/></svg>
+      <span class="sub" style="color:var(--ink-3)">默认态 · 边界 #8A94A6 压白底 3.06 ✅</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:var(--s3);border:1px solid var(--brand-700);border-radius:var(--r-md);padding:10px var(--s3);background:var(--canvas);margin-top:8px;outline:2px solid var(--brand-700);outline-offset:0">
+      <svg class="i m" style="color:var(--ink-1)"><use href="#i-user"/></svg>
+      <span class="sub">聚焦态 · 2px 焦点环（outline，不被裁）</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:var(--s3);border:1px solid var(--line-strong);border-radius:var(--r-md);padding:10px var(--s3);background:var(--sunken);margin-top:8px;opacity:.6">
+      <svg class="i m" style="color:var(--ink-4)"><use href="#i-user"/></svg>
+      <span class="sub" style="color:var(--ink-4)">禁用态</span>
+    </div>
+    <div class="muted" style="margin-top:8px">
+      ⚠️ 输入框<b>一律坐白底</b>：边界压 <code>sunken</code> 只有 2.70，不满足 1.4.11 的 3:1。
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">列表行 · 3 态</h3>
+    <div class="row" style="border-top:1px solid var(--line)">
+      <div class="ibox"><svg class="i m"><use href="#cat-food"/></svg></div>
+      <div class="grow"><div style="font-size:15px;line-height:24px">默认</div><div class="muted">12:30 · 食品酒水</div></div>
+      <span class="num" style="font-size:16px;font-weight:600;color:var(--expense);min-width:84px;text-align:right">-42.00</span>
+    </div>
+    <div class="row" style="background:var(--brand-50)">
+      <div class="ibox on"><svg class="i m"><use href="#cat-food"/></svg></div>
+      <div class="grow"><div style="font-size:15px;line-height:24px">选中 / 按下</div><div class="muted">浅橙底 + 图标反白</div></div>
+      <span class="num" style="font-size:16px;font-weight:600;color:var(--expense);min-width:84px;text-align:right">-42.00</span>
+    </div>
+    <div class="row" style="opacity:.55">
+      <div class="ibox"><svg class="i m" style="color:var(--ink-4)"><use href="#cat-food"/></svg></div>
+      <div class="grow"><div style="font-size:15px;line-height:24px">加载中（骨架）</div><div class="muted">内容占位，不改变行高</div></div>
+      <span class="num" style="font-size:16px;font-weight:600;color:var(--ink-4);min-width:84px;text-align:right">-42.00</span>
+    </div>
+    <div class="muted" style="margin-top:8px">行高固定 56px（紧凑 48px），金额列 <code>min-width</code> 定宽 + tabular-nums。</div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">分段控件 / Tab</h3>
+    <div class="seg"><span class="on">支出</span><span>收入</span></div>
+    <div class="seg" style="margin-top:10px"><span style="flex:none;width:56px" class="on">日</span><span style="flex:none;width:56px">周</span><span style="flex:none;width:56px">月</span><span style="flex:none;width:56px">年</span></div>
+    <div class="muted" style="margin-top:10px">选中态 = 白底 + 深墨 + 600 字重；未选中 = 透明 + ink-2。不靠颜色单独承担"选中"（形状也变了）。</div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">反馈 · 空 / 加载 / 错误 / Toast</h3>
+    <div style="display:flex;align-items:center;gap:var(--s3);padding:10px;background:var(--brand-50);border-radius:var(--r-md);color:var(--brand-ink)">
+      <svg class="i m" style="color:var(--brand-700)"><use href="#i-check-circle"/></svg>
+      <span class="sub" style="color:var(--brand-ink)">已保存</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:var(--s3);padding:10px;background:var(--danger-bg);border-radius:var(--r-md);margin-top:8px;color:var(--danger-text)">
+      <svg class="i m"><use href="#i-alert"/></svg><span class="sub" style="color:var(--danger-text)">网络异常，请重试</span>
+    </div>
+    <div style="text-align:center;padding:var(--s5) 0">
+      <svg class="i l" style="color:var(--ink-4);margin:0 auto 8px"><use href="#i-inbox"/></svg>
+      <div class="muted">本月还没有支出记录</div>
+    </div>
+    <div class="muted">空状态用图标而非 emoji 插画；toast 用色块 + 图标，不靠阴影浮起。</div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">模态 · 唯一的阴影例外</h3>
+    <div style="background:rgba(0,0,0,.45);border-radius:var(--r-md);padding:var(--s5) var(--s4);display:flex;align-items:flex-end;min-height:150px">
+      <div style="background:#fff;border-radius:var(--r-lg);padding:var(--s4);width:100%;box-shadow:0 8px 32px rgba(0,0,0,.18)">
+        <div style="font-size:17px;font-weight:600">删除这条记录？</div>
+        <div class="muted" style="margin-top:4px">删除后无法恢复</div>
+        <div style="display:flex;gap:var(--s3);margin-top:var(--s4)">
+          <div class="btn ghost grow">取消</div>
+          <div class="btn danger grow">删除</div>
+        </div>
+      </div>
+    </div>
+    <div class="muted" style="margin-top:8px">
+      <b>只此一处允许阴影</b>：模态必须表达"我在你之上"。其余所有层级都由底色与分隔线承担。
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     六、响应式
+     ═══════════════════════════════════════════════════════════════════════ -->
+<h2>六、响应式适配</h2>
+<p class="lede">
+  策略：<b>骨架不换，只调留白与列数</b>。字号<b>不随视口缩放</b>（px 固定），只随系统字号设置缩放 ——
+  这条是实测教训：项目已在 320px × 200% 下把所有页面跑到 0 屏不合规，不能为了"大屏好看"把这套推翻。
+</p>
+<table>
+  <thead><tr><th>断点</th><th>典型设备</th><th>布局</th><th>关键调整</th></tr></thead>
+  <tbody>
+    <tr><td>&lt; 360</td><td>320 窄屏</td><td>单列</td><td>页面内边距 16 → 12；金额列 <code>min-width</code> 收窄；允许换行而不是截断</td></tr>
+    <tr><td>360 – 599</td><td>手机常态（375 / 390 / 414）</td><td>单列</td><td>基准：页面内边距 16，行高 56</td></tr>
+    <tr><td>600 – 899</td><td>折叠屏展开 / 小平板竖</td><td>单列 + 居中</td><td>内容区上限 <b>560px</b> 居中；两侧留白同色，不加装饰</td></tr>
+    <tr><td>≥ 900</td><td>平板横 / 桌面浏览器</td><td>左导航 + 内容</td><td>侧栏 240px，内容区上限 <b>720px</b>；TabBar 转为侧栏</td></tr>
+  </tbody>
+</table>
+<div style="display:flex;gap:var(--s4);margin-top:var(--s4);overflow-x:auto;padding-bottom:var(--s2)">
+  <div style="flex:none">
+    <div style="width:280px;height:120px;background:var(--canvas);border:1px solid var(--line-strong);border-radius:var(--r-lg);padding:var(--s3)">
+      <div class="muted" style="font-size:11px">320 · 内边距 12</div>
+      <div class="num" style="font-size:20px;font-weight:600;margin-top:6px">¥13,918.05</div>
+      <div class="bar" style="margin-top:8px"><i style="width:60%;background:var(--c1)"></i></div>
+    </div>
+  </div>
+  <div style="flex:none">
+    <div style="width:335px;height:120px;background:var(--canvas);border:1px solid var(--line-strong);border-radius:var(--r-lg);padding:var(--s4)">
+      <div class="muted" style="font-size:11px">375 · 内边距 16（基准）</div>
+      <div class="num" style="font-size:28px;font-weight:600;margin-top:6px">¥13,918.05</div>
+      <div class="bar" style="margin-top:8px"><i style="width:60%;background:var(--c1)"></i></div>
+    </div>
+  </div>
+  <div style="flex:none">
+    <div style="width:560px;height:120px;background:var(--canvas);border:1px solid var(--line-strong);border-radius:var(--r-lg);padding:var(--s4);display:flex;gap:var(--s5);align-items:center">
+      <div style="flex:1;min-width:0">
+        <div class="muted" style="font-size:11px">≥600 · 内容 560 居中</div>
+        <div class="num" style="font-size:28px;font-weight:600;margin-top:6px">¥13,918.05</div>
+      </div>
+      <div style="flex:none;white-space:nowrap;font-size:11px;color:var(--ink-3);border-left:1px solid var(--line);padding-left:var(--s4)">
+        两侧留白同色<br>不加装饰<br>行宽不拉长
+      </div>
+    </div>
+  </div>
+</div>
+<div class="note">
+  <b>为什么大屏也不加列：</b>记账是"扫读数字"的任务，行被拉长到 900px 后视线要横跨整屏才能对上
+  分类与金额。上限 560px 保住<b>金额与分类在同一视野内</b>，这比"把屏幕填满"重要。
+</div>
+
+<h2>七、无障碍核对（WCAG 2.2 AA）</h2>
+<table>
+  <thead><tr><th>条款</th><th>本方案对应措施</th><th>状态</th></tr></thead>
+  <tbody>
+    <tr><td>1.4.1 颜色不作为唯一手段</td><td>收支金额强制带 +/−；图例含名称+金额+占比；分类图标形状各异</td><td class="ok">✅</td></tr>
+    <tr><td>1.4.3 对比度</td><td>§3.2 全表实测，正文 ≥4.5、大字 ≥3；支出红仅在白底使用</td><td class="ok">✅</td></tr>
+    <tr><td>1.4.4 文字缩放 200%</td><td>字号用 px（不随视口缩放）；金额折行而非 ellipsis 截断</td><td class="ok">✅ 已实测</td></tr>
+    <tr><td>1.4.10 回流 320px</td><td>单列 + <code>flex-wrap</code> + <code>min-width:0</code>；21 屏 0 不合规</td><td class="ok">✅ 已实测</td></tr>
+    <tr><td>1.4.11 非文字对比度 ≥3:1</td><td>输入框边界 3.06（白底）；图标字形 13.93；图表填充 ≥3.06</td><td class="ok">✅</td></tr>
+    <tr><td>1.4.12 文字间距</td><td>8 档字号全部显式声明 line-height，校验器强制</td><td class="ok">✅</td></tr>
+    <tr><td>2.4.7 焦点可见</td><td>2px <code>outline</code> 焦点环（不用 box-shadow，避免被 <code>overflow:hidden</code> 裁）</td><td class="ok">✅ 规则就位</td></tr>
+    <tr><td>2.5.8 目标尺寸 ≥24px</td><td>所有可点元素 ≥44px；Tab 项 52px 高</td><td class="ok">✅</td></tr>
+  </tbody>
+</table>
+
+<div class="note" style="margin-top:var(--s6)">
+  <b>落地顺序建议：</b>
+  ① 图标系统（纯增量，风险最低，可先替换 TabBar 与列表行）；
+  ② 配色 token（<code>canvas</code>/<code>line</code> 两个新 token + 图表色序重排）；
+  ③ 结构改造（去卡片、去渐变、去 FAB）—— 这一步会动布局，需重跑 320px/200% 复验。
+</div>
+
+</div>
+</body>
+</html>

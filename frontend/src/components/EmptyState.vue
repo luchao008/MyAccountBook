@@ -1,6 +1,6 @@
 <template>
   <view class="empty">
-    <text class="icon">{{ icon }}</text>
+    <SvgIcon class="icon" :name="icon" :size="48" />
     <text class="text">{{ text }}</text>
     <view v-if="buttonText" class="btn" @click="emit('action')">
       <text class="btn-text">{{ buttonText }}</text>
@@ -9,6 +9,8 @@
 </template>
 
 <script setup lang="ts">
+import SvgIcon from '@/components/SvgIcon.vue';
+
 withDefaults(
   defineProps<{
     icon?: string;
@@ -16,7 +18,8 @@ withDefaults(
     buttonText?: string;
   }>(),
   {
-    icon: '📭',
+    // 图标名而不是 emoji：emoji 不受 color 影响，做不出状态与主题
+    icon: 'icon-inbox',
     text: '暂无数据',
     buttonText: '',
   }
@@ -37,7 +40,8 @@ const emit = defineEmits<{
 }
 
 .icon {
-  font-size: $icon-3xl;
+  /* 图标改用显式颜色：font-size 对 svg 无效，而继承色在深浅背景上会失控 */
+  color: $text-primary;
   opacity: 0.5;
 }
 

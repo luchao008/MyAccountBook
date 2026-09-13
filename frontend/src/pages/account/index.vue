@@ -37,7 +37,7 @@
         </view>
       </view>
 
-      <EmptyState v-if="!list.length" icon="📁" text="还没有账本" />
+      <EmptyState v-if="!list.length" icon="icon-wallet" text="还没有账本" />
     </view>
 
     <!-- 新建 -->
@@ -266,7 +266,7 @@ async function execMerge(source: AccountItem, target: AccountItem) {
 
 <style scoped lang="scss">
 .page {
-  min-height: 100vh;
+  min-height: $page-min-height;
   background: $bg-page;
   padding: 16px;
 }
@@ -279,7 +279,7 @@ async function execMerge(source: AccountItem, target: AccountItem) {
 
 .list-item {
   padding: 14px 16px;
-  border-bottom: 1px solid $divider;
+  border-bottom: 1px solid $line;
 }
 
 .list-item:last-child {

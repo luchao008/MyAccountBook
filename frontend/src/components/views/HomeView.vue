@@ -4,11 +4,11 @@
     <view class="banner">
       <view class="banner-top">
         <view class="account-switch" @click="switchAccount">
-          <text class="account-icon">📁</text>
+          <SvgIcon class="account-icon" name="icon-wallet" :size="14" />
           <text class="account-name">{{ accountStore.currentName }}</text>
-          <text class="account-arrow">▾</text>
+          <SvgIcon class="account-arrow" name="icon-chevron-down" :size="12" />
         </view>
-        <text class="banner-deco">📊</text>
+        <SvgIcon class="banner-deco" name="icon-chart-bar" :size="28" />
       </view>
 
       <view class="banner-main">
@@ -61,14 +61,17 @@
         </view>
       </view>
 
-      <EmptyState v-if="!ranking.length" icon="📊" text="本月还没有支出记录" />
+      <EmptyState v-if="!ranking.length" icon="icon-chart-bar" text="本月还没有支出记录" />
 
       <view v-else class="rank-list">
         <view v-for="(item, index) in ranking" :key="item.categoryId || index" class="rank-item">
           <text class="rank-no">{{ index + 1 }}</text>
           <view class="rank-body">
             <view class="rank-line">
-              <text class="rank-name">{{ iconOf(item.icon) }} {{ item.name }}</text>
+              <view class="rank-name">
+                <CategoryIcon :name="item.icon" :size="16" />
+                <text>{{ item.name }}</text>
+              </view>
               <view class="rank-right">
                 <text class="rank-ratio">{{ item.ratio }}%</text>
                 <text class="rank-dot">•</text>
@@ -89,21 +92,19 @@
       </view>
     </view>
 
-    <!-- 底栏中间的记一笔 -->
-    <RecordFab />
+    <!-- 底栏的「记一笔」与导航由容器统一承载，视图内不再持有 -->
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue';
-import { onShow, onPullDownRefresh } from '@dcloudio/uni-app';
+import { ref, reactive, computed, onMounted } from 'vue';
 import EmptyState from '@/components/EmptyState.vue';
-import RecordFab from '@/components/RecordFab.vue';
 import { useUserStore } from '@/store/user';
 import { useAccountStore } from '@/store/account';
 import { useCategoryStore } from '@/store/category';
 import { getOverview, getCategoryStat, type CategoryStatItem } from '@/api/statistics';
-import { iconOf } from '@/utils/icon';
+import SvgIcon from '@/components/SvgIcon.vue';
+import CategoryIcon from '@/components/CategoryIcon.vue';
 import { formatMoney } from '@/utils/format';
 import { SOLID_SERIES } from '@/constants/chart';
 
@@ -188,7 +189,11 @@ function switchAccount() {
   });
 }
 
-onShow(async () => {
+/**
+ * 由容器在「切到本视图」或「容器页重新显示」时调用。
+ * 单页架构下视图没有自己的页面生命周期，onShow 统一由容器驱动。
+ */
+async function activate() {
   if (!userStore.isLogin) {
     uni.reLaunch({ url: '/pages/login/index' });
     return;
@@ -196,21 +201,26 @@ onShow(async () => {
   await accountStore.load();
   categoryStore.load();
   loadData();
-});
+}
 
-onPullDownRefresh(async () => {
+/** 容器转发下来的下拉刷新 */
+async function onPullDownRefresh() {
   await accountStore.load();
   loadData();
-});
+}
+
+onMounted(activate);
+
+defineExpose({ activate, onPullDownRefresh });
 </script>
 
 <style scoped lang="scss">
 .page {
-  min-height: 100vh;
-  background: $bg-page;
+  min-height: $page-min-height;
+  background: $bg-canvas;
   padding: 12px 12px 0;
-  /* 给底部的凸起按钮与 tabBar 留空间 */
-  padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  /* 自定义导航栏 52px + 凸起按钮向外溢出的部分 */
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
 }
 
 /* ===== 顶部 banner ===== */
@@ -240,7 +250,7 @@ onPullDownRefresh(async () => {
 }
 
 .account-icon {
-  font-size: $icon-sm;
+  /* 不写 color：继承 .banner 的白字，压在品牌色渐变上 */
   margin-right: 4px;
 }
 
@@ -254,13 +264,13 @@ onPullDownRefresh(async () => {
 }
 
 .account-arrow {
-  font-size: $icon-xs;
+  /* 不写 color：继承 .banner 的白字 */
   margin-left: 4px;
   opacity: 0.9;
 }
 
 .banner-deco {
-  font-size: $icon-2xl;
+  /* 纯装饰（不承载信息，WCAG 豁免），故保留 opacity */
   opacity: 0.85;
 }
 
@@ -353,7 +363,7 @@ onPullDownRefresh(async () => {
   flex-wrap: wrap;
   align-items: center;
   padding: 14px 16px;
-  border-bottom: 1px solid $divider;
+  border-bottom: 1px solid $line;
 }
 
 .range-row:last-child {
@@ -507,10 +517,18 @@ onPullDownRefresh(async () => {
 }
 
 .rank-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
   color: $text-primary;
   min-width: 0;
+}
+
+.rank-name .svg-icon {
+  /* 压白卡 6.00:1；比分类名弱一档，让名称先被看到 */
+  color: $text-secondary;
 }
 
 .rank-right {

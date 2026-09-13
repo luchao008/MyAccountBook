@@ -9,9 +9,9 @@
       <!-- 日历 -->
       <view class="cal">
         <view class="cal-header">
-          <text class="cal-nav" @click="shiftMonth(-1)">‹</text>
+          <view class="cal-nav" @click="shiftMonth(-1)"><SvgIcon name="icon-chevron-left" :size="20" /></view>
           <text class="cal-title">{{ viewYear }} 年 {{ viewMonth + 1 }} 月</text>
-          <text class="cal-nav" @click="shiftMonth(1)">›</text>
+          <view class="cal-nav" @click="shiftMonth(1)"><SvgIcon name="icon-chevron-right" :size="20" /></view>
         </view>
 
         <view class="week-row">
@@ -60,6 +60,7 @@
 </template>
 
 <script setup lang="ts">
+import SvgIcon from '@/components/SvgIcon.vue';
 import { ref, computed, watch } from 'vue';
 
 const weekLabels = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
@@ -239,12 +240,14 @@ watch(
 }
 
 .cal-nav {
-  /* 44×44：翻月是日历里唯一的高频点击目标 */
+  /* 44×44：翻月是日历里唯一的高频点击目标。改用 flex 居中而不是 text-align，
+     因为图标是 svg 不是字，text-align 对它无效 */
   width: $touch-target-min;
-  text-align: center;
-  font-size: $icon-lg;
+  min-height: $touch-target-min;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: $text-tertiary;
-  padding: 10px 0;
 }
 
 .cal-title {
@@ -327,7 +330,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  border-top: 1px solid $divider;
+  border-top: 1px solid $line;
   margin-top: 8px;
 }
 

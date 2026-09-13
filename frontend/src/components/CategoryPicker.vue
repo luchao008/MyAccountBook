@@ -5,14 +5,14 @@
       <view class="toolbar">
         <view class="tools">
           <view class="tool" @click="onCreateChild">
-            <text class="tool-icon">＋</text>
+            <SvgIcon class="tool-icon" name="icon-plus" :size="20" />
           </view>
           <view class="tool" @click="toggleSearch">
-            <text class="tool-icon">🔍</text>
+            <SvgIcon class="tool-icon" name="icon-search" :size="20" />
           </view>
         </view>
         <view class="tool" @click="close">
-          <text class="tool-icon collapse">⌄</text>
+          <view class="tool-icon collapse"><SvgIcon name="icon-chevron-down" :size="20" /></view>
         </view>
       </view>
 
@@ -40,7 +40,7 @@
               @click="pick(item)"
             >
               <view class="icon-box" :class="{ 'icon-picked': item.id === modelValue }">
-                <text class="icon">{{ iconOf(item.icon) }}</text>
+                <CategoryIcon class="icon" :name="item.icon" :size="24" />
               </view>
               <text class="name">{{ item.name }}</text>
             </view>
@@ -100,7 +100,7 @@
                 @click="pick(item)"
               >
                 <view class="icon-box" :class="{ 'icon-picked': item.id === modelValue }">
-                  <text class="icon">{{ iconOf(item.icon) }}</text>
+                  <CategoryIcon class="icon" :name="item.icon" :size="24" />
                 </view>
                 <text class="name">{{ item.name }}</text>
               </view>
@@ -123,7 +123,7 @@
                 @click="pick(item)"
               >
                 <view class="icon-box" :class="{ 'icon-picked': item.id === modelValue }">
-                  <text class="icon">{{ iconOf(item.icon) }}</text>
+                  <CategoryIcon class="icon" :name="item.icon" :size="24" />
                 </view>
                 <text class="name">{{ item.name }}</text>
               </view>
@@ -147,7 +147,8 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, getCurrentInstance } from 'vue';
-import { iconOf } from '@/utils/icon';
+import SvgIcon from '@/components/SvgIcon.vue';
+import CategoryIcon from '@/components/CategoryIcon.vue';
 import { useCategoryStore } from '@/store/category';
 import type { CategoryItem } from '@/api/category';
 
@@ -210,14 +211,15 @@ const barTop = computed(() => {
 });
 
 const roots = computed(() =>
-  props.type === 'expense' ? categoryStore.expenseRoots : categoryStore.incomeRoots
+  // 用 selectable* 而不是全量：隐藏的分类不参与记账
+  categoryStore.selectableRoots(props.type)
 );
 
 /** 右侧分组：每个一级 + 其二级 */
 const groups = computed(() =>
   roots.value.map((root) => ({
     root,
-    children: categoryStore.childrenOf(root.id),
+    children: categoryStore.selectableChildrenOf(root.id),
   }))
 );
 
@@ -354,7 +356,7 @@ function onCreateChild() {
         await categoryStore.add({
           name,
           type: props.type,
-          icon: '📦',
+          icon: 'cat-misc',
           parentId: parent.id,
         });
         await measureAnchors();
@@ -443,7 +445,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
-  border-bottom: 1px solid $divider;
+  border-bottom: 1px solid $line;
   flex-shrink: 0;
 }
 
@@ -467,18 +469,16 @@ watch(
 }
 
 .tool-icon {
-  font-size: $icon-lg;
   color: $text-secondary;
 }
 
 .collapse {
-  font-size: $icon-xl;
   color: $text-tertiary;
 }
 
 .search-bar {
   padding: 8px 16px;
-  border-bottom: 1px solid $divider;
+  border-bottom: 1px solid $line;
   flex-shrink: 0;
 }
 
@@ -615,7 +615,13 @@ watch(
 }
 
 .icon {
-  font-size: $icon-xl;
+  /* 压 $bg-subtle(#EEF1F5) 13.93:1 */
+  color: $text-primary;
+}
+
+.icon-picked .icon {
+  /* 压 $brand-100(#FFE3D6) 4.06:1 */
+  color: $brand-700;
 }
 
 .name {

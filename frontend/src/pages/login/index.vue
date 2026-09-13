@@ -1,7 +1,7 @@
 <template>
   <view class="page">
     <view class="header">
-      <text class="logo">💰</text>
+      <SvgIcon class="logo" name="cat-income" :size="64" />
       <text class="title">记账本</text>
       <text class="subtitle">简单记录每一笔收支</text>
     </view>
@@ -43,6 +43,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue';
 import { useUserStore } from '@/store/user';
+import SvgIcon from '@/components/SvgIcon.vue';
 
 const userStore = useUserStore();
 
@@ -71,7 +72,7 @@ async function submit() {
     } else {
       await userStore.login(form.username.trim(), form.password);
     }
-    uni.reLaunch({ url: '/pages/home/index' });
+    uni.reLaunch({ url: '/pages/main/index' });
   } catch (err: any) {
     // 错误提示已在 request 拦截器里统一 toast
     console.error('[login] 失败', err);
@@ -83,7 +84,7 @@ async function submit() {
 
 <style scoped lang="scss">
 .page {
-  min-height: 100vh;
+  min-height: $page-min-height;
   background: linear-gradient(180deg, $brand-50 0%, $bg-page 40%);
   padding: 0 32px;
 }
@@ -97,7 +98,8 @@ async function submit() {
 }
 
 .logo {
-  font-size: $icon-4xl;
+  /* 压 $bg-page(#F5F6F8) 约 4.3:1，图形要求 ≥3:1 */
+  color: $brand-600;
 }
 
 .title {

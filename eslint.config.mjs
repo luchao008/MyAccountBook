@@ -50,7 +50,13 @@ export default tseslint.config(
     },
   },
   {
-    // scripts/ 下是 Node 脚本（如配色校验器 check-contrast.mjs）
+    // scripts/ 下是两类脚本：
+    //   ① 纯 Node（check-contrast.mjs、gen-color-icons.mjs）
+    //   ② Playwright 驱动真实浏览器（diagnose-* / verify-*）
+    // ② 类脚本有两个执行上下文，所以下面的全局是**两套**的并集：
+    //   · 脚本主体跑在 Node 里（process / URL / fetch）
+    //   · page.evaluate() 的回调体跑在**浏览器**里（document / window / location / history /
+    //     localStorage / getComputedStyle），getCurrentPages 则是 uni-app H5 的页面全局
     files: ['scripts/**/*.mjs'],
     languageOptions: {
       globals: {
@@ -58,6 +64,18 @@ export default tseslint.config(
         process: 'readonly',
         // Node 全局，脚本里用 new URL('../x', import.meta.url) 拼路径
         URL: 'readonly',
+        // Node 18+ 自带 fetch，脚本直接打后端接口做数据准备与清理
+        fetch: 'readonly',
+        setTimeout: 'readonly',
+        Buffer: 'readonly',
+        // 以下仅在 page.evaluate() 回调（浏览器上下文）里使用
+        document: 'readonly',
+        window: 'readonly',
+        location: 'readonly',
+        history: 'readonly',
+        localStorage: 'readonly',
+        getComputedStyle: 'readonly',
+        getCurrentPages: 'readonly',
       },
     },
     rules: {

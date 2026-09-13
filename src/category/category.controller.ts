@@ -2,11 +2,19 @@ import { Controller, Get, Post, Put, Del, Body, Param, Query, Inject } from '@mi
 import { Context } from '@midwayjs/koa';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@midwayjs/swagger';
 import { CategoryService } from './category.service';
-import { CreateCategoryDTO, UpdateCategoryDTO, QueryCategoryDTO } from './dto/category.dto';
+import {
+  CreateCategoryDTO,
+  UpdateCategoryDTO,
+  QueryCategoryDTO,
+  BatchDeleteCategoryDTO,
+  BatchHideCategoryDTO,
+} from './dto/category.dto';
 import {
   CategoryListResponseVO,
   CategoryDetailResponseVO,
   DeleteResponseVO,
+  BatchDeleteResponseVO,
+  BatchHideResponseVO,
   ErrorResponseVO,
 } from '../common/swagger/response.vo';
 
@@ -82,5 +90,46 @@ export class CategoryController {
   @Del('/:id')
   async remove(@Param('id') id: string) {
     return this.categoryService.delete(this.userId, id);
+  }
+
+  @ApiOperation({
+    summary: '批量删除分类',
+    description:
+      '一级与二级可混合传入。传一级会连同其下二级一并删除（外键 CASCADE），' +
+      '返回的 `deleted` 是**实际消失的总数**（含被级联删掉的），`deletedChildren` 单列级联数。' +
+      '若列表里有不存在或不属于当前用户的 id，**整单失败**而不是静默少删。' +
+      '历史账单不会被删除，其 category_id 置为 NULL。',
+  })
+  @ApiResponse({ status: 200, type: BatchDeleteResponseVO, description: '删除成功' })
+  @ApiResponse({ status: 422, type: ErrorResponseVO, description: '参数校验失败' })
+  @ApiResponse({
+    status: 200,
+    type: ErrorResponseVO,
+    description: '有 id 不存在时 code=40401',
+  })
+  @Post('/batch-delete')
+  async batchDelete(@Body() dto: BatchDeleteCategoryDTO) {
+    return this.categoryService.batchDelete(this.userId, dto.ids);
+  }
+
+  @ApiOperation({
+    summary: '批量隐藏 / 恢复显示分类',
+    description:
+      '`hidden: true` 隐藏、`false` 恢复显示。隐藏的定义见分类实体注释：' +
+      '隐藏后**只是不出现在「记一笔」的选择器里**，分类管理页仍可见，' +
+      '历史交易 / 明细 / 统计完全不受影响。' +
+      '一级分类隐藏时其下二级也一并选不到 —— 这条由查询侧规则实现，' +
+      '不会给子分类写入 is_hidden。',
+  })
+  @ApiResponse({ status: 200, type: BatchHideResponseVO, description: '操作成功' })
+  @ApiResponse({ status: 422, type: ErrorResponseVO, description: '参数校验失败' })
+  @ApiResponse({
+    status: 200,
+    type: ErrorResponseVO,
+    description: '有 id 不存在时 code=40401',
+  })
+  @Post('/batch-hide')
+  async batchHide(@Body() dto: BatchHideCategoryDTO) {
+    return this.categoryService.batchHide(this.userId, dto.ids, dto.hidden);
   }
 }

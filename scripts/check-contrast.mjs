@@ -669,9 +669,19 @@ section('13. 字号阶梯自洽（文档 §3.2 ↔ tokens.scss ↔ 各 .vue）')
       else nLiteral += 1;
     }
   }
-  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 114, 0);
-  expect('  其中文字字号 $font-*', nText, 91, 0);
-  expect('  其中图标尺寸 $icon-*', nIcon, 23, 0);
+  // ⚠️ 这三个数字是**当前实测值**，改字号就必须同步改这里。
+  //    2026-09-12 更新一：emoji 换成 `SvgIcon` 组件后，图标不再用 `font-size` 渲染
+  //    （改走组件 size prop），`$icon-*` 从 23 处降到 2 处。
+  //    2026-09-12 更新三：统计页"结余独占一行"改造新增 1 处（95 → 96）。
+  //    2026-09-12 更新四：我的页分组标题新增 1 处（96 → 97），总数 99。
+  //    2026-09-12 更新五：新增「账本选择」启动页，+8 处（97 → 105），总数 107。
+  //    2026-09-13 更新六：「记一笔」由悬浮按钮改为底栏内凸起项，删除 `RecordFab.vue`
+  //    （其 .fab-label 是 1 处 $font-*）→ 文字 105 → 104，总数 107 → 106。
+  //    2026-09-13 更新七：新增「新建二级分类」与「图标选择」两个页面，+6 处
+  //    （分类名称/计数/标签/保存按钮/底部 Tab/空态等）→ 文字 104 → 110，总数 106 → 112。
+  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 115, 0);
+  expect('  其中文字字号 $font-*', nText, 113, 0);
+  expect('  其中图标尺寸 $icon-*', nIcon, 2, 0);
   expect('  其中字面量（必须为 0）', nLiteral, 0, 0);
 }
 
@@ -736,6 +746,116 @@ section('14. 焦点可见性（WCAG 2.4.7）');
   console.log(
     `  ${ringOk ? '\x1b[32m✅\x1b[0m' : '\x1b[31m❌ MISMATCH\x1b[0m'}  $focus-ring 基于 $brand-700（4.95:1）`,
   );
+}
+
+// ---------------------------------------------------------------- 15. FL-1「数字优先·通栏扁平」新增断言
+// 依据 docs/UI设计方案·扁平化.md。这一节专门盯两件事：
+//   ① 页面底改白是**被实测逼出来的**，不是审美偏好 —— 把"浅灰底会同时拉垮三处"钉死
+//   ② 环形图是闭环，(n-1, 0) 这一对也必须比对 —— 旧校验漏掉的口子
+{
+  section('15. FL-1 表面三层与分隔线（方案 §4.2）');
+
+  const dL = (a, b) => Math.abs(luminance(a) - luminance(b));
+
+  const CANVAS = '#FFFFFF';
+  const SUBTLE = '#F5F6F8';
+  const SUNKEN = '#EEF1F5';
+  const LINE = '#E6E9EF';
+  const LINE_STRONG = '#D6DAE3';
+  const OLD_DIVIDER = '#EDEFF3';
+
+  expect('line #E6E9EF 压 canvas ΔL', dL(LINE, CANVAS), 0.187, 0.005);
+  expect('line 压 subtle ΔL', dL(LINE, SUBTLE), 0.108, 0.005);
+  expect('line-strong #D6DAE3 压 canvas ΔL', dL(LINE_STRONG, CANVAS), 0.3, 0.005);
+  // 废弃理由：这条老分隔线压在同为浅灰的分区底上，几乎等于看不见
+  expect('废弃 divider #EDEFF3 压 canvas ΔL', dL(OLD_DIVIDER, CANVAS), 0.138, 0.005);
+  expect('废弃 divider 压 sunken ΔL（≈0）', dL(OLD_DIVIDER, SUNKEN), 0.015, 0.005);
+
+  section('15.2 文字/语义色 × 表面矩阵（方案 §4.3 · 这是前置约束）');
+  const INK1 = '#1F2329';
+  const INK2 = '#5A6472';
+  const INK3 = '#6E7787';
+  const INK4 = '#A8B0BD';
+
+  expect('ink-1 压 canvas', contrast(INK1, CANVAS), 15.78);
+  expect('ink-1 压 subtle', contrast(INK1, SUBTLE), 14.59);
+  expect('ink-1 压 sunken', contrast(INK1, SUNKEN), 13.93);
+  expect('ink-2 压 canvas', contrast(INK2, CANVAS), 6.0);
+  expect('ink-2 压 subtle', contrast(INK2, SUBTLE), 5.55);
+  expect('ink-2 压 sunken', contrast(INK2, SUNKEN), 5.3);
+  // ink-3 只够白底用 —— 这条决定了"非白底上的说明文字必须用 ink-2"
+  expect('ink-3 压 canvas（仅白底可用）', contrast(INK3, CANVAS), 4.51);
+  expect('ink-3 压 subtle（4.17 不达标）', contrast(INK3, SUBTLE), 4.17);
+  expect('ink-3 压 sunken（3.98 不达标）', contrast(INK3, SUNKEN), 3.98);
+  expect('ink-4 压 canvas（禁用/装饰，豁免）', contrast(INK4, CANVAS), 2.19);
+  expect('支出红 压 canvas', contrast('#D92D20', CANVAS), 4.83);
+  expect('支出红 压 subtle（4.47 不达标）', contrast('#D92D20', SUBTLE), 4.47);
+  expect('收入绿 压 canvas', contrast('#0B8038', CANVAS), 5.05);
+  expect('信息蓝 压 canvas', contrast('#1D63B8', CANVAS), 5.95);
+  expect('警告琥珀 压 canvas', contrast('#B45309', CANVAS), 5.02);
+  // 1.4.11 要求 ≥3:1：输入框坐白底刚好达标，坐浅灰底就废了
+  expect('输入框边界 压 canvas（≥3 达标）', contrast('#8A94A6', CANVAS), 3.06);
+  expect('输入框边界 压 subtle（2.83 不达标）', contrast('#8A94A6', SUBTLE), 2.83);
+  expect('输入框边界 压 sunken（2.70 不达标）', contrast('#8A94A6', SUNKEN), 2.7);
+
+  section('15.3 图表序列「闭环相邻」可区分度（方案 §4.5）');
+  // 环形图首尾在 12 点方向也相邻：必须把 (n-1, 0) 一并纳入比对
+  const minAdjacent = (series) => {
+    let min = Infinity;
+    for (let i = 0; i < series.length; i++) {
+      const d = cvd(series[i], series[(i + 1) % series.length]);
+      if (d < min) min = d;
+    }
+    return min;
+  };
+
+  // 现行（FL-1 落地后）顺序：橙红→蓝→品红→青→紫→翠绿→中性灰
+  const NEW_ORDER = ['#C2410C', '#1D63B8', '#C2185B', '#0E7490', '#7C3AED', '#0E7C42', '#8A94A6'];
+  // 旧顺序：橙红→蓝→品红→翠绿→紫→青→中性灰
+  const OLD_ORDER = ['#C2410C', '#1D63B8', '#C2185B', '#0E7C42', '#7C3AED', '#0E7490', '#8A94A6'];
+
+  expect('新序列最小相邻可区分度（含闭环对）', minAdjacent(NEW_ORDER), 90.15, 0.5);
+  expect('旧序列最小相邻可区分度（对照）', minAdjacent(OLD_ORDER), 74.98, 0.5);
+  // 闭环对单独钉死：它曾经完全没被比对过
+  expect('闭环对（中性灰 ↔ 橙红）', cvd('#8A94A6', '#C2410C'), 90.15, 0.5);
+
+  const tokensSrc2 = readFileSync(
+    new URL('../frontend/src/styles/tokens.scss', import.meta.url),
+    'utf8',
+  );
+  const hasToken = (name, value) =>
+    new RegExp(`\\$${name}:\\s*${value.replace('#', '#?')}\\s*;`, 'i').test(tokensSrc2);
+
+  const required = [
+    ['bg-canvas', '#ffffff'],
+    ['line', '#e6e9ef'],
+    ['line-strong', '#d6dae3'],
+    ['radius-sm', '6px'],
+    ['radius-md', '10px'],
+    ['radius-lg', '14px'],
+    ['radius-pill', '999px'],
+    ['space-1', '4px'],
+    ['space-2', '8px'],
+    ['space-3', '12px'],
+    ['space-4', '16px'],
+    ['space-5', '20px'],
+    ['space-6', '24px'],
+    ['space-8', '32px'],
+  ];
+  for (const [name, value] of required) {
+    const ok = hasToken(name, value);
+    if (ok) passed += 1;
+    else
+      failures.push({
+        label: `tokens.scss 缺少 $${name}: ${value}`,
+        actual: '未找到',
+        expected: `$${name}: ${value};`,
+        tol: 0,
+      });
+    console.log(
+      `  ${ok ? '\x1b[32m✅\x1b[0m' : '\x1b[31m❌ MISMATCH\x1b[0m'}  token $${name} = ${value}`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------- 汇总

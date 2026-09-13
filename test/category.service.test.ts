@@ -358,4 +358,157 @@ describe('CategoryService', () => {
       expect(promoted.parentId).toBeNull();
     });
   });
+
+  describe('list — visibility 过滤', () => {
+    it('默认返回全部（含隐藏的）—— 分类管理页要能看到才能取消隐藏', async () => {
+      const root = await categoryService.create(userId, { name: '可见性一级', type: 'expense' });
+      const child = await categoryService.create(userId, {
+        name: '可见性二级',
+        type: 'expense',
+        parentId: root.id,
+      });
+      await categoryService.batchHide(userId, [child.id], true);
+
+      const all = await categoryService.list(userId, { type: 'expense' });
+      expect(all.some((c) => c.id === child.id && c.isHidden)).toBe(true);
+
+      const visible = await categoryService.list(userId, {
+        type: 'expense',
+        visibility: 'visible',
+      });
+      expect(visible.some((c) => c.id === child.id)).toBe(false);
+      expect(visible.some((c) => c.id === root.id)).toBe(true);
+    });
+
+    it('父隐藏 ⇒ 其下二级也不可见，但**不写子分类的 is_hidden**', async () => {
+      const root = await categoryService.create(userId, { name: '父隐藏一级', type: 'expense' });
+      const a = await categoryService.create(userId, {
+        name: '父隐藏子A',
+        type: 'expense',
+        parentId: root.id,
+      });
+      const b = await categoryService.create(userId, {
+        name: '父隐藏子B',
+        type: 'expense',
+        parentId: root.id,
+      });
+
+      await categoryService.batchHide(userId, [root.id], true);
+
+      const visible = await categoryService.list(userId, {
+        type: 'expense',
+        visibility: 'visible',
+      });
+      expect(visible.some((c) => c.id === root.id)).toBe(false);
+      expect(visible.some((c) => c.id === a.id)).toBe(false);
+      expect(visible.some((c) => c.id === b.id)).toBe(false);
+
+      // 关键：子的 is_hidden 保持 false —— 取消隐藏父级时子级能自动回来，
+      // 不需要回滚任何东西（若冗余写了，这里就会漏掉而留下脏数据）
+      const all = await categoryService.list(userId, { type: 'expense' });
+      expect(all.find((c) => c.id === a.id)!.isHidden).toBe(false);
+      expect(all.find((c) => c.id === b.id)!.isHidden).toBe(false);
+
+      await categoryService.batchHide(userId, [root.id], false);
+      const back = await categoryService.list(userId, {
+        type: 'expense',
+        visibility: 'visible',
+      });
+      expect(back.some((c) => c.id === a.id)).toBe(true);
+      expect(back.some((c) => c.id === b.id)).toBe(true);
+    });
+  });
+
+  describe('batchDelete', () => {
+    it('父子同时选中：子分类不被重复计数', async () => {
+      const root = await categoryService.create(userId, { name: '批删一级', type: 'expense' });
+      const c1 = await categoryService.create(userId, {
+        name: '批删子1',
+        type: 'expense',
+        parentId: root.id,
+      });
+      const c2 = await categoryService.create(userId, {
+        name: '批删子2',
+        type: 'expense',
+        parentId: root.id,
+      });
+
+      // 故意把 c1 重复传一次
+      const res = await categoryService.batchDelete(userId, [root.id, c1.id, c2.id, c1.id]);
+      expect(res.deleted).toBe(3); // 一级 1 个 + 被级联的 2 个，而不是 4
+      expect(res.deletedChildren).toBe(2);
+    });
+
+    it('重复 id 去重，不会重复删', async () => {
+      const a = await categoryService.create(userId, { name: '批删重复A', type: 'expense' });
+      await categoryService.create(userId, {
+        name: '批删重复子',
+        type: 'expense',
+        parentId: a.id,
+      });
+      const res = await categoryService.batchDelete(userId, [a.id, a.id, a.id]);
+      expect(res.deleted).toBe(2);
+      expect(res.deletedChildren).toBe(1);
+    });
+
+    it('混入不存在的 id → 整单失败，且真实分类不被删（不静默少删）', async () => {
+      const keep = await categoryService.create(userId, { name: '批删保留', type: 'expense' });
+      await expectBusinessError(
+        () => categoryService.batchDelete(userId, [keep.id, '999999999']),
+        ErrorCode.CATEGORY_NOT_FOUND,
+      );
+      expect(await categoryService.findById(userId, keep.id)).toBeTruthy();
+    });
+
+    it('不能删别人的分类', async () => {
+      const mine = await categoryService.create(userId, { name: '批删越权', type: 'expense' });
+      await expectBusinessError(
+        () => categoryService.batchDelete(otherUserId, [mine.id]),
+        ErrorCode.CATEGORY_NOT_FOUND,
+      );
+      expect(await categoryService.findById(userId, mine.id)).toBeTruthy();
+    });
+  });
+
+  describe('batchHide', () => {
+    it('父子同时选中：只写一级，不冗余写子', async () => {
+      const root = await categoryService.create(userId, { name: '批隐一级', type: 'expense' });
+      const child = await categoryService.create(userId, {
+        name: '批隐子',
+        type: 'expense',
+        parentId: root.id,
+      });
+
+      const res = await categoryService.batchHide(userId, [root.id, child.id], true);
+      expect(res.updated).toBe(1); // 父被选中 ⇒ 子不重复写
+      expect(res.hidden).toBe(true);
+
+      const all = await categoryService.list(userId, { type: 'expense' });
+      expect(all.find((c) => c.id === root.id)!.isHidden).toBe(true);
+      expect(all.find((c) => c.id === child.id)!.isHidden).toBe(false);
+    });
+
+    it('单独隐藏二级是允许的（is_hidden 会被真实写入）', async () => {
+      const root = await categoryService.create(userId, { name: '批隐二级父', type: 'expense' });
+      const child = await categoryService.create(userId, {
+        name: '批隐二级独',
+        type: 'expense',
+        parentId: root.id,
+      });
+      const res = await categoryService.batchHide(userId, [child.id], true);
+      expect(res.updated).toBe(1);
+      const all = await categoryService.list(userId, { type: 'expense' });
+      expect(all.find((c) => c.id === child.id)!.isHidden).toBe(true);
+    });
+
+    it('混入不存在的 id → 整单失败', async () => {
+      const c = await categoryService.create(userId, { name: '批隐校验', type: 'expense' });
+      await expectBusinessError(
+        () => categoryService.batchHide(userId, [c.id, '888888888'], true),
+        ErrorCode.CATEGORY_NOT_FOUND,
+      );
+      const all = await categoryService.list(userId, { type: 'expense' });
+      expect(all.find((x) => x.id === c.id)!.isHidden).toBe(false);
+    });
+  });
 });

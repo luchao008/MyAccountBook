@@ -39,10 +39,95 @@ export class CategoryService {
       where.parentId = query.parentId;
     }
 
-    return this.repo.find({
+    const rows = await this.repo.find({
       where,
       order: { sort: 'ASC', id: 'ASC' },
     });
+
+    if (query.visibility !== 'visible') return rows;
+
+    // 可见性规则（实体注释里"放在查询侧做"的那条）：
+    //   ① 自身未隐藏
+    //   ② 若为二级分类，其父也未隐藏
+    // 刻意**不给二级冗余写 is_hidden**：否则取消隐藏父级时还要回滚所有子分类，
+    // 极易漏掉而留下"父可见、子却还隐藏着"的脏数据。
+    const hiddenRootIds = (
+      await this.repo.find({
+        where: { userId, parentId: IsNull(), isHidden: true },
+        select: ['id'],
+      })
+    ).map((c) => c.id);
+    const hidden = new Set(hiddenRootIds);
+
+    return rows.filter((c) => !c.isHidden && !(c.parentId && hidden.has(c.parentId)));
+  }
+
+  /** 批量取用户拥有的分类；有任何一个 id 不存在/不属于自己就整单报错。 */
+  private async findOwned(userId: string, ids: string[]): Promise<Category[]> {
+    const unique = [...new Set(ids)];
+    const found = await this.findByIds(userId, unique);
+    if (found.length !== unique.length) {
+      // 不静默少删：少删会让前端提示的数量与用户预期不符，同时把越权尝试掩盖掉
+      throw new BusinessError('部分分类不存在或不属于当前用户', ErrorCode.CATEGORY_NOT_FOUND);
+    }
+    return found;
+  }
+
+  /**
+   * 批量删除。
+   *
+   * 关键细节：**父子同时被选中时不能重复计数**。
+   * 删除一级分类会被外键 CASCADE 掉它的二级分类，所以"父已被选中"的二级要从
+   * 直接删除清单里剔除 —— 否则返回的数字会虚高，用户会以为多删了东西。
+   */
+  async batchDelete(userId: string, ids: string[]) {
+    const found = await this.findOwned(userId, ids);
+
+    const selected = new Set(found.map((c) => c.id));
+    // 直接删的 = 被选中的一级 + "父没被选中"的被选中二级
+    const roots = found.filter((c) => !c.parentId);
+    const loneChildren = found.filter((c) => c.parentId && !selected.has(c.parentId));
+
+    // 会被 CASCADE 一并删掉的二级分类数（供前端做提示）
+    let cascaded = 0;
+    if (roots.length) {
+      cascaded = await this.repo.count({
+        where: { userId, parentId: In(roots.map((c) => c.id)) },
+      });
+    }
+
+    await this.repo.delete({
+      userId,
+      id: In([...roots.map((c) => c.id), ...loneChildren.map((c) => c.id)]),
+    });
+
+    return {
+      success: true,
+      // 实际消失的分类总数（含被级联删除的）
+      deleted: roots.length + loneChildren.length + cascaded,
+      // 其中因删除一级而连带删掉的二级数量
+      deletedChildren: cascaded,
+    };
+  }
+
+  /**
+   * 批量隐藏 / 恢复显示。
+   *
+   * **不对"父已被选中"的子分类写 is_hidden**：一级隐藏后，其子分类由查询侧的
+   * "父隐藏 ⇒ 子不可选"规则自动失效，无需冗余写。
+   * 反过来，单独隐藏某个二级是允许的（它的 is_hidden 会被真实写入）。
+   */
+  async batchHide(userId: string, ids: string[], hidden: boolean) {
+    const found = await this.findOwned(userId, ids);
+
+    const selected = new Set(found.map((c) => c.id));
+    const targets = found.filter((c) => !c.parentId || !selected.has(c.parentId));
+
+    if (targets.length) {
+      await this.repo.update({ userId, id: In(targets.map((c) => c.id)) }, { isHidden: hidden });
+    }
+
+    return { success: true, updated: targets.length, hidden };
   }
 
   async findById(userId: string, id: string) {

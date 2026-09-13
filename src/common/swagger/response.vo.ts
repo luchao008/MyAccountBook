@@ -77,6 +77,15 @@ export class CategoryVO {
 
   @ApiProperty({ description: '排序值，升序', example: 0 })
   sort: number;
+
+  @ApiProperty({ description: '父分类 ID；null 表示一级分类', example: null, nullable: true })
+  parentId: string | null;
+
+  @ApiProperty({
+    description: '是否隐藏。隐藏后不出现在「记一笔」的选择器里，其余场景不受影响',
+    example: false,
+  })
+  isHidden: boolean;
 }
 
 export class CategoryListResponseVO {
@@ -113,6 +122,57 @@ export class DeleteResponseVO {
 
   @ApiProperty({ type: SuccessFlagVO })
   data: SuccessFlagVO;
+
+  @ApiProperty({ example: 'success' })
+  message: string;
+}
+
+/** 批量删除结果 */
+export class BatchDeleteResultVO {
+  @ApiProperty({ description: '操作结果', example: true })
+  success: boolean;
+
+  @ApiProperty({ description: '实际消失的分类总数（含被级联删除的二级分类）', example: 9 })
+  deleted: number;
+
+  @ApiProperty({ description: '其中因删除一级分类而连带删掉的二级分类数量', example: 7 })
+  deletedChildren: number;
+}
+
+export class BatchDeleteResponseVO {
+  @ApiProperty({ example: 0 })
+  code: number;
+
+  @ApiProperty({ type: BatchDeleteResultVO })
+  data: BatchDeleteResultVO;
+
+  @ApiProperty({ example: 'success' })
+  message: string;
+}
+
+/** 批量隐藏 / 恢复显示结果 */
+export class BatchHideResultVO {
+  @ApiProperty({ description: '操作结果', example: true })
+  success: boolean;
+
+  @ApiProperty({
+    description:
+      '实际写入的分类数量。注意可能**小于**传入的 id 数：' +
+      '父分类已被选中时，其二级分类不重复写入（由查询侧规则覆盖）',
+    example: 1,
+  })
+  updated: number;
+
+  @ApiProperty({ description: '本次写入的目标状态：true=隐藏，false=恢复显示', example: true })
+  hidden: boolean;
+}
+
+export class BatchHideResponseVO {
+  @ApiProperty({ example: 0 })
+  code: number;
+
+  @ApiProperty({ type: BatchHideResultVO })
+  data: BatchHideResultVO;
 
   @ApiProperty({ example: 'success' })
   message: string;

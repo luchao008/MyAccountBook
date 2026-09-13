@@ -9,6 +9,15 @@ export interface CategoryItem {
   sort: number;
   /** 父分类 ID；null 表示一级分类 */
   parentId: string | null;
+  /**
+   * 是否隐藏。
+   *
+   * 语义：隐藏的分类**不出现在「记一笔」的分类选择器里**，其余场景完全不受影响
+   * （分类管理页仍可见、历史交易 / 明细 / 统计照旧）。
+   * 一级分类隐藏时其下二级也选不到 —— 这个判断由 `visibility=visible` 或
+   * store 的 `selectable*` getter 做，**不会冗余写到子分类上**。
+   */
+  isHidden: boolean;
 }
 
 /**
@@ -18,12 +27,20 @@ export interface CategoryItem {
  *   - 'root'  → 只返回一级分类
  *   - 具体 ID → 返回该父下的二级分类
  *   - 不传    → 返回全部（前端自行组装成树）
+ *
+ * visibility 两种取值：
+ *   - 'all'（默认）→ 全部，**分类管理页用这个**：必须能看到被隐藏的分类，
+ *     否则用户永远无法取消隐藏（功能死锁）
+ *   - 'visible'   → 只返回可用于记账的（自身未隐藏，且二级分类的父也未隐藏）
+ *
+ * 用显式枚举而不是布尔参数：query 值都是字符串，`"false"` 是 truthy，很容易埋坑。
  */
 export function getCategories(
   type?: 'income' | 'expense',
-  parentId?: string
+  parentId?: string,
+  visibility?: 'all' | 'visible'
 ): Promise<CategoryItem[]> {
-  return http.get('/categories', { params: { type, parentId } }) as any;
+  return http.get('/categories', { params: { type, parentId, visibility } }) as any;
 }
 
 export function createCategory(data: {
@@ -55,4 +72,32 @@ export function deleteCategory(
   id: string
 ): Promise<{ success: boolean; deletedChildren: number }> {
   return http.delete(`/categories/${id}`) as any;
+}
+
+/**
+ * 批量删除分类。
+ *
+ * `deleted` 是**实际消失的分类总数**（含被级联删掉的二级），
+ * `deletedChildren` 单列其中因删除一级而连带删掉的数量 —— 提示文案要用到后者。
+ * 传入的 ids 若含不存在/不属于自己的，后端**整单失败**（不静默少删）。
+ */
+export function batchDeleteCategories(ids: string[]): Promise<{
+  success: boolean;
+  deleted: number;
+  deletedChildren: number;
+}> {
+  return http.post('/categories/batch-delete', { ids }) as any;
+}
+
+/**
+ * 批量隐藏 / 恢复显示。
+ *
+ * `updated` 可能**小于**传入的 id 数：父分类已被选中时，其二级分类不重复写入
+ * （由「父隐藏 ⇒ 子不可选」的规则覆盖，取消隐藏时子级自动回来）。
+ */
+export function batchHideCategories(
+  ids: string[],
+  hidden: boolean
+): Promise<{ success: boolean; updated: number; hidden: boolean }> {
+  return http.post('/categories/batch-hide', { ids, hidden }) as any;
 }

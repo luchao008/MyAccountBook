@@ -8,7 +8,7 @@
       @click="onPick(item.id)"
     >
       <view class="icon-box" :class="{ 'icon-active': item.id === modelValue }">
-        <text class="icon">{{ iconOf(item.icon) }}</text>
+        <CategoryIcon class="icon" :name="item.icon" :size="24" />
       </view>
       <text class="name">{{ item.name }}</text>
     </view>
@@ -18,7 +18,7 @@
 </template>
 
 <script setup lang="ts">
-import { iconOf } from '@/utils/icon';
+import CategoryIcon from '@/components/CategoryIcon.vue';
 import type { CategoryItem } from '@/api/category';
 
 defineProps<{
@@ -68,7 +68,13 @@ function onPick(id: string) {
 }
 
 .icon {
-  font-size: $icon-xl;
+  /* 压 $bg-subtle(#EEF1F5) 13.93:1 */
+  color: $text-primary;
+}
+
+.icon-active .icon {
+  /* 压 $brand-100(#FFE3D6) 4.06:1，图形按 3:1 判定 */
+  color: $brand-700;
 }
 
 .name {

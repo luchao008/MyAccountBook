@@ -48,6 +48,20 @@ export class Category {
   @Column({ name: 'parent_id', type: 'bigint', unsigned: true, nullable: true })
   parentId: string | null;
 
+  /**
+   * 是否隐藏。
+   *
+   * 语义（已与产品确认）：隐藏的分类**不出现在「记一笔」的分类选择器里**，
+   * 目的是把不常用的分类收起来；分类管理页仍可见、可取消隐藏，
+   * 历史交易 / 明细 / 统计**完全不受影响**。
+   *
+   * 一级分类隐藏时，其下二级分类也一并选不到 —— 这个判断放在查询侧做
+   * （父隐藏 ⇒ 子不可选），**不给二级分类冗余写 is_hidden**：
+   * 否则取消隐藏时还要回滚所有子分类，极易漏掉而留下不一致的数据。
+   */
+  @Column({ name: 'is_hidden', type: 'boolean', default: false })
+  isHidden: boolean;
+
   /** 父分类。删除一级分类时，其下二级分类一并删除（CASCADE） */
   @ManyToOne(() => Category, (category) => category.children, {
     onDelete: 'CASCADE',

@@ -85,4 +85,43 @@ export class QueryCategoryDTO {
   })
   @Rule(RuleType.string().optional())
   parentId?: string;
+
+  @ApiProperty({
+    description:
+      '可见性过滤。`all`（默认）返回全部分类，供分类管理页使用（要能看到被隐藏的才能取消隐藏）；' +
+      '`visible` 只返回**可用于记账**的分类 —— 自身未隐藏，且若为二级分类其父也未隐藏。' +
+      '不改用布尔参数是因为 query 值都是字符串，`"false"` 是 truthy，容易埋坑。',
+    example: 'all',
+    enum: ['all', 'visible'],
+    required: false,
+    default: 'all',
+  })
+  @Rule(RuleType.string().valid('all', 'visible').optional().default('all'))
+  visibility?: 'all' | 'visible';
+}
+
+export class BatchDeleteCategoryDTO {
+  @ApiProperty({
+    description:
+      '要删除的分类 ID 列表，一级与二级可混合。传一级会连同其下二级一并删除（CASCADE）。' +
+      '列表内的重复 id 会自动去重；不存在的 id 会整单报错（不静默少删）。',
+    example: ['1', '2'],
+    required: true,
+  })
+  @Rule(RuleType.array().items(RuleType.string().required()).required().min(1).max(200))
+  ids: string[];
+}
+
+export class BatchHideCategoryDTO {
+  @ApiProperty({ description: '要操作的分类 ID 列表', example: ['1', '2'], required: true })
+  @Rule(RuleType.array().items(RuleType.string().required()).required().min(1).max(200))
+  ids: string[];
+
+  @ApiProperty({
+    description: 'true = 隐藏；false = 恢复显示',
+    example: true,
+    required: true,
+  })
+  @Rule(RuleType.boolean().required())
+  hidden: boolean;
 }

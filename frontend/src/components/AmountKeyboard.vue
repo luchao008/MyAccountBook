@@ -1,28 +1,23 @@
 <template>
   <view class="keyboard">
-    <view class="row">
-      <view class="key" @click="press('7')">7</view>
-      <view class="key" @click="press('8')">8</view>
-      <view class="key" @click="press('9')">9</view>
-      <view class="key fn" @click="backspace">删除</view>
-    </view>
-    <view class="row">
-      <view class="key" @click="press('4')">4</view>
-      <view class="key" @click="press('5')">5</view>
-      <view class="key" @click="press('6')">6</view>
-      <view class="key fn" @click="clear">清空</view>
-    </view>
-    <view class="row">
-      <view class="key" @click="press('1')">1</view>
-      <view class="key" @click="press('2')">2</view>
-      <view class="key" @click="press('3')">3</view>
-      <view class="key confirm" @click="emit('confirm')">完成</view>
-    </view>
-    <view class="row">
-      <view class="key zero" @click="press('0')">0</view>
-      <view class="key" @click="press('.')">.</view>
-      <view class="key confirm" @click="emit('confirm')">保存</view>
-    </view>
+    <view class="key" @click="press('7')">7</view>
+    <view class="key" @click="press('8')">8</view>
+    <view class="key" @click="press('9')">9</view>
+    <view class="key fn" @click="backspace">删除</view>
+
+    <view class="key" @click="press('4')">4</view>
+    <view class="key" @click="press('5')">5</view>
+    <view class="key" @click="press('6')">6</view>
+    <view class="key fn" @click="clear">清空</view>
+
+    <view class="key" @click="press('1')">1</view>
+    <view class="key" @click="press('2')">2</view>
+    <view class="key" @click="press('3')">3</view>
+    <!-- 主操作在右下角：右手拇指的自然落点，纵向跨两行 -->
+    <view class="key confirm" @click="emit('confirm')">完成</view>
+
+    <view class="key zero" @click="press('0')">0</view>
+    <view class="key" @click="press('.')">.</view>
   </view>
 </template>
 
@@ -72,33 +67,30 @@ function clear() {
 </script>
 
 <style scoped lang="scss">
+/* ============================================================
+   金额键盘 · FL-1「零阴影」
+   按键之间靠 1px 分隔线（容器底色 $line + grid gap）区分，
+   **不靠阴影**；辅助键用 $bg-subtle 底与数字键（白底）分组。
+   ============================================================ */
 .keyboard {
-  background: $bg-page;
-  padding: 6px;
-}
-
-.row {
-  display: flex;
-  margin-bottom: 8px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  /* gap 露出容器的 $line 底色 = 1px 分隔线 */
+  gap: 1px;
+  background: $line;
+  padding: 1px;
 }
 
 .key {
-  flex: 1;
   height: 48px;
-  margin-right: 8px;
   background: $bg-card;
-  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: $font-h1;
   line-height: $lh-h1;
   color: $text-primary;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.key:last-child {
-  margin-right: 0;
+  /* 扁平：无阴影 */
 }
 
 .key:active {
@@ -106,9 +98,10 @@ function clear() {
 }
 
 .zero {
-  flex: 2;
+  grid-column: span 2;
 }
 
+/* 辅助键：靠底色与数字键分组，不靠阴影 */
 .fn {
   font-size: $font-body;
   line-height: $lh-body;
@@ -116,11 +109,15 @@ function clear() {
   background: $bg-subtle;
 }
 
+/* 主操作：右下角，纵向跨两行 */
 .confirm {
+  grid-row: span 2;
+  height: auto;
   background: $brand-600;
   color: $text-inverse;
   font-size: $font-body-lg;
   line-height: $lh-body-lg;
+  font-weight: $weight-medium;
 }
 
 .confirm:active {

@@ -23,7 +23,7 @@
         <text class="row-value" :class="{ placeholder: !categoryId }">
           {{ categoryId ? categoryStore.fullNameOf(categoryId) : '请选择二级分类' }}
         </text>
-        <text class="row-arrow">›</text>
+        <SvgIcon class="row-arrow" name="icon-chevron-right" :size="16" />
       </view>
     </view>
 
@@ -34,7 +34,7 @@
         <text class="row-value" :class="{ placeholder: !recordDate }">
           {{ recordDate }}{{ recordTime ? ' ' + recordTime : '' }}
         </text>
-        <text class="row-arrow">›</text>
+        <SvgIcon class="row-arrow" name="icon-chevron-right" :size="16" />
       </view>
       <view class="row">
         <text class="row-label">备注</text>
@@ -75,6 +75,7 @@ import { onLoad } from '@dcloudio/uni-app';
 import AmountKeyboard from '@/components/AmountKeyboard.vue';
 import CategoryPicker from '@/components/CategoryPicker.vue';
 import DateTimePicker from '@/components/DateTimePicker.vue';
+import SvgIcon from '@/components/SvgIcon.vue';
 import { useCategoryStore } from '@/store/category';
 import { useAccountStore } from '@/store/account';
 import {
@@ -198,8 +199,9 @@ async function save() {
       uni.showToast({ title: '已记录', icon: 'success' });
     }
     setTimeout(() => {
+      // 兜底用 reLaunch 而不是 switchTab：原生 tabBar 已移除，switchTab 会失败
       uni.navigateBack({
-        fail: () => uni.switchTab({ url: '/pages/home/index' }),
+        fail: () => uni.reLaunch({ url: '/pages/main/index' }),
       });
     }, 600);
   } catch (err) {
@@ -219,8 +221,9 @@ function onDelete() {
         await deleteTransaction(editId.value);
         uni.showToast({ title: '已删除', icon: 'success' });
         setTimeout(() => {
+          // 同上：原生 tabBar 已移除
           uni.navigateBack({
-            fail: () => uni.switchTab({ url: '/pages/home/index' }),
+            fail: () => uni.reLaunch({ url: '/pages/main/index' }),
           });
         }, 600);
       } catch (err) {
@@ -233,7 +236,7 @@ function onDelete() {
 
 <style scoped lang="scss">
 .page {
-  min-height: 100vh;
+  min-height: $page-min-height;
   background: $bg-page;
   padding: 16px 16px 280px;
 }
@@ -297,7 +300,7 @@ function onDelete() {
   display: flex;
   align-items: center;
   padding: 14px 0;
-  border-bottom: 1px solid $divider;
+  border-bottom: 1px solid $line;
 }
 
 .row:last-child {
@@ -325,7 +328,6 @@ function onDelete() {
 
 .row-arrow {
   color: $text-tertiary;
-  font-size: $icon-lg;
   margin-left: 6px;
 }
 

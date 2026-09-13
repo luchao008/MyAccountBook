@@ -2,31 +2,30 @@
   <view class="page">
     <!-- 月份切换 -->
     <view class="month-bar">
-      <view class="arrow-btn" @click="shiftMonth(-1)">‹</view>
+      <view class="arrow-btn" @click="shiftMonth(-1)"><SvgIcon name="icon-chevron-left" :size="20" /></view>
       <picker mode="date" fields="month" :value="month" @change="onMonthChange">
         <view class="month-text">{{ month }}</view>
       </picker>
-      <view class="arrow-btn" @click="shiftMonth(1)">›</view>
+      <view class="arrow-btn" @click="shiftMonth(1)"><SvgIcon name="icon-chevron-right" :size="20" /></view>
     </view>
 
     <!-- 当前账本 -->
     <view class="account-line">
-      <text class="account-line-text">📁 统计范围：{{ accountStore.currentName }}</text>
+      <view class="account-line-text">
+        <SvgIcon name="icon-wallet" :size="14" />
+        <text>统计范围：{{ accountStore.currentName }}</text>
+      </view>
     </view>
 
-    <!-- 汇总 -->
+    <!-- 汇总：结余是结论（独占一行、28px），收入与支出是明细（14px 并排小字） -->
     <view class="summary">
-      <view class="summary-item">
-        <text class="label">收入</text>
-        <text class="value income">¥{{ stat.income }}</text>
+      <view class="balance-row">
+        <text class="balance-label">结余</text>
+        <text class="balance-value">¥{{ stat.balance }}</text>
       </view>
-      <view class="summary-item">
-        <text class="label">支出</text>
-        <text class="value expense">¥{{ stat.expense }}</text>
-      </view>
-      <view class="summary-item">
-        <text class="label">结余</text>
-        <text class="value">¥{{ stat.balance }}</text>
+      <view class="io-row">
+        <text class="io-item income">收入 +{{ stat.income }}</text>
+        <text class="io-item expense">支出 -{{ stat.expense }}</text>
       </view>
     </view>
 
@@ -50,7 +49,7 @@
 
       <EmptyState
         v-if="!rows.length"
-        icon="📊"
+        icon="icon-chart-bar"
         :text="`本月暂无${type === 'expense' ? '支出' : '收入'}记录`"
       />
 
@@ -58,7 +57,7 @@
         <RingChart
           :items="chartItems"
           :size="180"
-          :thickness="26"
+          :thickness="24"
           :center-label="type === 'expense' ? '总支出' : '总收入'"
           :center-value="`¥${totalAmount}`"
         />
@@ -74,16 +73,15 @@
       </view>
     </view>
 
-    <RecordFab />
+    <!-- 底栏由容器统一承载 -->
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue';
-import { onLoad, onShow } from '@dcloudio/uni-app';
+import { ref, reactive, computed, onMounted } from 'vue';
 import RingChart from '@/components/RingChart.vue';
+import SvgIcon from '@/components/SvgIcon.vue';
 import EmptyState from '@/components/EmptyState.vue';
-import RecordFab from '@/components/RecordFab.vue';
 import { useAccountStore } from '@/store/account';
 import { getMonthlyStat, getCategoryStat, type CategoryStatItem } from '@/api/statistics';
 import { CHART_SERIES } from '@/constants/chart';
@@ -121,7 +119,7 @@ const displayRows = computed<CategoryStatItem[]>(() => {
     {
       categoryId: null,
       name: '其他',
-      icon: '📦',
+      icon: 'cat-misc',
       type: type.value,
       sum: restSum.toFixed(2),
       // 占比按「金额 / 总额」重算，而不是把各段百分比相加（四舍五入会凑不出 100%）
@@ -181,40 +179,47 @@ function setType(next: 'income' | 'expense') {
   loadData();
 }
 
-onLoad(async () => {
+/** 由容器在「切到本视图」或「容器页重新显示」时调用 */
+async function activate() {
   await accountStore.load();
   loadData();
-});
-onShow(async () => {
-  await accountStore.load();
-  loadData();
-});
+}
+
+onMounted(activate);
+
+defineExpose({ activate });
 </script>
 
 <style scoped lang="scss">
+/* ============================================================
+   统计页 · FL-1「通栏扁平 + 数字优先」
+   ============================================================ */
 .page {
-  min-height: 100vh;
-  background: $bg-page;
-  padding: 16px;
-  padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  min-height: $page-min-height;
+  background: $bg-canvas;
+  padding: 0;
+  /* 自定义导航栏 52px + 凸起按钮向外溢出的部分 */
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
 }
 
+/* ── 月份切换：通栏 + 下边线（不再做成浮起的白卡） ── */
 .month-bar {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: $bg-card;
-  border-radius: 12px;
-  padding: 12px;
-  margin-bottom: 16px;
+  background: $bg-canvas;
+  padding: $space-2 $space-4;
+  border-bottom: 1px solid $line;
 }
 
 .arrow-btn {
-  /* 44×44：翻月是高频操作，用满触控建议值 */
+  /* 44×44：翻月是高频操作，用满触控建议值。
+     改用 flex 居中 + min-height，让触控目标不再依赖字体行高 */
   width: $touch-target-min;
-  padding: 10px 0;
-  text-align: center;
-  font-size: $icon-xl;
+  min-height: $touch-target-min;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: $text-tertiary;
 }
 
@@ -229,55 +234,70 @@ onShow(async () => {
   color: $text-primary;
 }
 
-.summary {
-  display: flex;
-  /* ×2 下每个金额需要 215px，三个并排 645px ≫ 内宽 288px。wrap 让它们各占一行 */
-  flex-wrap: wrap;
-  background: $bg-card;
-  border-radius: 12px;
-  padding: 20px 0;
-  margin-bottom: 16px;
-}
-
 .account-line {
-  padding: 0 4px 10px;
+  padding: $space-3 $space-4 $space-2;
 }
 
 .account-line-text {
+  display: flex;
+  align-items: center;
+  gap: $space-1;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
   color: $text-secondary;
 }
 
-.summary-item {
-  /* 用 flex-basis: auto —— 理由见 home 页 .sub-item 的注释：
-     换行与否应当由「内容真实宽度 vs 容器可用宽度」决定，而不是某个写死的阈值。
-     三栏实测（320px 视口，卡片内宽 288px）：
-       「¥32130.80」@ $font-h1 20px 需要约 105px，三等分每栏只有 96px
-       → 3 × 105 = 315 > 288，于是换行（原来的写法是硬挤进 96px，
-         结果三个金额互相压住、数字叠在一起，而 body 的 overflow-x:hidden
-         让这个屏既没有滚动条也没有报错，只有肉眼能看出来）。
-       ×2 字号下每栏需要约 210px，一行只放得下一个 → 三个纵向排开 */
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+/*
+ * 汇总：结余独占一行（它是「结论」），收入/支出降为并排小字（它们是「明细」）。
+ *
+ * 这一处改的是方案 §7.3 记录的一个**实测 bug**：
+ * 原设计把三个金额做成 20px 并排三栏，阶段 5 归一到 20px 后每栏需 105px，
+ * 而三等分只有 96px —— 三个数字互相压在一起，
+ * 且 body 的 overflow-x:hidden 让它既不报错也不出滚动条，只有肉眼能看出来。
+ * 现在层级也清楚了：三栏并列等于告诉用户「这三个同等重要」，而事实不是。
+ */
+.summary {
+  padding: $space-4 $space-4 $space-3;
+  background: $bg-canvas;
+  border-bottom: 1px solid $line;
 }
 
-.label {
+.balance-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.balance-label {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $text-secondary;
+  flex-shrink: 0;
 }
 
-.value {
+.balance-value {
   @include tabular-nums;
-  font-size: $font-h1;
-  line-height: $lh-h1;
+  font-size: $font-display;
+  line-height: $lh-display;
   font-weight: $weight-semibold;
   color: $text-primary;
-  margin-top: 4px;
+  text-align: right;
+  /* ×2 字号下金额需要折行而不是被裁掉（金额宁可换行也不能丢内容） */
+  @include text-safe;
+}
+
+.io-row {
+  display: flex;
+  align-items: baseline;
+  margin-top: $space-2;
+}
+
+.io-item {
+  @include tabular-nums;
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
+  margin-right: $space-4;
+  @include text-safe;
 }
 
 .income {
@@ -288,17 +308,17 @@ onShow(async () => {
   color: $expense;
 }
 
+/* ── 分类占比：通栏，靠上边线与上面的汇总区分 ── */
 .panel {
-  background: $bg-card;
-  border-radius: 12px;
-  padding: 16px;
+  background: $bg-canvas;
+  padding: $space-4;
 }
 
 .panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: $space-3;
 }
 
 .panel-title {
@@ -314,13 +334,13 @@ onShow(async () => {
 
 .tab {
   /* 22px 行盒 + 上下各 8px = 38 */
-  padding: 8px 12px;
-  margin-left: 8px;
+  padding: $space-2 $space-3;
+  margin-left: $space-2;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
   color: $text-secondary;
   background: $bg-subtle;
-  border-radius: 12px;
+  border-radius: $radius-sm;
 }
 
 .tab.active {
@@ -336,7 +356,7 @@ onShow(async () => {
 
 .legend {
   width: 100%;
-  margin-top: 20px;
+  margin-top: $space-5;
 }
 
 .legend-item {
@@ -345,8 +365,8 @@ onShow(async () => {
      wrap 后「金额 + 占比」整体掉到第二行；margin-left:auto 负责贴右。 */
   flex-wrap: wrap;
   align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid $divider;
+  padding: $space-2 0;
+  border-bottom: 1px solid $line;
 }
 
 .legend-item:last-child {
@@ -357,7 +377,8 @@ onShow(async () => {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  margin-right: 8px;
+  margin-right: $space-2;
+  flex-shrink: 0;
 }
 
 .legend-name {
@@ -365,6 +386,7 @@ onShow(async () => {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
   color: $text-primary;
+  @include text-safe;
 }
 
 .legend-sum {
@@ -375,7 +397,7 @@ onShow(async () => {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
   color: $text-secondary;
-  margin-right: 12px;
+  margin-right: $space-3;
   /* 与名称同行时没有剩余空间，auto 是 no-op；独占一行时把金额+占比推到右侧 */
   margin-left: auto;
 }
@@ -395,7 +417,7 @@ onShow(async () => {
 
 .empty {
   text-align: center;
-  padding: 40px 0;
+  padding: $space-8 0;
   color: $text-tertiary;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
