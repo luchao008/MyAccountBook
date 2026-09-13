@@ -53,12 +53,18 @@ const USER = process.env.SEED_USER || 'demo';
 const PASS = process.env.SEED_PASS || '123456';
 const OUT = process.env.SHOT_DIR || '/tmp/reflow-audit';
 
-/** 页面清单：单页容器架构下，4 个 Tab 是同一个路由的不同视图 */
+/**
+ * 页面清单。
+ *
+ * 2026-09-13 结构变化后必须同步，否则会重现"巡检到了错页却全绿"那类假结果：
+ *   · 「明细」已下线 → 摘掉 `?tab=detail`（否则它既不是视图也进不去，量到的是首页）；
+ *   · 「统计」改为独立页「报表」→ 要按**独立地址**巡检，`?tab=statistics` 已失效；
+ *   · 容器内只剩 记账 / 我的 两个视图。
+ */
 const PAGES = [
   ['home', '#/pages/main/index'],
-  ['detail', '#/pages/main/index?tab=detail'],
-  ['statistics', '#/pages/main/index?tab=statistics'],
   ['mine', '#/pages/main/index?tab=mine'],
+  ['report', '#/pages/statistics/index'],
   ['account-select', '#/pages/account-select/index'],
   ['category-expense', '#/pages/category/index?type=expense'],
   ['category-income', '#/pages/category/index?type=income'],

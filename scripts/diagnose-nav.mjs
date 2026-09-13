@@ -8,6 +8,12 @@
  * 判据（比"看起来像"可靠）：
  *   - hash 变化 + 页面栈 +1  → 发生了页面跳转（navigateTo）
  *   - hash 不变 + 页面栈不变 → 就地切换视图
+ *
+ * ⚠️ 底栏的格子有**两种语义**（2026-09-13 起），诊断时必须分开断言：
+ *   · 无 url 的格子（记账 / 我的）→ 必须**就地切视图**：hash 不变、页面栈不变；
+ *   · 有 url 的格子（报表）        → 必须**跳转**：hash 变、页面栈 +1、且目标页有返回按钮。
+ *   把跨页项错当成视图，或者反过来（每次都压栈），都会让底栏行为退化成"死按钮"或
+ *   "栈无限增长" —— 这两种失败都不报错，只能靠这里量出来。
  */
 import fs from 'node:fs';
 
@@ -99,8 +105,8 @@ async function snap(tag) {
       // 各视图的特征元素，判断"哪个视图正显示"
       viewHits: {
         home: visible('.banner') + visible('.rank-card'),
-        detail: visible('.list-group') + visible('.filter-bar'),
-        statistics: visible('.chart-area') + visible('.legend'),
+        // 「明细」已下线；「统计」改为独立页「报表」（pages/statistics）
+        report: visible('.chart-area') + visible('.legend'),
         mine: visible('.user-card') + visible('.logout'),
         账本选择: visible('.account-item') + visible('.manage-entry'),
         记账页: visible('.keyboard'),
@@ -221,11 +227,54 @@ if (after.hash !== before.hash) {
 await clickTab('记账');
 await snap('⑥ 再点「记账」');
 
-// 反复切换，确认不会累积跳转
-for (const name of ['明细', '统计', '我的', '记账', '我的']) {
+// 容器内反复切换，确认不会累积跳转（容器现在只有 记账 / 我的 两个视图）
+for (const name of ['我的', '记账', '我的', '记账', '我的']) {
   await clickTab(name);
 }
-await snap('⑦ 连续切换 5 次后');
+await snap('⑦ 容器内连续切换 5 次后');
+
+/*
+ * ⑧ 「报表」必须**跳转**而不是切视图（2026-09-13 的明确要求）。
+ *
+ * 判据用 hash + 页面栈，"看起来变了"不算数。三项都要过：
+ *   ① 跳转：hash → #/pages/statistics/index 且页面栈 +1
+ *   ② 目标页有返回按钮 —— 这才是"跳转"相对"切视图"的意义所在
+ *   ③ 内容真的渲染了（chart-area / legend 命中）—— 防"跳到一个白页也算通过"
+ */
+const beforeReport = await snap('⑧ 点击「报表」之前');
+await clickTab('报表');
+const afterReport = await snap('⑨ 点击「报表」之后');
+await page.screenshot({ path: process.env.SHOT_REPORT || '/tmp/tabbar-report.png' });
+
+console.log('\n===== 「报表」跳转判定 =====');
+console.log(
+  `${afterReport.hash !== beforeReport.hash && afterReport.stackLen > beforeReport.stackLen ? '✓' : '✗'} ` +
+    `发生了页面跳转：hash ${beforeReport.hash} → ${afterReport.hash}，` +
+    `栈 ${beforeReport.stackLen} → ${afterReport.stackLen}`,
+);
+console.log(
+  `${afterReport.backBtn > 0 ? '✓' : '✗'} 目标页有返回按钮（${afterReport.backBtn} 个）—— 能原路返回才有"跳转"的意义`,
+);
+console.log(
+  `${afterReport.viewHits.report > 0 ? '✓' : '✗'} 目标页内容已渲染（命中 ${afterReport.viewHits.report}）`,
+);
+
+// 原路返回：点导航栏返回按钮（真实用法），并确认页面栈复原
+const backLoc = page.locator('.uni-page-head-hd .uni-page-head-btn').first();
+if ((await backLoc.count()) > 0) {
+  await backLoc.click();
+} else {
+  await page.goBack();
+}
+await page.waitForTimeout(1400);
+const backFromReport = await snap('⑩ 从报表页返回');
+console.log(
+  `${backFromReport.stackLen === beforeReport.stackLen ? '✓' : '✗'} ` +
+    `返回后页面栈复原：${afterReport.stackLen} → ${backFromReport.stackLen}（期望 ${beforeReport.stackLen}）`,
+);
+console.log(
+  `${backFromReport.viewHits.home + backFromReport.viewHits.mine > 0 ? '✓' : '✗'} 回到了容器视图`,
+);
 
 /*
  * 核心验收点：**账本选择页**点底栏「我的」必须就地切换 —— 不压栈、hash 不变。

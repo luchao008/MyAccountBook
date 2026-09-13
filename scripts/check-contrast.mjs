@@ -679,8 +679,11 @@ section('13. 字号阶梯自洽（文档 §3.2 ↔ tokens.scss ↔ 各 .vue）')
   //    （其 .fab-label 是 1 处 $font-*）→ 文字 105 → 104，总数 107 → 106。
   //    2026-09-13 更新七：新增「新建二级分类」与「图标选择」两个页面，+6 处
   //    （分类名称/计数/标签/保存按钮/底部 Tab/空态等）→ 文字 104 → 110，总数 106 → 112。
-  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 115, 0);
-  expect('  其中文字字号 $font-*', nText, 113, 0);
+  //    2026-09-13 更新八：「明细」下线，删除 `components/views/DetailView.vue`
+  //    （该文件有 11 处 $font-*）→ 文字 113 → 102，总数 115 → 104。
+  //    这次是**减少**导致的计数变化：删掉一个真正承载内容的视图，字号用量理应跟着降。
+  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 104, 0);
+  expect('  其中文字字号 $font-*', nText, 102, 0);
   expect('  其中图标尺寸 $icon-*', nIcon, 2, 0);
   expect('  其中字面量（必须为 0）', nLiteral, 0, 0);
 }

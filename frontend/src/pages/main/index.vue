@@ -1,24 +1,26 @@
 <template>
   <view class="main">
     <!--
-      单页多视图容器。
-      用 v-if + visited 做**懒挂载**：没访问过的视图不渲染，避免一次性打 4 个接口。
+      单页多视图容器（2026-09-13 起只剩两个视图：记账 / 我的）。
+
+      **谁该放进容器**：会长期停留、且切换时**不该**压页面栈的视图。
+      **谁该独立成页**：用户看完要能"原路返回"的内容 —— 报表 `pages/statistics`。
+      判据是"离开这里时该不该出现/使用返回路径"，不是"内容重不重要"。
+      （「明细」已按此判据于同日下线。）
+
+      用 v-if + visited 做**懒挂载**：没访问过的视图不渲染，避免一次性打多个接口。
       v-show（display:none）保证非激活视图不占高度，因此页面滚动语义与原来一致，
       且组件实例与已加载数据都被保留 —— 反复切换不会重新请求。
     -->
     <HomeView v-if="visited.home" v-show="current === 'home'" ref="homeRef" />
-    <DetailView v-if="visited.detail" v-show="current === 'detail'" ref="detailRef" />
-    <StatisticsView
-      v-if="visited.statistics"
-      v-show="current === 'statistics'"
-      ref="statisticsRef"
-    />
     <MineView v-if="visited.mine" v-show="current === 'mine'" ref="mineRef" />
 
     <!--
       底栏只实例化一次，这是"零滑动感"的关键。
-      「记一笔」不再是悬浮按钮（RecordFab 已删除），而是底栏中间那个凸起项 ——
-      它由 TabBar 自己渲染，点击时 emit('change', 'record')，由下面的 switchTo 兜住。
+      · 「记一笔」（凸起项）没有 url：点击 emit('change', 'record')，由下面的 switchTo 兜住。
+      · 「报表」**带 url**：由 TabBar 自己走页面跳转，根本不经过本页 ——
+        所以 VALID_KEYS 里不该有它（它不是本容器的视图）。这也是"点了没反应"这类
+        死按钮的成因：把一个跨页项错当成视图 emit，而父级没有对应分支。
     -->
     <TabBar :current="current" @change="switchTo" />
   </view>
@@ -28,20 +30,16 @@
 import { ref, computed, nextTick } from 'vue';
 import { onLoad, onShow, onPageScroll, onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app';
 import HomeView from '@/components/views/HomeView.vue';
-import DetailView from '@/components/views/DetailView.vue';
-import StatisticsView from '@/components/views/StatisticsView.vue';
 import MineView from '@/components/views/MineView.vue';
 import TabBar from '@/components/TabBar.vue';
 
-type ViewKey = 'home' | 'detail' | 'statistics' | 'mine';
+type ViewKey = 'home' | 'mine';
 
-const VALID_KEYS: ViewKey[] = ['home', 'detail', 'statistics', 'mine'];
+const VALID_KEYS: ViewKey[] = ['home', 'mine'];
 
 /** 视图 → 导航栏标题（单页容器里标题需要自己切） */
 const TITLES: Record<ViewKey, string> = {
   home: '记账',
-  detail: '明细',
-  statistics: '统计',
   mine: '我的',
 };
 
@@ -49,20 +47,14 @@ const current = ref<ViewKey>('home');
 /** 已访问过的视图（懒挂载） */
 const visited = ref<Record<ViewKey, boolean>>({
   home: true,
-  detail: false,
-  statistics: false,
   mine: false,
 });
 
 const homeRef = ref();
-const detailRef = ref();
-const statisticsRef = ref();
 const mineRef = ref();
 
 const refMap = computed<Record<ViewKey, any>>(() => ({
   home: homeRef.value,
-  detail: detailRef.value,
-  statistics: statisticsRef.value,
   mine: mineRef.value,
 }));
 
@@ -77,8 +69,6 @@ const activeRef = computed(() => refMap.value[current.value]);
  */
 const scrollPositions: Record<ViewKey, number> = {
   home: 0,
-  detail: 0,
-  statistics: 0,
   mine: 0,
 };
 
@@ -104,6 +94,8 @@ function switchTo(key: string) {
   /*
    * 凸起项「记一笔」：不是视图，直接去记账页。
    * 用 navigateTo 保留页面栈 —— 记完返回时当前视图与它的滚动位置都还在。
+   * 注意它**没有 url**（跳转目标由这里决定）；「报表」有 url、由 TabBar 自己跳。
+   * 两者的差别是"谁决定去哪"，不是"要不要跳转"。
    */
   if (key === RECORD_KEY) {
     uni.navigateTo({ url: '/pages/record/index' });

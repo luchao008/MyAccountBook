@@ -359,9 +359,8 @@ td.bad{color:var(--expense);font-weight:600}
       </div>
       <nav class="tabbar">
         <div class="tab on"><svg class="i m"><use href="#i-chart-bar"/></svg>记账</div>
-        <div class="tab"><svg class="i m"><use href="#i-receipt"/></svg>明细</div>
+        <div class="tab"><svg class="i m"><use href="#i-pie"/></svg>报表</div>
         <div class="tab mid"><span class="btn-add"><svg class="i m" style="color:#fff"><use href="#i-plus"/></svg></span></div>
-        <div class="tab"><svg class="i m"><use href="#i-pie"/></svg>统计</div>
         <div class="tab"><svg class="i m"><use href="#i-user"/></svg>我的</div>
       </nav>
     </div>
@@ -441,14 +440,20 @@ td.bad{color:var(--expense);font-weight:600}
         <div class="tab"><svg class="i m"><use href="#i-user"/></svg>我的</div>
       </nav>
     </div>
-    <figcaption><b>明细</b>　吸顶筛选条 ／ 日期分组粘性头 ／ 定宽右对齐金额</figcaption>
+    <figcaption><b>明细</b>　吸顶筛选条 ／ 日期分组粘性头 ／ 定宽右对齐金额<br><span style="color:var(--ink-3)">2026-09-13 已下线（保留作设计记录；本屏底栏为改版前的 5 格形态）</span></figcaption>
   </figure>
 
   <!-- ════════ 统计 ════════ -->
   <figure class="phone">
     <div class="screen">
       <div class="statusbar"><span>9:41</span><span>···· ▮</span></div>
-      <div class="navbar">统计</div>
+      <!--
+        报表是**独立页**（pages/statistics）：有导航栏与返回按钮，**没有底栏** ——
+        底栏属于 pages/main 这个容器。底栏那一格「报表」带 url，点击是页面跳转。
+      -->
+      <div class="navbar" style="position:relative">
+        <svg class="i m" style="position:absolute;left:12px"><use href="#i-chevron-left"/></svg>报表
+      </div>
       <div class="content">
         <div style="display:flex;align-items:center;justify-content:center;gap:var(--s4);padding:var(--s2) 0;border-bottom:1px solid var(--line)">
           <svg class="i m" style="color:var(--ink-2)"><use href="#i-chevron-left"/></svg>
@@ -519,15 +524,8 @@ td.bad{color:var(--expense);font-weight:600}
           </div>
         </div>
       </div>
-      <nav class="tabbar">
-        <div class="tab"><svg class="i m"><use href="#i-chart-bar"/></svg>记账</div>
-        <div class="tab"><svg class="i m"><use href="#i-receipt"/></svg>明细</div>
-        <div class="tab mid"><span class="btn-add"><svg class="i m" style="color:#fff"><use href="#i-plus"/></svg></span></div>
-        <div class="tab on"><svg class="i m"><use href="#i-pie"/></svg>统计</div>
-        <div class="tab"><svg class="i m"><use href="#i-user"/></svg>我的</div>
-      </nav>
     </div>
-    <figcaption><b>统计</b>　结余大 + 收支小 ／ 环内白色间隙 ／ 图例三通道</figcaption>
+    <figcaption><b>报表</b>　独立页（有返回按钮、无底栏）／ 结余大 + 收支小 ／ 环内白色间隙 ／ 图例三通道</figcaption>
   </figure>
 
   <!-- ════════ 我的 ════════ -->
@@ -579,9 +577,8 @@ td.bad{color:var(--expense);font-weight:600}
       </div>
       <nav class="tabbar">
         <div class="tab"><svg class="i m"><use href="#i-chart-bar"/></svg>记账</div>
-        <div class="tab"><svg class="i m"><use href="#i-receipt"/></svg>明细</div>
+        <div class="tab"><svg class="i m"><use href="#i-pie"/></svg>报表</div>
         <div class="tab mid"><span class="btn-add"><svg class="i m" style="color:#fff"><use href="#i-plus"/></svg></span></div>
-        <div class="tab"><svg class="i m"><use href="#i-pie"/></svg>统计</div>
         <div class="tab on"><svg class="i m"><use href="#i-user"/></svg>我的</div>
       </nav>
     </div>

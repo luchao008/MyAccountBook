@@ -198,8 +198,18 @@ defineExpose({ activate });
   min-height: $page-min-height;
   background: $bg-canvas;
   padding: 0;
-  /* 自定义导航栏 52px + 凸起按钮向外溢出的部分 */
-  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+  /*
+   * 底栏留白，**默认 0**。
+   *
+   * 本视图目前只被独立页「报表」（`pages/statistics`）承载，那页没有底栏，
+   * 所以默认值就是 0 —— 不留一段凭空多出来的 88px 空白。
+   * 若将来把它放回容器（容器有底栏），由承载方显式给 `--view-bottom-gap: 88px`
+   * （56px 底栏 + 凸起按钮外溢），这套约定与账本选择页给 MineView 写的
+   * `--view-bottom-gap: 52px` 是同一个。
+   * 默认取"没有底栏"而不是"有底栏"：**让默认值等于最常见的实际情形**，
+   * 忘记设的场景会表现为"内容贴着底部"（一眼能看出），而不是"页底一片空白"（容易被忽略）。
+   */
+  padding-bottom: calc(var(--view-bottom-gap, 0px) + env(safe-area-inset-bottom));
 }
 
 /* ── 月份切换：通栏 + 下边线（不再做成浮起的白卡） ── */
