@@ -30,6 +30,235 @@ export class StatisticsService {
   }
 
   /**
+   * 把报表时段解析成首尾日期。
+   *   - '2026'     → 整年 [2026-01-01, 2026-12-31]，granularity='year'
+   *   - '2026-09'  → 该月 [2026-09-01, 2026-09-30]，granularity='month'
+   */
+  private resolvePeriodRange(period: string): {
+    start: string;
+    end: string;
+    granularity: 'year' | 'month';
+  } {
+    if (period.length === 4) {
+      return { start: `${period}-01-01`, end: `${period}-12-31`, granularity: 'year' };
+    }
+    const { monthStart, monthEnd } = this.resolveMonthRange(period);
+    return { start: monthStart, end: monthEnd, granularity: 'month' };
+  }
+
+  /**
+   * 报表聚合（GET /statistics/report）
+   *
+   * 一次返回该时段（年 / 月）的：汇总、支出分类、收入分类、12 个月趋势。
+   * 年粒度下 trend 有 12 条（无数据的月份补 0）；月粒度下 trend 为空数组
+   * （单月看"跨月走势"没有意义，前端也不渲染该模块）。
+   *
+   * 口径与 monthly / categoryBreakdown 完全一致：分类按一级聚合、结余 = 收入 - 支出。
+   */
+  async report(userId: string, period: string, accountId?: string) {
+    const { start, end, granularity } = this.resolvePeriodRange(period);
+
+    const summary = await this.summaryInRange(userId, start, end, accountId);
+    const expense = await this.categoryInRange(userId, start, end, 'expense', accountId);
+    const income = await this.categoryInRange(userId, start, end, 'income', accountId);
+    const trend = granularity === 'year' ? await this.monthlyTrend(userId, period, accountId) : [];
+
+    return {
+      period,
+      granularity,
+      start,
+      end,
+      summary,
+      // 一级口径：基础统计 Tab 的「收入来源 / 支出分布」（看大类结构）
+      expenseCategories: expense.level1,
+      incomeCategories: income.level1,
+      // 二级口径：分类 Tab 的环形图与排行（看具体花在哪）
+      expenseCategoriesL2: expense.level2,
+      incomeCategoriesL2: income.level2,
+      trend,
+    };
+  }
+
+  /** 任意日期区间的收支汇总 */
+  private async summaryInRange(userId: string, start: string, end: string, accountId?: string) {
+    const qb = this.dataSource
+      .getRepository(Transaction)
+      .createQueryBuilder('t')
+      .select("COALESCE(SUM(CASE WHEN t.type = 'income'  THEN t.amount ELSE 0 END), 0)", 'income')
+      .addSelect(
+        "COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END), 0)",
+        'expense',
+      )
+      .addSelect('COUNT(*)', 'count')
+      .where('t.userId = :userId', { userId })
+      .andWhere('t.recordDate BETWEEN :start AND :end', { start, end });
+
+    if (accountId) {
+      qb.andWhere('t.accountId = :accountId', { accountId });
+    }
+
+    const raw = await qb.getRawOne();
+    const income = Number(raw.income).toFixed(2);
+    const expense = Number(raw.expense).toFixed(2);
+    return {
+      income,
+      expense,
+      balance: (Number(income) - Number(expense)).toFixed(2),
+      count: Number(raw.count ?? 0),
+    };
+  }
+
+  /**
+   * 任意日期区间的分类聚合，**一次查询同时产出两级口径**。
+   *
+   * 做法：SQL 按「叶子分类」分组（挂二级就是二级、直接挂一级就是它自己、
+   * 未分类为 NULL），再在 JS 里把叶子按父级汇总出一级。
+   *
+   * 为什么不查两遍：两遍 SQL 会在大表上重复扫描，而且两次结果之间可能有写入
+   * 导致口径对不上（一级之和 ≠ 二级之和）。一次查询、一次聚合天然自洽。
+   *
+   * 口径：
+   *   - level1：交易挂二级 → 归到父；直接挂一级 → 归到自身；未分类 → 单独一组
+   *   - level2：交易挂哪个叶子就算哪个（未分类单独一组）
+   * 两级各自的 ratio 都以「该类型总金额」为分母，因此**各级之和都是 100%**。
+   */
+  private async categoryInRange(
+    userId: string,
+    start: string,
+    end: string,
+    type: 'income' | 'expense',
+    accountId?: string,
+  ) {
+    const conditions = ['t.user_id = ?', 't.record_date BETWEEN ? AND ?', 't.type = ?'];
+    const params: any[] = [userId, start, end, type];
+    if (accountId) {
+      conditions.push('t.account_id = ?');
+      params.push(accountId);
+    }
+
+    const rows = await this.dataSource.query(
+      `SELECT
+         c.id   AS leafId,
+         c.name AS leafName,
+         c.icon AS leafIcon,
+         p.id   AS parentId,
+         p.name AS parentName,
+         p.icon AS parentIcon,
+         t.type AS type,
+         SUM(t.amount) AS sum,
+         COUNT(*) AS count
+       FROM transactions t
+       LEFT JOIN categories c ON c.id = t.category_id
+       LEFT JOIN categories p ON p.id = c.parent_id
+       WHERE ${conditions.join(' AND ')}
+       GROUP BY leafId, leafName, leafIcon, parentId, parentName, parentIcon, t.type
+       ORDER BY sum DESC`,
+      params,
+    );
+
+    const total = rows.reduce((acc: number, r: any) => acc + Number(r.sum), 0);
+    const ratioOf = (v: any) => (total > 0 ? Number(((Number(v) / total) * 100).toFixed(2)) : 0);
+
+    // ---- 二级：每行叶子就是一个条目 ----
+    const level2 = rows.map((r: any) => ({
+      categoryId: r.leafId ?? null,
+      name: r.leafName ?? '未分类',
+      icon: r.leafIcon ?? '',
+      type: r.type,
+      sum: Number(r.sum).toFixed(2),
+      ratio: ratioOf(r.sum),
+      count: Number(r.count),
+      /** 所属一级分类 id（未分类与一级自身为 null） */
+      parentId: r.parentId ?? null,
+      /** 所属一级分类名，供前端做分组展示 */
+      parentName: r.parentName ?? null,
+    }));
+
+    // ---- 一级：把叶子按 parentId ?? leafId 归并 ----
+    const bucket = new Map<
+      string,
+      {
+        categoryId: string | null;
+        name: string;
+        icon: string;
+        type: string;
+        sum: number;
+        count: number;
+      }
+    >();
+    for (const r of rows) {
+      const key = String(r.parentId ?? r.leafId ?? '__none__');
+      const name = r.parentName ?? r.leafName ?? '未分类';
+      const icon = r.parentIcon ?? r.leafIcon ?? '';
+      const cur = bucket.get(key);
+      if (cur) {
+        cur.sum += Number(r.sum);
+        cur.count += Number(r.count);
+      } else {
+        bucket.set(key, {
+          categoryId: r.parentId ?? r.leafId ?? null,
+          name,
+          icon,
+          type: r.type,
+          sum: Number(r.sum),
+          count: Number(r.count),
+        });
+      }
+    }
+
+    const level1 = [...bucket.values()]
+      .sort((a, b) => b.sum - a.sum)
+      .map((b) => ({
+        categoryId: b.categoryId,
+        name: b.name,
+        icon: b.icon,
+        type: b.type,
+        sum: b.sum.toFixed(2),
+        ratio: ratioOf(b.sum),
+        count: b.count,
+        parentId: null,
+        parentName: null,
+      }));
+
+    return { level1, level2 };
+  }
+
+  /** 某年 12 个月的收支（无数据的月份补 0） */
+  private async monthlyTrend(userId: string, year: string, accountId?: string) {
+    const conditions = ['t.user_id = ?', 't.record_date BETWEEN ? AND ?'];
+    const params: any[] = [userId, `${year}-01-01`, `${year}-12-31`];
+    if (accountId) {
+      conditions.push('t.account_id = ?');
+      params.push(accountId);
+    }
+
+    const rows = await this.dataSource.query(
+      `SELECT
+         MONTH(t.record_date) AS m,
+         COALESCE(SUM(CASE WHEN t.type = 'income'  THEN t.amount ELSE 0 END), 0) AS income,
+         COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END), 0) AS expense
+       FROM transactions t
+       WHERE ${conditions.join(' AND ')}
+       GROUP BY m`,
+      params,
+    );
+
+    const map = new Map<number, any>();
+    for (const r of rows) map.set(Number(r.m), r);
+
+    return Array.from({ length: 12 }, (_, i) => {
+      const m = i + 1;
+      const row = map.get(m);
+      return {
+        month: `${year}-${String(m).padStart(2, '0')}`,
+        label: `${String(m).padStart(2, '0')}月`,
+        income: Number(row?.income ?? 0).toFixed(2),
+        expense: Number(row?.expense ?? 0).toFixed(2),
+      };
+    });
+  }
+
+  /**
    * 月度汇总：收入 / 支出 / 结余
    *
    * accountId 可选：不传时统计该用户全部账本（保持多账本改造前的行为）。

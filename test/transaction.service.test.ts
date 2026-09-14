@@ -356,4 +356,132 @@ describe('TransactionService', () => {
       expect(ids.indexOf(withTime.id)).toBeLessThan(ids.indexOf(withoutTime.id));
     });
   });
+
+  describe('新增筛选与排序（流水页用）', () => {
+    let qUserId: string;
+    let catFood: string;
+    let catLunch: string;
+    let catTraffic: string;
+
+    beforeAll(async () => {
+      const u = await authService.register({
+        username: randomUsername('tquery'),
+        password: '123456',
+      });
+      qUserId = u.user.id;
+      createdUserIds.push(qUserId);
+
+      catFood = (await categoryService.create(qUserId, { name: '餐饮Q', type: 'expense' })).id;
+      catLunch = (
+        await categoryService.create(qUserId, {
+          name: '午餐Q',
+          type: 'expense',
+          parentId: catFood,
+        })
+      ).id;
+      catTraffic = (await categoryService.create(qUserId, { name: '交通Q', type: 'expense' })).id;
+
+      await transactionService.create(qUserId, {
+        type: 'expense',
+        amount: '30.00',
+        categoryId: catLunch,
+        recordDate: '2026-06-01',
+        note: '公司午餐',
+      });
+      await transactionService.create(qUserId, {
+        type: 'expense',
+        amount: '80.00',
+        categoryId: catTraffic,
+        recordDate: '2026-06-02',
+        note: '打车',
+      });
+      await transactionService.create(qUserId, {
+        type: 'income',
+        amount: '500.00',
+        recordDate: '2026-06-03',
+        note: '兼职收入',
+      });
+    });
+
+    const q = () => ({ page: 1, size: 50 });
+
+    it('关键词匹配备注', async () => {
+      const r = await transactionService.page(qUserId, { ...q(), keyword: '午餐' } as any);
+      expect(r.total).toBe(1);
+      expect(r.list[0].note).toBe('公司午餐');
+    });
+
+    it('关键词匹配分类名', async () => {
+      const r = await transactionService.page(qUserId, { ...q(), keyword: '交通Q' } as any);
+      expect(r.total).toBe(1);
+    });
+
+    it('金额区间（闭区间）', async () => {
+      const r = await transactionService.page(qUserId, {
+        ...q(),
+        minAmount: '30.00',
+        maxAmount: '80.00',
+      } as any);
+      expect(r.total).toBe(2);
+    });
+
+    it('分类多选：逗号分隔', async () => {
+      const r = await transactionService.page(qUserId, {
+        ...q(),
+        categoryIds: `${catLunch},${catTraffic}`,
+      } as any);
+      expect(r.total).toBe(2);
+    });
+
+    it('分类多选：传一级分类会连带命中其下二级', async () => {
+      // 交易挂在二级「午餐Q」上，传一级「餐饮Q」应当命中
+      const r = await transactionService.page(qUserId, {
+        ...q(),
+        categoryIds: catFood,
+      } as any);
+      expect(r.total).toBe(1);
+      expect(r.list[0].categoryId).toBe(catLunch);
+    });
+
+    it('排序：金额升序 / 降序', async () => {
+      const asc = await transactionService.page(qUserId, { ...q(), order: 'amountAsc' } as any);
+      expect(asc.list.map((t) => t.amount)).toEqual(['30.00', '80.00', '500.00']);
+
+      const desc = await transactionService.page(qUserId, { ...q(), order: 'amountDesc' } as any);
+      expect(desc.list.map((t) => t.amount)).toEqual(['500.00', '80.00', '30.00']);
+    });
+
+    it('summary：按天分组，结余 = 收入 - 支出，倒序', async () => {
+      const rows = await transactionService.summary(qUserId, { unit: 'day' } as any);
+      expect(rows.map((r) => r.key)).toEqual(['2026-06-03', '2026-06-02', '2026-06-01']);
+      expect(rows[0].income).toBe('500.00');
+      expect(rows[0].balance).toBe('500.00');
+      expect(rows[2].expense).toBe('30.00');
+      expect(rows[2].balance).toBe('-30.00');
+    });
+
+    it('summary：按月分组', async () => {
+      const rows = await transactionService.summary(qUserId, { unit: 'month' } as any);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].key).toBe('2026-06');
+      expect(rows[0].income).toBe('500.00');
+      expect(rows[0].expense).toBe('110.00');
+      expect(rows[0].balance).toBe('390.00');
+      expect(rows[0].count).toBe(3);
+    });
+
+    it('summary：与列表共用筛选（只看支出）', async () => {
+      const rows = await transactionService.summary(qUserId, {
+        unit: 'month',
+        type: 'expense',
+      } as any);
+      expect(rows[0].income).toBe('0.00');
+      expect(rows[0].expense).toBe('110.00');
+    });
+
+    it('summary：数据隔离', async () => {
+      const rows = await transactionService.summary(otherUserId, { unit: 'month' } as any);
+      expect(rows.find((r) => r.key === '2026-06')).toBeUndefined();
+    });
+  });
 });

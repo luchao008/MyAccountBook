@@ -39,13 +39,53 @@ export interface QueryParams {
   start?: string;
   end?: string;
   type?: 'income' | 'expense';
+  /** 单选分类（旧参数，与 categoryIds 互斥，都传时以后者为准） */
   categoryId?: string;
+  /** 多选分类，逗号分隔。传一级分类会连带命中其下二级 */
+  categoryIds?: string;
+  accountId?: string;
+  /** 关键词，匹配备注或分类名 */
+  keyword?: string;
+  minAmount?: string;
+  maxAmount?: string;
+  order?: 'time' | 'amountDesc' | 'amountAsc';
   page?: number;
   size?: number;
 }
 
+/** 分组粒度 */
+export type SummaryUnit = 'year' | 'quarter' | 'month' | 'week' | 'day';
+
+export interface SummaryItem {
+  /** 分组键，随 unit 变化：2026 / 2026-Q3 / 2026-09 / 2026-W37 / 2026-09-14 */
+  key: string;
+  unit: SummaryUnit;
+  income: string;
+  expense: string;
+  balance: string;
+  count: number;
+}
+
+/** 与列表共用筛选条件的汇总查询参数（不含分页） */
+export interface SummaryParams {
+  unit: SummaryUnit;
+  start?: string;
+  end?: string;
+  type?: 'income' | 'expense';
+  categoryIds?: string;
+  accountId?: string;
+  keyword?: string;
+  minAmount?: string;
+  maxAmount?: string;
+}
+
 export function getTransactions(params: QueryParams): Promise<PageResult<TransactionItem>> {
   return http.get('/transactions', { params }) as any;
+}
+
+/** 流水分组汇总（流水页主列表） */
+export function getTransactionSummary(params: SummaryParams): Promise<SummaryItem[]> {
+  return http.get('/transactions/summary', { params }) as any;
 }
 
 export function getTransaction(id: string): Promise<TransactionItem> {
@@ -60,6 +100,7 @@ export function createTransaction(data: {
   note?: string;
   /** HH:mm；不传表示不记录时间 */
   recordTime?: string;
+  accountId?: string;
 }): Promise<TransactionItem> {
   return http.post('/transactions', data) as any;
 }

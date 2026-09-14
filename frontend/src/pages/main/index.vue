@@ -1,19 +1,18 @@
 <template>
   <view class="main">
     <!--
-      单页多视图容器（2026-09-13 起只剩两个视图：记账 / 我的）。
+      单页多视图容器（2026-09-14 起只剩**一个视图**：记账）。
 
       **谁该放进容器**：会长期停留、且切换时**不该**压页面栈的视图。
       **谁该独立成页**：用户看完要能"原路返回"的内容 —— 报表 `pages/statistics`。
       判据是"离开这里时该不该出现/使用返回路径"，不是"内容重不重要"。
-      （「明细」已按此判据于同日下线。）
+      （「明细」已按此判据于同日下线；**「我的」于 09-14 从本容器移除** ——
+       入口改由账本选择页的底栏提供，本页不再承载它。）
 
-      用 v-if + visited 做**懒挂载**：没访问过的视图不渲染，避免一次性打多个接口。
-      v-show（display:none）保证非激活视图不占高度，因此页面滚动语义与原来一致，
-      且组件实例与已加载数据都被保留 —— 反复切换不会重新请求。
+      仍保留 visited / v-show 这套机制：只剩一个视图时它退化为常量，
+      但机制留着，将来若再加视图不必重写这段逻辑。
     -->
     <HomeView v-if="visited.home" v-show="current === 'home'" ref="homeRef" />
-    <MineView v-if="visited.mine" v-show="current === 'mine'" ref="mineRef" />
 
     <!--
       底栏只实例化一次，这是"零滑动感"的关键。
@@ -30,32 +29,34 @@
 import { ref, computed, nextTick } from 'vue';
 import { onLoad, onShow, onPageScroll, onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app';
 import HomeView from '@/components/views/HomeView.vue';
-import MineView from '@/components/views/MineView.vue';
 import TabBar from '@/components/TabBar.vue';
 
-type ViewKey = 'home' | 'mine';
+type ViewKey = 'home';
 
-const VALID_KEYS: ViewKey[] = ['home', 'mine'];
+/** 合法视图 key（当前只有 home；将来加视图时在这里登记） */
+const VALID_KEYS = ['home'];
 
 /** 视图 → 导航栏标题（单页容器里标题需要自己切） */
-const TITLES: Record<ViewKey, string> = {
+const TITLES: Record<string, string> = {
   home: '记账',
-  mine: '我的',
 };
 
 const current = ref<ViewKey>('home');
 /** 已访问过的视图（懒挂载） */
-const visited = ref<Record<ViewKey, boolean>>({
+const visited = ref<Record<string, boolean>>({
   home: true,
-  mine: false,
 });
 
 const homeRef = ref();
-const mineRef = ref();
 
-const refMap = computed<Record<ViewKey, any>>(() => ({
+/*
+ * ⚠️ 下面三张表用 `Record<string, …>` 而不是 `Record<ViewKey, …>`：
+ *    只剩一个视图时 ViewKey 退化成单字面量联合，Vue 的 Unref/UnwrapRef
+ *    会把 `Record<'home', boolean>` 的值推成 `never`（TS2322，实测）。
+ *    用 string 键即可，同时保留"将来加视图只改 VALID_KEYS 与这里"的可扩展性。
+ */
+const refMap = computed<Record<string, any>>(() => ({
   home: homeRef.value,
-  mine: mineRef.value,
 }));
 
 /** 当前激活视图的实例 */
@@ -67,9 +68,8 @@ const activeRef = computed(() => refMap.value[current.value]);
  * 用**普通对象**而不是 ref：onPageScroll 触发极频繁，
  * 走响应式会让每次滚动都触发依赖更新，白白开销（这里根本不需要响应式）。
  */
-const scrollPositions: Record<ViewKey, number> = {
+const scrollPositions: Record<string, number> = {
   home: 0,
-  mine: 0,
 };
 
 /**
@@ -134,7 +134,7 @@ function switchTo(key: string) {
 }
 
 onLoad((options?: Record<string, string>) => {
-  // 支持 /pages/main/index?tab=mine 直接落到指定视图
+  // 支持 /pages/main/index?tab=xxx 直接落到指定视图（当前只有 home 一个合法值）
   const tab = options?.tab as ViewKey | undefined;
   if (tab && VALID_KEYS.includes(tab)) {
     visited.value[tab] = true;

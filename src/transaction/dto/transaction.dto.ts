@@ -166,6 +166,49 @@ export class QueryTransactionDTO {
   @Rule(RuleType.string().optional())
   accountId?: string;
 
+  @ApiProperty({
+    description:
+      '按分类**多选**筛选，逗号分隔。与单值 `categoryId` 互斥（都传时以本字段为准）。' +
+      '支持同时选一级分类（其下二级一并命中）与二级分类。',
+    example: '12,34',
+    required: false,
+  })
+  @Rule(RuleType.string().optional())
+  categoryIds?: string;
+
+  @ApiProperty({
+    description: '关键词，匹配**备注**或**分类名**（模糊、不区分大小写）',
+    example: '午饭',
+    required: false,
+  })
+  @Rule(RuleType.string().max(255).optional().allow(''))
+  keyword?: string;
+
+  @ApiProperty({
+    description: '金额下限（含），字符串如 "10.00"',
+    example: '10.00',
+    required: false,
+  })
+  @Rule(RuleType.string().pattern(AMOUNT_PATTERN).optional().allow(''))
+  minAmount?: string;
+
+  @ApiProperty({
+    description: '金额上限（含），字符串如 "100.00"',
+    example: '100.00',
+    required: false,
+  })
+  @Rule(RuleType.string().pattern(AMOUNT_PATTERN).optional().allow(''))
+  maxAmount?: string;
+
+  @ApiProperty({
+    description: '排序方式。默认 `time`（日期倒序，同日期按时刻倒序）',
+    example: 'time',
+    enum: ['time', 'amountDesc', 'amountAsc'],
+    required: false,
+  })
+  @Rule(RuleType.string().valid('time', 'amountDesc', 'amountAsc').optional())
+  order?: 'time' | 'amountDesc' | 'amountAsc';
+
   @ApiProperty({ description: '页码，从 1 开始', example: 1, required: false })
   @Rule(RuleType.number().integer().min(1).default(1))
   page: number;
@@ -173,4 +216,69 @@ export class QueryTransactionDTO {
   @ApiProperty({ description: '每页条数，1-100', example: 20, required: false })
   @Rule(RuleType.number().integer().min(1).max(100).default(20))
   size: number;
+}
+
+/** 流水分组的粒度 */
+export type SummaryUnit = 'year' | 'quarter' | 'month' | 'week' | 'day';
+
+/**
+ * 流水分组汇总（GET /transactions/summary）
+ *
+ * 与列表接口共用同一套筛选条件，差别只在"怎么聚合"：
+ * 列表返回逐条明细，本接口按 `unit` 指定的粒度分组返回结余/收入/支出/笔数。
+ */
+export class SummaryQueryDTO {
+  @ApiProperty({
+    description: '分组粒度',
+    example: 'month',
+    enum: ['year', 'quarter', 'month', 'week', 'day'],
+    required: false,
+  })
+  @Rule(RuleType.string().valid('year', 'quarter', 'month', 'week', 'day').default('month'))
+  unit: SummaryUnit;
+
+  @ApiProperty({
+    description: '起始日期 YYYY-MM-DD（闭区间）',
+    example: '2026-01-01',
+    required: false,
+  })
+  @Rule(RuleType.string().pattern(DATE_PATTERN).optional())
+  start?: string;
+
+  @ApiProperty({
+    description: '结束日期 YYYY-MM-DD（闭区间）',
+    example: '2026-12-31',
+    required: false,
+  })
+  @Rule(RuleType.string().pattern(DATE_PATTERN).optional())
+  end?: string;
+
+  @ApiProperty({
+    description: '按收支类型筛选',
+    example: 'expense',
+    enum: ['income', 'expense'],
+    required: false,
+  })
+  @Rule(RuleType.string().valid('income', 'expense').optional())
+  type?: 'income' | 'expense';
+
+  @ApiProperty({ description: '按分类多选筛选，逗号分隔', example: '12,34', required: false })
+  @Rule(RuleType.string().optional())
+  categoryIds?: string;
+
+  @ApiProperty({ description: '按账本筛选，不传为全部账本', example: '1', required: false })
+  @Rule(RuleType.string().optional())
+  accountId?: string;
+
+  @ApiProperty({ description: '关键词，匹配备注或分类名', example: '午饭', required: false })
+  @Rule(RuleType.string().max(255).optional().allow(''))
+  keyword?: string;
+
+  @ApiProperty({ description: '金额下限（含）', example: '10.00', required: false })
+  @Rule(RuleType.string().pattern(AMOUNT_PATTERN).optional().allow(''))
+  minAmount?: string;
+
+  @ApiProperty({ description: '金额上限（含）', example: '100.00', required: false })
+  @Rule(RuleType.string().pattern(AMOUNT_PATTERN).optional().allow(''))
+  maxAmount?: string;
 }

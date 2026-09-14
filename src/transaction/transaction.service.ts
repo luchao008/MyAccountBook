@@ -12,7 +12,23 @@ import {
   CreateTransactionDTO,
   UpdateTransactionDTO,
   QueryTransactionDTO,
+  SummaryQueryDTO,
+  SummaryUnit,
 } from './dto/transaction.dto';
+
+/**
+ * 分组粒度 → MySQL DATE_FORMAT 表达式。
+ *
+ * 放在模块级常量而不是方法里：它是 SQL 片段、不含运行时变量，
+ * 写进方法内每次调用都会重建，且容易被人误以为"可以按用户传参拼接"（那是注入风险）。
+ */
+const GROUP_FORMAT: Record<SummaryUnit, string> = {
+  year: "DATE_FORMAT(t.record_date, '%Y')",
+  quarter: "CONCAT(DATE_FORMAT(t.record_date, '%Y'), '-Q', QUARTER(t.record_date))",
+  month: "DATE_FORMAT(t.record_date, '%Y-%m')",
+  week: "CONCAT(DATE_FORMAT(t.record_date, '%x'), '-W', LPAD(WEEK(t.record_date, 3), 2, '0'))",
+  day: "DATE_FORMAT(t.record_date, '%Y-%m-%d')",
+};
 
 @Provide()
 export class TransactionService {
@@ -97,46 +113,17 @@ export class TransactionService {
     return this.findById(userId, saved.id);
   }
 
-  /**
-   * 分页查询 + 多维筛选
-   * 支持：时间范围、收支类型、分类、分页
-   */
+  /** 分页查询 + 多维筛选（支持：时间/类型/分类多选/账本/关键词/金额区间/排序） */
   async page(userId: string, query: QueryTransactionDTO): Promise<PageResult<Transaction>> {
     const qb = this.repo
       .createQueryBuilder('t')
       .leftJoinAndSelect('t.category', 'c')
-      .leftJoinAndSelect('t.account', 'a')
-      .where('t.userId = :userId', { userId });
+      .leftJoinAndSelect('t.account', 'a');
 
-    if (query.start) {
-      qb.andWhere('t.recordDate >= :start', { start: query.start });
-    }
-    if (query.end) {
-      qb.andWhere('t.recordDate <= :end', { end: query.end });
-    }
-    if (query.type) {
-      qb.andWhere('t.type = :type', { type: query.type });
-    }
-    if (query.categoryId) {
-      qb.andWhere('t.categoryId = :categoryId', {
-        categoryId: query.categoryId,
-      });
-    }
-    // 多账本：传了 accountId 才按账本过滤；不传返回全部账本（向后兼容）
-    if (query.accountId) {
-      qb.andWhere('t.accountId = :accountId', {
-        accountId: query.accountId,
-      });
-    }
+    applyFilters(qb, userId, query);
+    applyOrder(qb, query.order);
 
-    // 时间倒序（贴合随手记"最近记录在前"）：
-    // 同日期内按 record_time 倒序——MySQL DESC 排序中 NULL 靠后，
-    // 即"没填时刻的排在同日填了时刻的后面"；再按 id 兜底
-    qb.orderBy('t.recordDate', 'DESC')
-      .addOrderBy('t.recordTime', 'DESC')
-      .addOrderBy('t.id', 'DESC')
-      .skip((query.page - 1) * query.size)
-      .take(query.size);
+    qb.skip((query.page - 1) * query.size).take(query.size);
 
     const [list, total] = await qb.getManyAndCount();
 
@@ -146,6 +133,58 @@ export class TransactionService {
       page: query.page,
       size: query.size,
     };
+  }
+
+  /**
+   * 按粒度分组汇总（流水页主列表）。
+   *
+   * 一条 SQL 覆盖五种粒度 —— 差别只是 `DATE_FORMAT` 的格式串：
+   *   year    → %Y           2026
+   *   quarter → CONCAT(%Y,-Q,QUARTER)  2026-Q3
+   *   month   → %Y-%m        2026-09
+   *   week    → %x-%v        ISO 周（周一为起点，与首页"本周"口径一致）
+   *   day     → %Y-%m-%d     2026-09-14
+   *
+   * ⚠️ 用 `DATE_FORMAT` 而不是 `YEAR()/MONTH()`：后者要拼多列，
+   *    且周/季无法用单列表达，五种粒度就没法收敛成同一段代码。
+   *
+   * 返回按**时间倒序**（最近的组在前，与列表一致）。
+   */
+  async summary(userId: string, query: SummaryQueryDTO) {
+    const unit = query.unit as SummaryUnit;
+    const groupExpr = GROUP_FORMAT[unit];
+
+    const qb = this.repo
+      .createQueryBuilder('t')
+      .leftJoin('t.category', 'c')
+      .select(`${groupExpr}`, 'groupKey')
+      .addSelect("COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END), 0)", 'income')
+      .addSelect(
+        "COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END), 0)",
+        'expense',
+      )
+      .addSelect('COUNT(*)', 'count')
+      .groupBy(groupExpr)
+      // ⚠️ 别名不能叫 `key`：它是 MariaDB 的保留字，`AS key` 直接语法错误（实测 500）。
+      // 用 groupKey，返回给前端时再映射回 `key`。
+      .orderBy('groupKey', 'DESC');
+
+    applyFilters(qb, userId, query);
+
+    const rows = await qb.getRawMany();
+
+    return rows.map((r: any) => {
+      const income = Number(r.income).toFixed(2);
+      const expense = Number(r.expense).toFixed(2);
+      return {
+        key: r.groupKey,
+        unit,
+        income,
+        expense,
+        balance: (Number(income) - Number(expense)).toFixed(2),
+        count: Number(r.count),
+      };
+    });
   }
 
   async findById(userId: string, id: string): Promise<Transaction> {
@@ -204,4 +243,85 @@ export class TransactionService {
     await this.repo.delete({ id, userId });
     return { success: true };
   }
+}
+/**
+ * 列表与汇总共用的筛选条件。
+ *
+ * 抽成独立方法的原因：流水页的「列表」和「分组汇总」用的是**同一套筛选**
+ * （时间/类型/分类/账本/关键词/金额区间），只有"怎么输出"不同。
+ * 各写一遍必然出现"筛选了列表却没筛选汇总"这类不一致，且改一处漏一处。
+ *
+ * 分类多选的语义：`categoryIds` 里若含**一级分类**，其下二级也要命中 ——
+ * 这与统计口径（二级归到一级）一致：用户选「食品酒水」时想看的是这个大类，
+ * 而不是恰好直接挂在一级上的那几笔。
+ */
+function applyFilters<T extends { andWhere: (sql: string, params?: object) => T }>(
+  qb: T,
+  userId: string,
+  q: {
+    start?: string;
+    end?: string;
+    type?: 'income' | 'expense';
+    categoryId?: string;
+    categoryIds?: string;
+    accountId?: string;
+    keyword?: string;
+    minAmount?: string;
+    maxAmount?: string;
+  },
+): T {
+  qb.andWhere('t.userId = :userId', { userId });
+
+  if (q.start) qb.andWhere('t.recordDate >= :start', { start: q.start });
+  if (q.end) qb.andWhere('t.recordDate <= :end', { end: q.end });
+  if (q.type) qb.andWhere('t.type = :type', { type: q.type });
+
+  // 分类：多选优先（categoryIds 逗号分隔），并展开一级 → 其下二级
+  const rawIds = q.categoryIds
+    ? q.categoryIds
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : q.categoryId
+      ? [q.categoryId]
+      : [];
+
+  if (rawIds.length) {
+    // 先把"传入的一级分类"展开成"自身 + 其全部二级"，再用 IN 过滤。
+    // 用子查询而非再查一次库：与主查询同事务快照，避免两次读取之间数据变动。
+    qb.andWhere(
+      `(t.categoryId IN (:...catIds) OR t.categoryId IN (
+         SELECT c2.id FROM categories c2 WHERE c2.parent_id IN (:...catIds)
+       ))`,
+      { catIds: rawIds },
+    );
+  }
+
+  if (q.accountId) qb.andWhere('t.accountId = :accountId', { accountId: q.accountId });
+
+  // 关键词：备注 或 分类名（模糊、不区分大小写）
+  if (q.keyword) {
+    qb.andWhere('(t.note LIKE :kw OR c.name LIKE :kw)', { kw: `%${q.keyword}%` });
+  }
+
+  if (q.minAmount) qb.andWhere('t.amount >= :minAmount', { minAmount: q.minAmount });
+  if (q.maxAmount) qb.andWhere('t.amount <= :maxAmount', { maxAmount: q.maxAmount });
+
+  return qb;
+}
+
+/** 排序方式 → QueryBuilder 的 orderBy 片段 */
+function applyOrder(qb: ReturnType<Repository<Transaction>['createQueryBuilder']>, order?: string) {
+  if (order === 'amountDesc') {
+    qb.orderBy('t.amount', 'DESC').addOrderBy('t.id', 'DESC');
+    return;
+  }
+  if (order === 'amountAsc') {
+    qb.orderBy('t.amount', 'ASC').addOrderBy('t.id', 'DESC');
+    return;
+  }
+  // 默认：时间倒序（贴合随手记"最近记录在前"）。
+  // 同日期内按 record_time 倒序——MySQL DESC 排序中 NULL 靠后，
+  // 即"没填时刻的排在同日填了时刻的后面"；再按 id 兜底
+  qb.orderBy('t.recordDate', 'DESC').addOrderBy('t.recordTime', 'DESC').addOrderBy('t.id', 'DESC');
 }

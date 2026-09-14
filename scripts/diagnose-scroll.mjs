@@ -124,13 +124,10 @@ if (await page.locator('.submit').count()) {
   await page.waitForTimeout(2500);
 }
 
-// 主容器：逐个视图测
-const views = [
-  ['记账', 'home'],
-  ['明细', 'detail'],
-  ['统计', 'statistics'],
-  ['我的', 'mine'],
-];
+// 主容器：逐个视图测。
+// ⚠️ 2026-09-14 起容器只剩「记账」一个视图（「我的」移出、明细已下线、统计成独立页），
+//    列失效的项会静默点到不存在的格子 —— 那样什么都不会发生，却仍输出一份"零溢出"的漂亮结论。
+const views = [['记账', 'home']];
 for (const [text, key] of views) {
   const item = page.locator('.tabbar .tab-item', { hasText: text }).first();
   if (await item.count()) {

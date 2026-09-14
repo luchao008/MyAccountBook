@@ -464,8 +464,11 @@ section('11. 旧色值残留扫描（迁移回归防护）');
     '#333',
   ];
   const root = new URL('../frontend/src/', import.meta.url);
+  // ⚠️ 跳过 uni_modules：那是第三方组件（uni-ui / uCharts）的源码，
+  //    不受本项目 token 体系约束，扫进来会凭空制造一堆"旧色值残留"。
   const walk = (dir) =>
     readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      if (e.name === 'uni_modules') return [];
       const p = new URL(e.name + (e.isDirectory() ? '/' : ''), dir);
       if (e.isDirectory()) return walk(p);
       return e.name.endsWith('.vue') ? [p] : [];
@@ -579,6 +582,7 @@ section('13. 字号阶梯自洽（文档 §3.2 ↔ tokens.scss ↔ 各 .vue）')
   const vueList = [];
   const collectVue = (dir) =>
     readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      if (e.name === 'uni_modules') return []; // 第三方组件不受本项目 token 约束
       const p = new URL(e.name + (e.isDirectory() ? '/' : ''), dir);
       if (e.isDirectory()) return collectVue(p);
       return e.name.endsWith('.vue') ? [p] : [];
@@ -682,8 +686,15 @@ section('13. 字号阶梯自洽（文档 §3.2 ↔ tokens.scss ↔ 各 .vue）')
   //    2026-09-13 更新八：「明细」下线，删除 `components/views/DetailView.vue`
   //    （该文件有 11 处 $font-*）→ 文字 113 → 102，总数 115 → 104。
   //    这次是**减少**导致的计数变化：删掉一个真正承载内容的视图，字号用量理应跟着降。
-  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 104, 0);
-  expect('  其中文字字号 $font-*', nText, 102, 0);
+  //    2026-09-13 更新九：报表页重构（对齐参考图）。删除旧 `StatisticsView.vue`
+  //    （12 处 $font-*），新增 PeriodPicker / RankList / ReportView 三个组件，
+  //    RingChart 增加引出线标注文字 → 文字 102 → 117，总数 104 → 119。
+  //    2026-09-13 更新十：环形图标注拆成「名称 + 百分比」两个元素
+  //    （名称可截断、百分比不可压缩）→ 文字 117 → 118，总数 119 → 120。
+  //    2026-09-14 更新十一：新增流水页 / 日历页 / 筛选面板三个文件，
+  //    并给 EmptyState 加 subText、TabBar 改文案 → 文字 118 → 161，总数 120 → 163。
+  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 163, 0);
+  expect('  其中文字字号 $font-*', nText, 161, 0);
   expect('  其中图标尺寸 $icon-*', nIcon, 2, 0);
   expect('  其中字面量（必须为 0）', nLiteral, 0, 0);
 }
@@ -694,6 +705,7 @@ section('14. 焦点可见性（WCAG 2.4.7）');
   const srcRoot = new URL('../frontend/src/', import.meta.url);
   const collectVue = (dir) =>
     readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      if (e.name === 'uni_modules') return []; // 第三方组件不受本项目 token 约束
       const p = new URL(e.name + (e.isDirectory() ? '/' : ''), dir);
       if (e.isDirectory()) return collectVue(p);
       return e.name.endsWith('.vue') ? [p] : [];

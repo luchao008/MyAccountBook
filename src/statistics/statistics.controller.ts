@@ -2,13 +2,18 @@ import { Controller, Get, Query, Inject } from '@midwayjs/core';
 import { Context } from '@midwayjs/koa';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@midwayjs/swagger';
 import { StatisticsService } from './statistics.service';
-import { MonthlyQueryDTO, CategoryQueryDTO, OverviewQueryDTO } from './dto/statistics.dto';
+import {
+  MonthlyQueryDTO,
+  CategoryQueryDTO,
+  OverviewQueryDTO,
+  ReportQueryDTO,
+} from './dto/statistics.dto';
 import {
   MonthlyStatResponseVO,
   CategoryStatResponseVO,
   ErrorResponseVO,
 } from '../common/swagger/response.vo';
-import { OverviewResponseVO } from './dto/statistics.vo';
+import { OverviewResponseVO, ReportResponseVO } from './dto/statistics.vo';
 
 @ApiTags(['统计'])
 @ApiBearerAuth()
@@ -33,6 +38,24 @@ export class StatisticsController {
   @Get('/overview')
   async overview(@Query() query: OverviewQueryDTO) {
     return this.statisticsService.overview(this.userId, query.accountId);
+  }
+
+  @ApiOperation({
+    summary: '报表聚合（年 / 月）',
+    description:
+      '按 period 粒度一次返回：汇总、支出分类、收入分类、12 个月趋势。' +
+      'period 为 YYYY 时按整年聚合且 trend 返回 12 个月；为 YYYY-MM 时按该月聚合且 trend 为空数组。' +
+      '分类按一级聚合，口径与 /statistics/category 一致。不传 accountId 则统计全部账本。',
+  })
+  @ApiResponse({ status: 200, type: ReportResponseVO, description: '查询成功' })
+  @ApiResponse({
+    status: 422,
+    type: ErrorResponseVO,
+    description: 'period 格式必须为 YYYY 或 YYYY-MM',
+  })
+  @Get('/report')
+  async report(@Query() query: ReportQueryDTO) {
+    return this.statisticsService.report(this.userId, query.period, query.accountId);
   }
 
   @ApiOperation({

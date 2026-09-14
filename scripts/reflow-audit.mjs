@@ -56,14 +56,21 @@ const OUT = process.env.SHOT_DIR || '/tmp/reflow-audit';
 /**
  * 页面清单。
  *
- * 2026-09-13 结构变化后必须同步，否则会重现"巡检到了错页却全绿"那类假结果：
- *   · 「明细」已下线 → 摘掉 `?tab=detail`（否则它既不是视图也进不去，量到的是首页）；
- *   · 「统计」改为独立页「报表」→ 要按**独立地址**巡检，`?tab=statistics` 已失效；
- *   · 容器内只剩 记账 / 我的 两个视图。
+ * ⚠️ 本清单**必须随结构变化同步**，否则会重现"巡检到了错页却全绿"那类假结果 ——
+ *    失效的 `?tab=xxx` 不会报错，它会静默加载首页，于是量的是首页却记为那个视图。
+ *
+ * 结构沿革：
+ *   · 2026-09-13「明细」下线 → 摘掉 `?tab=detail`；
+ *     「统计」改为独立页「报表」→ 按**独立地址**巡检，`?tab=statistics` 失效；
+ *   · 2026-09-14「我的」从主容器移除 → 摘掉 `?tab=mine`（容器的 VALID_KEYS 只剩 home，
+ *     该 URL 现在会静默落到首页）。**「我的」视图仍存在于账本选择页**（页内视图切换，
+ *     不是 URL 可寻址的），所以本脚本不再覆盖它 —— 这是已知的覆盖缺口，
+ *     要补需在巡检里先点一次底栏「我的」（属独立任务）。
  */
 const PAGES = [
   ['home', '#/pages/main/index'],
-  ['mine', '#/pages/main/index?tab=mine'],
+  ['flow', '#/pages/flow/index'],
+  ['calendar', '#/pages/calendar/index'],
   ['report', '#/pages/statistics/index'],
   ['account-select', '#/pages/account-select/index'],
   ['category-expense', '#/pages/category/index?type=expense'],

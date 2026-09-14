@@ -256,6 +256,45 @@ export class TransactionPageResponseVO {
   message: string;
 }
 
+/** 流水分组汇总的单项 */
+export class TransactionSummaryItemVO {
+  @ApiProperty({
+    description: '分组键。随 unit 变化：2026 / 2026-Q3 / 2026-09 / 2026-W37 / 2026-09-14',
+    example: '2026-09',
+  })
+  key: string;
+
+  @ApiProperty({
+    description: '分组粒度',
+    example: 'month',
+    enum: ['year', 'quarter', 'month', 'week', 'day'],
+  })
+  unit: string;
+
+  @ApiProperty({ description: '该组收入', example: '11756.33' })
+  income: string;
+
+  @ApiProperty({ description: '该组支出', example: '5256.16' })
+  expense: string;
+
+  @ApiProperty({ description: '该组结余 = 收入 - 支出', example: '6500.17' })
+  balance: string;
+
+  @ApiProperty({ description: '该组记账笔数', example: 28 })
+  count: number;
+}
+
+export class TransactionSummaryResponseVO {
+  @ApiProperty({ example: 0 })
+  code: number;
+
+  @ApiProperty({ type: TransactionSummaryItemVO, isArray: true })
+  data: TransactionSummaryItemVO[];
+
+  @ApiProperty({ example: 'success' })
+  message: string;
+}
+
 export class TransactionDetailResponseVO {
   @ApiProperty({ example: 0 })
   code: number;

@@ -6,12 +6,14 @@ import {
   CreateTransactionDTO,
   UpdateTransactionDTO,
   QueryTransactionDTO,
+  SummaryQueryDTO,
 } from './dto/transaction.dto';
 import {
   TransactionPageResponseVO,
   TransactionDetailResponseVO,
   DeleteResponseVO,
   ErrorResponseVO,
+  TransactionSummaryResponseVO,
 } from '../common/swagger/response.vo';
 
 @ApiTags(['账单'])
@@ -37,6 +39,19 @@ export class TransactionController {
   @Get('/')
   async list(@Query() query: QueryTransactionDTO) {
     return this.transactionService.page(this.userId, query);
+  }
+
+  @ApiOperation({
+    summary: '流水分组汇总',
+    description:
+      '按 unit 指定的粒度分组返回结余/收入/支出/笔数，筛选条件与列表接口一致。' +
+      'unit: year | quarter | month | week | day（默认 month）。' +
+      'week 用 ISO 周（周一为起点，与首页"本周"口径一致）。',
+  })
+  @ApiResponse({ status: 200, type: TransactionSummaryResponseVO, description: '查询成功' })
+  @Get('/summary')
+  async summary(@Query() query: SummaryQueryDTO) {
+    return this.transactionService.summary(this.userId, query);
   }
 
   @ApiOperation({ summary: '账单详情' })

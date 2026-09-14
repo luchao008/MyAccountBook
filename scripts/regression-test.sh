@@ -118,6 +118,27 @@ check "category 200" 200 "$(code "$BASE/api/statistics/category?month=2026-09" -
 check "category by type 200" 200 "$(code "$BASE/api/statistics/category?month=2026-09&type=expense" -H "Authorization: Bearer $TOKEN")"
 check "bad month 422" 422 "$(code "$BASE/api/statistics/monthly?month=2026-9" -H "Authorization: Bearer $TOKEN")"
 check "overview 200" 200 "$(code "$BASE/api/statistics/overview" -H "Authorization: Bearer $TOKEN")"
+# 流水分组汇总：五种粒度都要 200
+for U in year quarter month week day; do
+  check "summary unit=$U 200" 200 "$(code "$BASE/api/transactions/summary?unit=$U" -H "Authorization: Bearer $TOKEN")"
+done
+check "summary bad unit 422" 422 "$(code "$BASE/api/transactions/summary?unit=bad" -H "Authorization: Bearer $TOKEN")"
+check "summary no token 401" 401 "$(code "$BASE/api/transactions/summary?unit=month")"
+# 列表新增筛选/排序
+check "list keyword 200" 200 "$(code "$BASE/api/transactions?keyword=test" -H "Authorization: Bearer $TOKEN")"
+check "list amount range 200" 200 "$(code "$BASE/api/transactions?minAmount=1&maxAmount=99999" -H "Authorization: Bearer $TOKEN")"
+check "list order amountAsc 200" 200 "$(code "$BASE/api/transactions?order=amountAsc" -H "Authorization: Bearer $TOKEN")"
+check "list order amountDesc 200" 200 "$(code "$BASE/api/transactions?order=amountDesc" -H "Authorization: Bearer $TOKEN")"
+check "list bad order 422" 422 "$(code "$BASE/api/transactions?order=bad" -H "Authorization: Bearer $TOKEN")"
+check "report year 200" 200 "$(code "$BASE/api/statistics/report?period=2026" -H "Authorization: Bearer $TOKEN")"
+check "report month 200" 200 "$(code "$BASE/api/statistics/report?period=2026-09" -H "Authorization: Bearer $TOKEN")"
+check "report bad period 422" 422 "$(code "$BASE/api/statistics/report?period=abc" -H "Authorization: Bearer $TOKEN")"
+# 两级口径：一次请求同时返回一级（expenseCategories）与二级（expenseCategoriesL2）
+REPORT_JSON=$(curl -s "$BASE/api/statistics/report?period=2026-09" -H "Authorization: Bearer $TOKEN")
+check "report L1 has items" 200 "$(code "$BASE/api/statistics/report?period=2026-09" -H "Authorization: Bearer $TOKEN")"
+check "report L2 field present" "true" "$(echo "$REPORT_JSON" | jq_get "data.expenseCategoriesL2 !== undefined")"
+check "report L1 field present" "true" "$(echo "$REPORT_JSON" | jq_get "data.expenseCategories !== undefined")"
+check "report no token 401" 401 "$(code "$BASE/api/statistics/report?period=2026")"
 echo ""
 
 echo "[data isolation]"
@@ -150,6 +171,7 @@ EOF
 check "create txn in account 200" 200 "$(code -X POST $BASE/api/transactions -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/acc_txn.json)"
 check "filter txn by account 200" 200 "$(code "$BASE/api/transactions?accountId=$ACC_ID" -H "Authorization: Bearer $TOKEN")"
 check "stat by account 200" 200 "$(code "$BASE/api/statistics/monthly?month=2026-09&accountId=$ACC_ID" -H "Authorization: Bearer $TOKEN")"
+check "report by account 200" 200 "$(code "$BASE/api/statistics/report?period=2026&accountId=$ACC_ID" -H "Authorization: Bearer $TOKEN")"
 # 总览按账本：此时 ACC_ID 已有值，断言的是真正的账本维度
 check "overview by account 200" 200 "$(code "$BASE/api/statistics/overview?accountId=$ACC_ID" -H "Authorization: Bearer $TOKEN")"
 

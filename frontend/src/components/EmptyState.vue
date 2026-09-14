@@ -2,6 +2,7 @@
   <view class="empty">
     <SvgIcon class="icon" :name="icon" :size="48" />
     <text class="text">{{ text }}</text>
+    <text v-if="subText" class="sub-text">{{ subText }}</text>
     <view v-if="buttonText" class="btn" @click="emit('action')">
       <text class="btn-text">{{ buttonText }}</text>
     </view>
@@ -15,12 +16,15 @@ withDefaults(
   defineProps<{
     icon?: string;
     text?: string;
+    /** 次级说明（如「点击右下角加号可快速记账」） */
+    subText?: string;
     buttonText?: string;
   }>(),
   {
     // 图标名而不是 emoji：emoji 不受 color 影响，做不出状态与主题
     icon: 'icon-inbox',
     text: '暂无数据',
+    subText: '',
     buttonText: '',
   }
 );
@@ -54,6 +58,15 @@ const emit = defineEmits<{
   margin-top: 12px;
   text-align: center;
   line-height: $lh-body-sm;
+}
+
+/* 次级说明：用 secondary 而非 tertiary —— 页面底上是 tertiary 不达标的场景之一 */
+.sub-text {
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
+  color: $text-secondary;
+  margin-top: 6px;
+  text-align: center;
 }
 
 .btn {

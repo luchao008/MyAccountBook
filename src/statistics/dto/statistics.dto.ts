@@ -2,6 +2,8 @@ import { Rule, RuleType } from '@midwayjs/validate';
 import { ApiProperty } from '@midwayjs/swagger';
 
 const MONTH_PATTERN = /^\d{4}-\d{2}$/;
+/** 报表时段：'2026'（年）或 '2026-09'（年月） */
+const PERIOD_PATTERN = /^\d{4}(-\d{2})?$/;
 
 export class MonthlyQueryDTO {
   @ApiProperty({
@@ -48,6 +50,31 @@ export class CategoryQueryDTO {
   })
   @Rule(RuleType.string().valid('income', 'expense').optional())
   type?: 'income' | 'expense';
+
+  @ApiProperty({
+    description: '按账本统计。不传则统计全部账本。',
+    example: '1',
+    required: false,
+  })
+  @Rule(RuleType.string().optional())
+  accountId?: string;
+}
+
+/**
+ * 报表聚合查询（GET /statistics/report）
+ *
+ * period 同时接受两种粒度：
+ *   - '2026'     年粒度：汇总/分类按整年聚合，trend 返回 12 个月
+ *   - '2026-09'  月粒度：汇总/分类按该月聚合，trend 为空数组
+ */
+export class ReportQueryDTO {
+  @ApiProperty({
+    description: '报表时段，格式 YYYY（年）或 YYYY-MM（年月）',
+    example: '2026-09',
+    required: true,
+  })
+  @Rule(RuleType.string().required().pattern(PERIOD_PATTERN))
+  period: string;
 
   @ApiProperty({
     description: '按账本统计。不传则统计全部账本。',
