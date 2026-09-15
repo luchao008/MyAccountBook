@@ -416,6 +416,18 @@ describe('TransactionService', () => {
       expect(r.total).toBe(1);
     });
 
+    it('关键词匹配金额（"80" 命中 80.00）', async () => {
+      const r = await transactionService.page(qUserId, { ...q(), keyword: '80' } as any);
+      expect(r.total).toBe(1);
+      expect(r.list[0].amount).toBe('80.00');
+    });
+
+    it('关键词匹配金额：整数部分命中（"8" 命中 80.00）', async () => {
+      const r = await transactionService.page(qUserId, { ...q(), keyword: '8' } as any);
+      expect(r.total).toBeGreaterThanOrEqual(1);
+      expect(r.list.some((t) => t.amount === '80.00')).toBe(true);
+    });
+
     it('金额区间（闭区间）', async () => {
       const r = await transactionService.page(qUserId, {
         ...q(),
@@ -482,6 +494,78 @@ describe('TransactionService', () => {
     it('summary：数据隔离', async () => {
       const rows = await transactionService.summary(otherUserId, { unit: 'month' } as any);
       expect(rows.find((r) => r.key === '2026-06')).toBeUndefined();
+    });
+
+    it('summary 按一级分类分组：二级交易归到父', async () => {
+      const rows = await transactionService.summary(qUserId, {
+        groupBy: 'category',
+        level: 1,
+      } as any);
+
+      // 餐饮Q（含其下二级午餐Q 30）+ 交通Q 80 + 未分类（收入 500）
+      const food = rows.find((r) => r.name === '餐饮Q');
+      expect(food?.expense).toBe('30.00');
+      expect(food?.key).toBe(catFood);
+
+      const traffic = rows.find((r) => r.name === '交通Q');
+      expect(traffic?.expense).toBe('80.00');
+
+      const none = rows.find((r) => r.name === '未分类');
+      expect(none?.income).toBe('500.00');
+      expect(none?.key).toBe('__none__');
+
+      /*
+       * 排序口径是 **金额合计降序**（SQL 里 `ORDER BY sum DESC`），不是结余降序 ——
+       * 结余会把支出组排到很后面（支出是负数），与"哪类花得最多"的直觉相反。
+       * 这里按 |收入| + |支出| 的总量核对。
+       */
+      const totals = rows.map((r) => Number(r.income) + Number(r.expense));
+      expect([...totals].sort((a, b) => b - a)).toEqual(totals);
+    });
+
+    it('summary 按二级分类分组：带所属一级，且未挂父的为 null', async () => {
+      const rows = await transactionService.summary(qUserId, {
+        groupBy: 'category',
+        level: 2,
+      } as any);
+
+      const lunch = rows.find((r) => r.name === '午餐Q');
+      expect(lunch?.key).toBe(catLunch);
+      expect(lunch?.parentName).toBe('餐饮Q');
+
+      // 交通Q 本身就是一级，作为"叶子"出现时没有父
+      const traffic = rows.find((r) => r.name === '交通Q');
+      expect(traffic?.parentName).toBeNull();
+    });
+
+    it('summary 按分类分组：两级各自的金额之和相等（同一批交易换个分组方式）', async () => {
+      const l1 = await transactionService.summary(qUserId, {
+        groupBy: 'category',
+        level: 1,
+      } as any);
+      const l2 = await transactionService.summary(qUserId, {
+        groupBy: 'category',
+        level: 2,
+      } as any);
+      const sum = (arr: any[], f: string) => arr.reduce((s, r) => s + Number(r[f]), 0);
+      expect(sum(l1, 'expense').toFixed(2)).toBe(sum(l2, 'expense').toFixed(2));
+      expect(sum(l1, 'income').toFixed(2)).toBe(sum(l2, 'income').toFixed(2));
+    });
+
+    it('summary 按分类分组：不带时间限制（整个账本）', async () => {
+      // 再插一笔更早日期的交易，验证它同样被统计（时间维度下会被 start/end 排除）
+      await transactionService.create(qUserId, {
+        type: 'expense',
+        amount: '20.00',
+        categoryId: catTraffic,
+        recordDate: '2020-01-01',
+      });
+      const rows = await transactionService.summary(qUserId, {
+        groupBy: 'category',
+        level: 1,
+      } as any);
+      const traffic = rows.find((r) => r.name === '交通Q');
+      expect(traffic?.expense).toBe('100.00'); // 80 + 20
     });
   });
 });

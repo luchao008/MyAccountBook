@@ -57,9 +57,16 @@ export interface QueryParams {
 export type SummaryUnit = 'year' | 'quarter' | 'month' | 'week' | 'day';
 
 export interface SummaryItem {
-  /** 分组键，随 unit 变化：2026 / 2026-Q3 / 2026-09 / 2026-W37 / 2026-09-14 */
+  /** 分组键：时间维度是 2026 / 2026-Q3 / 2026-09 / …；分类维度是分类 id（未分类为 '__none__'） */
   key: string;
-  unit: SummaryUnit;
+  /** 'category' 表示按分类分组（此时 unit 不是时间粒度） */
+  unit: SummaryUnit | 'category';
+  /** 分类维度才有：分类名 */
+  name?: string;
+  /** 分类维度才有：图标 */
+  icon?: string;
+  /** 分类维度才有（二级口径）：所属一级分类名 */
+  parentName?: string | null;
   income: string;
   expense: string;
   balance: string;
@@ -68,7 +75,11 @@ export interface SummaryItem {
 
 /** 与列表共用筛选条件的汇总查询参数（不含分页） */
 export interface SummaryParams {
-  unit: SummaryUnit;
+  /** 分组维度，默认 time */
+  groupBy?: 'time' | 'category';
+  /** 分类层级，仅 groupBy=category 有意义 */
+  level?: 1 | 2;
+  unit?: SummaryUnit;
   start?: string;
   end?: string;
   type?: 'income' | 'expense';

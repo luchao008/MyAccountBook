@@ -97,8 +97,23 @@ const amount = ref('');
 /** 只能选二级分类，所以这里必然是一个二级分类的 id */
 const categoryId = ref<string | null>(null);
 const recordDate = ref(today());
-/** HH:mm；null 表示不记录时刻 */
+/**
+ * HH:mm；null 表示不记录时刻。
+ *
+ * ⚠️ 新增时**用户没主动选时间也不传 null** —— 见 save() 里"提交时取当前时刻"的处理：
+ *    实际提交的那一刻才用 `new Date()` 算时刻，而不是进页面时就算好。
+ *    这样"打开页面 14:00、14:30 才保存"记的是 **14:30**，语义更准。
+ *    编辑已有账单时沿用库里的原值（改旧账不该悄悄改掉它的时间）。
+ */
 const recordTime = ref<string | null>(null);
+
+/**
+ * 用户是否**主动清掉**过时刻（在日期选择器里关掉时刻开关、或手动清空）。
+ *
+ * 为什么要单独记这个：新增时"没选过"要默认当前时刻，但"主动关掉"是明确的
+ * 用户意图 —— 两者都是 `recordTime === null`，靠值本身分不开。
+ */
+const userClearedTime = ref(false);
 const note = ref('');
 const showPicker = ref(false);
 const showDatePicker = ref(false);
@@ -152,6 +167,14 @@ function switchType(next: 'income' | 'expense') {
 function onDateConfirm(payload: { date: string; time: string | null }) {
   recordDate.value = payload.date;
   recordTime.value = payload.time;
+  // 用户这次明确选了（或明确清空了）时刻 —— 之后不再自动补默认值
+  userClearedTime.value = payload.time === null;
+}
+
+/** 当前时刻 HH:mm */
+function nowTime(): string {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 function openPicker() {
@@ -183,8 +206,15 @@ async function save() {
     recordDate: recordDate.value,
     categoryId: categoryId.value,
     note: note.value.trim(),
-    // 时刻：开启开关时为 HH:mm，关闭时为空串（后端存 NULL）
-    recordTime: recordTime.value || '',
+    /*
+     * 时刻：
+     *   · 用户主动选过 → 用他选的
+     *   · 新增且没选过 → **提交这一刻**的当前时刻（不是进页面时算好的）
+     *   · 编辑且库里原本为空 → 保持空（不擅自补时刻，改旧账不该动它的时间语义）
+     */
+    recordTime:
+      recordTime.value ||
+      (!isEdit.value && !userClearedTime.value ? nowTime() : ''),
     // 新增时记入当前账本；编辑时不传，保持原账本不变
     ...(isEdit.value ? {} : { accountId: accountStore.currentId }),
   };

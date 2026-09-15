@@ -1,47 +1,50 @@
 <template>
   <view class="page">
-    <!-- 自绘顶栏：返回 + 月份（点击展开年月选择） -->
+    <!-- ══════ 收起态：顶栏 + swiper 单月 + 当日明细 ══════ -->
     <view class="nav" :style="{ paddingTop: statusBarHeight + 'px' }">
       <view class="nav-inner">
         <view class="nav-btn" @click="goBack"><SvgIcon name="icon-chevron-left" :size="20" /></view>
-        <view class="nav-title-wrap" @click="monthPickerVisible = true">
-          <text class="nav-title">{{ viewYear }}年{{ viewMonth + 1 }}月{{ selectedDay }}日</text>
+        <view class="nav-title-wrap" @click="expand">
+          <text class="nav-title">{{ titleText }}</text>
           <SvgIcon class="nav-title-arrow" name="icon-chevron-down" :size="12" />
         </view>
-        <view class="nav-btn" />
-      </view>
-    </view>
-
-    <!-- 日历：周日起始（与项目 DateTimePicker 一致） -->
-    <view class="calendar">
-      <view class="week-row">
-        <text v-for="w in WEEK_LABELS" :key="w" class="week-label">{{ w }}</text>
-      </view>
-
-      <view class="day-grid">
-        <view v-for="(cell, i) in cells" :key="i" class="day-cell">
-          <view
-            v-if="cell"
-            class="day"
-            :class="{
-              today: isToday(cell.date),
-              selected: cell.date === selectedDate,
-              empty: !cell.hasData,
-            }"
-            @click="selectDay(cell.date)"
-          >
-            <text class="day-num">{{ cell.day }}</text>
-            <!-- 两行：上行支出、下行收入（只有支出时只显示一行） -->
-            <text v-if="cell.expense" class="day-amount expense">{{ shortMoney(cell.expense) }}</text>
-            <text v-if="cell.income" class="day-amount income">{{ shortMoney(cell.income) }}</text>
+        <view class="nav-btn">
+          <!-- 「今天」只在没选中当天时出现 -->
+          <view v-if="!isSelectedToday" class="today-btn" @click="goToday">
+            <text class="today-text">今天</text>
           </view>
         </view>
       </view>
     </view>
 
-    <!-- 当日明细 / 空状态 -->
+    <!--
+      收起态用 swiper 实现左右滑动切月：原生手势与惯性，不用自己处理边界回弹。
+      固定 3 个 item（前/当前/后），滑完把 current 复位到中间 —— 这样"无限滑动"
+      只需要换数据，不需要真的渲染无限个 item。
+    -->
+    <swiper
+      class="month-swiper"
+      :current="swiperIndex"
+      :duration="220"
+      @change="onSwipe"
+    >
+      <swiper-item v-for="(m, i) in swiperMonths" :key="i">
+        <view class="swiper-month">
+          <MonthGrid
+            :year="m.year"
+            :month="m.month"
+            :day-agg="dayAgg"
+            :selected-date="selectedDate"
+            :today-str="todayStr"
+            @select="selectDate"
+          />
+        </view>
+      </swiper-item>
+    </swiper>
+
+    <!-- 当日明细 -->
     <view class="detail">
-      <view v-if="loading" class="state"><text class="state-text">加载中…</text></view>
+      <view v-if="loadingDetail" class="state"><text class="state-text">加载中…</text></view>
       <EmptyState
         v-else-if="!dayItems.length"
         icon="icon-inbox"
@@ -62,35 +65,71 @@
       </template>
     </view>
 
-    <!-- 右下角 FAB：快速记账（本页无主导航底栏，故不与底栏凸起项重复） -->
+    <!-- 右下角 FAB：快速记账 -->
     <view class="fab" @click="goRecord">
       <SvgIcon name="icon-plus" :size="28" />
     </view>
 
-    <!-- 年月选择 -->
-    <view v-if="monthPickerVisible" class="mask" @click="monthPickerVisible = false">
-      <view class="sheet" @click.stop>
-        <view class="sheet-header">
-          <view class="sheet-header-btn" @click="monthPickerVisible = false">
-            <SvgIcon name="icon-close" :size="20" />
-          </view>
-          <text class="sheet-header-title">选择月份</text>
-          <view class="sheet-header-btn" />
+    <!--
+      ══════ 展开态：整屏日历 + 虚拟列表 ══════
+      用 fixed 覆盖层 + transform/opacity 过渡，做出"从顶向下展开"的渐变效果。
+      translateY 从 -100% 到 0，同时透明度 0→1，两者共用 0.28s 缓动。
+    -->
+    <view
+      class="expand-panel"
+      :class="{ open: expanded }"
+      :style="{ paddingTop: statusBarHeight + 'px' }"
+    >
+      <view class="nav-inner">
+        <view class="nav-btn" @click="goBack"><SvgIcon name="icon-chevron-left" :size="20" /></view>
+        <view class="nav-title-wrap" @click="collapse">
+          <text class="nav-title">{{ titleText }}</text>
+          <SvgIcon class="nav-title-arrow" name="icon-chevron-up" :size="12" />
         </view>
-        <picker-view class="wheel" :value="wheelValue" @change="onWheelChange">
-          <picker-view-column>
-            <view v-for="y in years" :key="'y' + y" class="wheel-item">{{ y }} 年</view>
-          </picker-view-column>
-          <picker-view-column>
-            <view v-for="m in 12" :key="'m' + m" class="wheel-item">{{ m }} 月</view>
-          </picker-view-column>
-        </picker-view>
-        <view class="sheet-footer">
-          <view class="btn btn-confirm" @click="confirmMonth">
-            <text class="btn-text confirm-text">确定</text>
+        <view class="nav-btn">
+          <view v-if="!isSelectedToday" class="today-btn" @click="goToday">
+            <text class="today-text">今天</text>
           </view>
         </view>
       </view>
+
+      <view class="week-row">
+        <text v-for="(w, i) in WEEK_LABELS" :key="i" class="week-label">{{ w }}</text>
+      </view>
+
+      <!--
+        虚拟列表：只渲染视口内 ±1 个月，其余用占位高度撑开。
+        每个月的**高度不固定**（4/5/6 行），所以用前缀和算偏移量，
+        再按 scrollTop 二分查找可视区间 —— 比"固定 6 行"少一排空白，
+        也比"全部渲染"省掉几百个 DOM。
+      -->
+      <scroll-view
+        class="month-list"
+        scroll-y
+        :style="{ height: listHeight + 'px' }"
+        :scroll-top="listScrollTop"
+        @scroll="onListScroll"
+        @scrolltolower="onListScrollEnd"
+      >
+        <view class="month-list-inner" :style="{ height: totalHeight + 'px' }">
+          <view
+            v-for="m in renderedMonths"
+            :key="m.key"
+            class="month-block"
+            :style="{ top: m.top + 'px' }"
+          >
+            <text class="month-title">{{ m.label }}</text>
+            <MonthGrid
+              :year="m.year"
+              :month="m.month"
+              :day-agg="dayAgg"
+              :selected-date="selectedDate"
+              :today-str="todayStr"
+              @select="selectDate"
+            />
+          </view>
+        </view>
+      </scroll-view>
     </view>
   </view>
 </template>
@@ -99,121 +138,144 @@
 /**
  * 日历页（流水页顶栏第二个图标跳转进入）。
  *
- * 结构对齐参考图：
- *   · 上半屏日历，每日格子下方显示当天**支出（上行）/ 收入（下行）**，
- *     只有支出时只显示一行 —— 这是参考图里"多数日期一行、个别日期两行"的形态。
- *   · 下半屏显示**选中那天的明细**；没有流水时显示空状态，右下角 FAB 快速记账。
+ * 两种形态：
+ *   · **收起态**：swiper 单月（左右滑动切月）+ 当日明细 + FAB。
+ *   · **展开态**：整屏可滚动日历（虚拟列表），点日期即选中并自动收起。
  *
- * 数据：一次拉该月全部流水（`GET /transactions?start=&end=&size=100`），
- * 在前端按日聚合出格子上的数字并归组当天明细 —— 避免为每个日期各发一次请求。
+ * 数据策略（关键）：
+ *   格子上只需要"每天的收入/支出"，不需要明细 —— 所以用
+ *   `GET /transactions/summary?unit=day` **一次覆盖多个月**，缓存进
+ *   `dayAgg`（日期 → 收支）。滚动到哪就补拉哪一段，避免 600 个月各发一次请求。
+ *   只有"选中某天"时才去拉那天的明细列表（`GET /transactions`）。
+ *
+ * 范围：2000-01 ~ 2049-12（600 个月）。配合虚拟列表，滑动接近"无限"。
  */
-import { ref, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, nextTick } from 'vue';
 import SvgIcon from '@/components/SvgIcon.vue';
 import CategoryIcon from '@/components/CategoryIcon.vue';
 import EmptyState from '@/components/EmptyState.vue';
+import MonthGrid from '@/components/MonthGrid.vue';
 import { useAccountStore } from '@/store/account';
-import { getTransactions, type TransactionItem } from '@/api/transaction';
+import { getTransactions, getTransactionSummary, type TransactionItem } from '@/api/transaction';
 import { formatMoney } from '@/utils/format';
 
 const WEEK_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
+/** 日历可滚动范围 */
+const RANGE_START_YEAR = 2000;
+const MONTH_COUNT = 600; // 2000-01 ~ 2049-12
+
+/** 每块的固定构成（用于前缀和算偏移） */
+const TITLE_H = 36;
+const ROW_H = 74;
+
 const accountStore = useAccountStore();
 
 const statusBarHeight = ref(0);
+const windowHeight = ref(812);
 try {
-  statusBarHeight.value = uni.getSystemInfoSync().statusBarHeight || 0;
+  const info = uni.getSystemInfoSync();
+  statusBarHeight.value = info.statusBarHeight || 0;
+  windowHeight.value = info.windowHeight || 812;
 } catch {
-  statusBarHeight.value = 0;
+  /* 用默认值 */
 }
-
-const now = new Date();
-const viewYear = ref(now.getFullYear());
-const viewMonth = ref(now.getMonth()); // 0-based
-const selectedDay = ref(now.getDate());
-
-const loading = ref(false);
-const monthItems = ref<TransactionItem[]>([]);
-const monthPickerVisible = ref(false);
 
 const pad = (n: number) => String(n).padStart(2, '0');
+const now = new Date();
+const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
-/** 选中日期 YYYY-MM-DD */
+/* ── 选中状态 ── */
+const selectedYear = ref(now.getFullYear());
+const selectedMonth = ref(now.getMonth());
+const selectedDay = ref(now.getDate());
+
 const selectedDate = computed(
-  () => `${viewYear.value}-${pad(viewMonth.value + 1)}-${pad(selectedDay.value)}`
+  () => `${selectedYear.value}-${pad(selectedMonth.value + 1)}-${pad(selectedDay.value)}`
+);
+const isSelectedToday = computed(() => selectedDate.value === todayStr);
+const titleText = computed(
+  () => `${selectedYear.value}年${selectedMonth.value + 1}月${selectedDay.value}日`
 );
 
-/** 按日聚合：{ 'YYYY-MM-DD': { income, expense } } */
-const dayMap = computed(() => {
-  const map: Record<string, { income: number; expense: number }> = {};
-  for (const t of monthItems.value) {
-    const cur = map[t.recordDate] || { income: 0, expense: 0 };
-    if (t.type === 'income') cur.income += Number(t.amount);
-    else cur.expense += Number(t.amount);
-    map[t.recordDate] = cur;
-  }
-  return map;
+/* ── 全量「日期 → 收支」缓存 ── */
+const dayAgg = ref<Record<string, { income: number; expense: number }>>({});
+/** 已拉取过的月份（避免重复请求） */
+const loadedMonths = new Set<string>();
+
+/* ── 收起态 swiper ── */
+const swiperIndex = ref(1);
+const swiperMonths = computed(() => {
+  const base = selectedYear.value * 12 + selectedMonth.value;
+  return [-1, 0, 1].map((d) => {
+    const idx = base + d;
+    return { year: Math.floor(idx / 12), month: ((idx % 12) + 12) % 12 };
+  });
 });
 
-interface Cell {
-  day: number;
-  date: string;
-  income: number;
-  expense: number;
-  hasData: boolean;
+function onSwipe(e: any) {
+  const i = e.detail.current;
+  if (i === 1) return;
+  // 0 = 前一个月，2 = 后一个月
+  const delta = i === 0 ? -1 : 1;
+  const idx = selectedYear.value * 12 + selectedMonth.value + delta;
+  selectedYear.value = Math.floor(idx / 12);
+  selectedMonth.value = ((idx % 12) + 12) % 12;
+  // 选中的"日"在新月份可能不存在（如 31 日 → 2 月），收敛到月末
+  const daysInNew = new Date(selectedYear.value, selectedMonth.value + 1, 0).getDate();
+  if (selectedDay.value > daysInNew) selectedDay.value = daysInNew;
+
+  // 复位到中间，并把相邻月份数据补齐
+  nextTick(() => {
+    swiperIndex.value = 1;
+  });
+  ensureMonthsAround(selectedYear.value, selectedMonth.value);
+  loadDetail();
 }
 
-/**
- * 日历格子（周日起始，与项目 `DateTimePicker` 一致）。
- * 前后补 null 让 1 号对齐到正确的星期几。
- */
-const cells = computed<(Cell | null)[]>(() => {
-  const y = viewYear.value;
-  const m0 = viewMonth.value;
-  const firstDow = new Date(y, m0, 1).getDay();
-  const daysInMonth = new Date(y, m0 + 1, 0).getDate();
+/** 选中某天（收起态点格子 / 展开态点格子） */
+function selectDate(date: string) {
+  const [y, m, d] = date.split('-').map(Number);
+  selectedYear.value = y;
+  selectedMonth.value = m - 1;
+  selectedDay.value = d;
+  loadDetail();
+  // 展开态下选完自动收起（用户已确认）
+  if (expanded.value) collapse();
+}
 
-  const out: (Cell | null)[] = [];
-  for (let i = 0; i < firstDow; i++) out.push(null);
-  for (let d = 1; d <= daysInMonth; d++) {
-    const date = `${y}-${pad(m0 + 1)}-${pad(d)}`;
-    const agg = dayMap.value[date];
-    out.push({
-      day: d,
-      date,
-      income: agg?.income || 0,
-      expense: agg?.expense || 0,
-      hasData: !!agg,
+function goToday() {
+  selectedYear.value = now.getFullYear();
+  selectedMonth.value = now.getMonth();
+  selectedDay.value = now.getDate();
+  loadDetail();
+  if (expanded.value) {
+    scrollToMonth(selectedYear.value, selectedMonth.value);
+  } else {
+    ensureMonthsAround(selectedYear.value, selectedMonth.value);
+  }
+}
+
+/* ── 当日明细 ── */
+const dayItems = ref<TransactionItem[]>([]);
+const loadingDetail = ref(false);
+
+async function loadDetail() {
+  loadingDetail.value = true;
+  try {
+    const page = await getTransactions({
+      start: selectedDate.value,
+      end: selectedDate.value,
+      size: 100,
+      accountId: accountStore.currentId || undefined,
     });
+    dayItems.value = page.list;
+  } catch (err) {
+    console.error('[calendar] 明细加载失败', err);
+    dayItems.value = [];
+  } finally {
+    loadingDetail.value = false;
   }
-  return out;
-});
-
-/** 选中那天的明细（后端已按时间倒序，直接过滤保持顺序） */
-const dayItems = computed(() => monthItems.value.filter((t) => t.recordDate === selectedDate.value));
-
-function isToday(date: string): boolean {
-  return date === `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
-
-/**
- * 格子里的金额用**紧凑写法**，否则一行放不下。
- *
- * ⚠️ 这不是"好看"，是被实测逼出来的：320px 屏下每个格子内宽只有约 41px，
- *    而 12px 字号（项目硬下限）下 "119.40" 需要约 42px —— 差一点就溢出。
- *    参考图里也是紧凑写法（"1.17万"）。
- *
- * 分档：
- *   ≥ 1万  → "1.17万"（2 位小数）
- *   ≥ 1000 → "3.3k"（1 位小数）
- *   ≥ 100  → "119"（取整，不显示分位）
- *   < 100  → "15.8"（1 位小数）
- * 分位在格子这种极小尺寸下没有意义（下方当日明细里有完整金额）。
- */
-function shortMoney(v: number): string {
-  if (v >= 10000) return `${(v / 10000).toFixed(2)}万`;
-  if (v >= 1000) return `${(v / 1000).toFixed(1)}k`;
-  if (v >= 100) return String(Math.round(v));
-  return v.toFixed(1);
 }
 
 function txnMeta(t: TransactionItem): string {
@@ -224,52 +286,176 @@ function txnMeta(t: TransactionItem): string {
   return parts.join(' · ');
 }
 
-/* ── 年月选择 ── */
-const years = Array.from({ length: 11 }, (_, i) => now.getFullYear() - 5 + i);
-const yearIndex = ref(years.indexOf(now.getFullYear()));
-const monthIndex = ref(now.getMonth());
-const wheelValue = computed(() => [yearIndex.value, monthIndex.value]);
-
-function onWheelChange(e: any) {
-  yearIndex.value = e.detail.value[0];
-  monthIndex.value = e.detail.value[1];
+/* ── 数据按需加载 ── */
+/** 月份 key → 该月起止日期 */
+function monthRange(y: number, m0: number): { start: string; end: string; key: string } {
+  const key = `${y}-${pad(m0 + 1)}`;
+  const last = new Date(y, m0 + 1, 0).getDate();
+  return { start: `${key}-01`, end: `${key}-${pad(last)}`, key };
 }
 
-function confirmMonth() {
-  viewYear.value = years[yearIndex.value];
-  viewMonth.value = monthIndex.value;
-  monthPickerVisible.value = false;
-  loadMonth();
-}
+/** 确保 [fromY,fromM] ~ [toY,toM] 区间的日聚合已加载 */
+async function ensureRange(fromY: number, fromM0: number, toY: number, toM0: number) {
+  // 找出所有未加载的月份，合成**一段**区间去请求（一次覆盖多个月）
+  let firstMissing: { y: number; m: number } | null = null;
+  let lastMissing: { y: number; m: number } | null = null;
+  const cursor = new Date(fromY, fromM0, 1);
+  const end = new Date(toY, toM0, 1);
+  while (cursor <= end) {
+    const y = cursor.getFullYear();
+    const m = cursor.getMonth();
+    const { key } = monthRange(y, m);
+    if (!loadedMonths.has(key)) {
+      if (!firstMissing) firstMissing = { y, m };
+      lastMissing = { y, m };
+    }
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  if (!firstMissing || !lastMissing) return;
 
-function selectDay(date: string) {
-  const d = Number(date.slice(8, 10));
-  selectedDay.value = d;
-}
-
-async function loadMonth() {
-  loading.value = true;
+  const s = monthRange(firstMissing.y, firstMissing.m);
+  const e = monthRange(lastMissing.y, lastMissing.m);
   try {
-    await accountStore.load();
-    const start = `${viewYear.value}-${pad(viewMonth.value + 1)}-01`;
-    const end = `${viewYear.value}-${pad(viewMonth.value + 1)}-${pad(
-      new Date(viewYear.value, viewMonth.value + 1, 0).getDate()
-    )}`;
-    const page = await getTransactions({
-      start,
-      end,
-      size: 100,
+    const rows = await getTransactionSummary({
+      unit: 'day',
+      start: s.start,
+      end: e.end,
       accountId: accountStore.currentId || undefined,
     });
-    monthItems.value = page.list;
+    const next = { ...dayAgg.value };
+    for (const r of rows) {
+      next[r.key] = { income: Number(r.income), expense: Number(r.expense) };
+    }
+    dayAgg.value = next;
+    // 标记已加载
+    const cur = new Date(firstMissing.y, firstMissing.m, 1);
+    const stop = new Date(lastMissing.y, lastMissing.m, 1);
+    while (cur <= stop) {
+      loadedMonths.add(monthRange(cur.getFullYear(), cur.getMonth()).key);
+      cur.setMonth(cur.getMonth() + 1);
+    }
   } catch (err) {
-    console.error('[calendar] 加载失败', err);
-    monthItems.value = [];
-  } finally {
-    loading.value = false;
+    console.error('[calendar] 汇总加载失败', err);
   }
 }
 
+/** 确保某月及其前后各 1 个月已加载（收起态用） */
+function ensureMonthsAround(y: number, m0: number) {
+  const base = y * 12 + m0;
+  const a = base - 1;
+  const b = base + 1;
+  ensureRange(Math.floor(a / 12), ((a % 12) + 12) % 12, Math.floor(b / 12), ((b % 12) + 12) % 12);
+}
+
+/* ── 展开态：虚拟列表 ── */
+const expanded = ref(false);
+const listScrollTop = ref(0);
+const listHeight = computed(() => Math.max(240, windowHeight.value - statusBarHeight.value - 44 - 24));
+
+/** 每个月的行数（4/5/6），用于前缀和 */
+const monthRows = (idx: number): number => {
+  const y = RANGE_START_YEAR + Math.floor(idx / 12);
+  const m0 = idx % 12;
+  const firstDow = new Date(y, m0, 1).getDay();
+  const days = new Date(y, m0 + 1, 0).getDate();
+  return Math.ceil((firstDow + days) / 7);
+};
+
+/** 前缀和：offsets[i] = 第 i 个月块顶部的 y 坐标 */
+const offsets = computed(() => {
+  const arr = new Array(MONTH_COUNT);
+  let acc = 0;
+  for (let i = 0; i < MONTH_COUNT; i++) {
+    arr[i] = acc;
+    acc += TITLE_H + monthRows(i) * ROW_H;
+  }
+  return arr;
+});
+const totalHeight = computed(() => offsets.value[MONTH_COUNT - 1] + TITLE_H + monthRows(MONTH_COUNT - 1) * ROW_H);
+
+/** 二分查找：y 坐标落在第几个月块内 */
+function monthAtY(y: number): number {
+  const off = offsets.value;
+  let lo = 0;
+  let hi = MONTH_COUNT - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (off[mid] <= y) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+}
+
+const startIdx = ref(0);
+const endIdx = ref(2);
+
+const renderedMonths = computed(() => {
+  const out: { key: string; label: string; top: number; year: number; month: number }[] = [];
+  for (let i = startIdx.value; i <= endIdx.value; i++) {
+    const y = RANGE_START_YEAR + Math.floor(i / 12);
+    const m0 = i % 12;
+    out.push({
+      key: `${y}-${pad(m0 + 1)}`,
+      label: `${y}年 ${m0 + 1}月`,
+      top: offsets.value[i],
+      year: y,
+      month: m0,
+    });
+  }
+  return out;
+});
+
+function onListScroll(e: any) {
+  const top = e.detail.scrollTop;
+  const first = monthAtY(top);
+  const last = monthAtY(top + listHeight.value);
+  const s = Math.max(0, first - 1);
+  const en = Math.min(MONTH_COUNT - 1, last + 1);
+  if (s !== startIdx.value) startIdx.value = s;
+  if (en !== endIdx.value) endIdx.value = en;
+  ensureRange(
+    RANGE_START_YEAR + Math.floor(s / 12),
+    s % 12,
+    RANGE_START_YEAR + Math.floor(en / 12),
+    en % 12
+  );
+}
+
+function onListScrollEnd() {
+  // 滚到底：补拉后面一段（为后续扩展留钩子）
+}
+
+/** 展开并定位到选中月 */
+function expand() {
+  const idx = (selectedYear.value - RANGE_START_YEAR) * 12 + selectedMonth.value;
+  const safe = Math.max(0, Math.min(MONTH_COUNT - 1, idx));
+  startIdx.value = Math.max(0, safe - 1);
+  endIdx.value = Math.min(MONTH_COUNT - 1, safe + 1);
+  // 先设 scrollTop，再显示面板 —— 避免"先看到旧位置再跳动"
+  listScrollTop.value = offsets.value[safe];
+  ensureRange(selectedYear.value, selectedMonth.value, selectedYear.value, selectedMonth.value);
+  nextTick(() => {
+    expanded.value = true;
+    // 设成同值时 scroll-view 不会重新滚动，这里错开 1px 强制生效
+    nextTick(() => {
+      listScrollTop.value = offsets.value[safe] + 1;
+    });
+  });
+}
+
+function collapse() {
+  expanded.value = false;
+}
+
+/** 展开态里「今天」要滚到当月 */
+function scrollToMonth(y: number, m0: number) {
+  const idx = Math.max(0, Math.min(MONTH_COUNT - 1, (y - RANGE_START_YEAR) * 12 + m0));
+  startIdx.value = Math.max(0, idx - 1);
+  endIdx.value = Math.min(MONTH_COUNT - 1, idx + 1);
+  listScrollTop.value = offsets.value[idx] + 1;
+}
+
+/* ── 导航 ── */
 function goBack() {
   const pages = getCurrentPages();
   if (pages.length > 1) uni.navigateBack();
@@ -284,7 +470,11 @@ function editTransaction(id: string) {
   uni.navigateTo({ url: `/pages/record/index?id=${id}` });
 }
 
-onMounted(loadMonth);
+onMounted(async () => {
+  await accountStore.load();
+  ensureMonthsAround(selectedYear.value, selectedMonth.value);
+  loadDetail();
+});
 </script>
 
 <style scoped lang="scss">
@@ -294,6 +484,7 @@ onMounted(loadMonth);
   padding-bottom: calc(80px + env(safe-area-inset-bottom));
 }
 
+/* ── 顶栏（两种形态共用同一套布局，过渡时才显得连续）── */
 .nav {
   background: $bg-canvas;
 }
@@ -333,14 +524,64 @@ onMounted(loadMonth);
   color: $text-secondary;
 }
 
-/* ── 日历 ── */
-.calendar {
-  padding: $space-2 $space-2 $space-4;
+.today-btn {
+  padding: 0 $space-2;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  border: 1px solid $brand-600;
+  border-radius: $radius-pill;
+}
+
+.today-text {
+  font-size: $font-caption;
+  line-height: $lh-caption;
+  color: $brand-700;
+}
+
+/* ── 收起态 swiper ── */
+.month-swiper {
+  height: 486px;
   border-bottom: 1px solid $line;
+}
+
+.swiper-month {
+  padding: 0 $space-2;
+}
+
+/* ── 展开态面板 ── */
+.expand-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 200;
+  background: $bg-canvas;
+  display: flex;
+  flex-direction: column;
+  /*
+   * 从顶向下展开：translateY(-100%) → 0，同时透明度 0 → 1。
+   * 两者共用同一条缓动，视觉上就是"渐变地展开"。
+   */
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 0.28s ease,
+    opacity 0.28s ease;
+}
+
+.expand-panel.open {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .week-row {
   display: flex;
+  padding: 0 $space-2;
+  border-bottom: 1px solid $line;
 }
 
 .week-label {
@@ -349,99 +590,33 @@ onMounted(loadMonth);
   font-size: $font-caption;
   line-height: $lh-caption;
   color: $text-tertiary;
+  padding-bottom: $space-1;
 }
 
-.day-grid {
-  display: flex;
-  flex-wrap: wrap;
+.month-list {
+  flex: 1;
+  min-height: 0;
 }
 
-.day-cell {
-  width: calc(100% / 7);
-  display: flex;
-  justify-content: center;
-  padding: 3px 1px;
+/* 虚拟列表容器：绝对定位的子块靠 top 偏移排布 */
+.month-list-inner {
+  position: relative;
 }
 
-/*
- * 宽度用**流式**而不是写死 44px。
- *
- * 踩过：写死 44px 在 320px 屏上放不下 —— 容器宽 304px ÷ 7 = 43.4px/格，
- * 44px 的盒子直接压到邻居身上（reflow-audit 实测「压邻居 5 处」）。
- * 改为 `width: 100%` + `max-width` 后，窄屏自动收缩、宽屏不超过 44px。
- */
-.day {
-  width: 100%;
-  max-width: 44px;
-  min-height: 68px;
-  border-radius: $radius-md;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 4px 1px;
-  background: $brand-50;
+.month-block {
+  position: absolute;
+  left: 0;
+  right: 0;
+  padding: 0 $space-2;
 }
 
-/* 无数据的日子不铺底色，避免整屏都是色块 */
-.day.empty {
-  background: transparent;
-}
-
-.day.today {
-  border: 1.5px solid $brand-600;
-  padding: 2.5px 0.5px;
-}
-
-.day.selected {
-  background: $brand-600;
-}
-
-.day-num {
-  font-size: $font-body-sm;
-  line-height: $lh-body-sm;
-  color: $text-primary;
-  @include tabular-nums;
-}
-
-.day.selected .day-num {
-  color: $text-inverse;
-  font-weight: $weight-semibold;
-}
-
-/*
- * ⚠️ 这里**不能**用 9px 这类阶梯外字面量：项目的字号校验器会直接报 MISMATCH
- *    （`npm run check:contrast` 第 13 节）。且 12px 是项目的硬下限。
- *    格子宽度在 320px 屏上只有约 41px，「1.17万」在 12px 下刚好放得下；
- *    再大字号（200%）必然溢出，属 reflow-audit 的已知接受项。
- */
-/*
- * ⚠️ 这里刻意**不用** `overflow: hidden` + `text-overflow: ellipsis`：
- *    uni-app 把 `<text>` 渲染成 inline `<span>`，ellipsis 对它不生效 ——
- *    结果是"被祖先静默裁掉"，正是项目反复强调的那类**看不见的内容丢失**
- *    （reflow-audit 首跑就报「被裁 1 处」，三个视口全中）。
- *    改为让金额本身足够短（见 shortMoney），并允许它换行兜底。
- */
-.day-amount {
-  font-size: $font-caption;
-  line-height: $lh-caption;
-  @include tabular-nums;
-  max-width: 100%;
-  @include text-safe;
-}
-
-/* 支出用中性色：支出红压 brand-50 只有 4.47:1，小字号下不达标 */
-.day.empty .day-amount,
-.day .day-amount.expense {
+.month-title {
+  display: block;
+  height: 36px;
+  line-height: 36px;
+  font-size: $font-body-lg;
+  font-weight: $weight-medium;
   color: $text-secondary;
-}
-
-.day .day-amount.income {
-  color: $income;
-}
-
-.day.selected .day-amount {
-  color: $text-inverse;
 }
 
 /* ── 当日明细 ── */
@@ -513,7 +688,7 @@ onMounted(loadMonth);
   color: $expense;
 }
 
-/* ── FAB（本页无主导航底栏，不与其凸起项重复）── */
+/* ── FAB ── */
 .fab {
   position: fixed;
   right: $space-5;
@@ -531,84 +706,5 @@ onMounted(loadMonth);
 
 .fab:active {
   background: $brand-800;
-}
-
-/* ── 年月弹层 ── */
-.mask {
-  position: fixed;
-  inset: 0;
-  background: $bg-mask;
-  z-index: 1000;
-  display: flex;
-  align-items: flex-end;
-}
-
-.sheet {
-  width: 100%;
-  background: $bg-card;
-  border-radius: $radius-lg $radius-lg 0 0;
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-.sheet-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: $space-3 $space-2;
-}
-
-.sheet-header-btn {
-  min-width: $touch-target-min;
-  height: $touch-target-min;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: $text-secondary;
-}
-
-.sheet-header-title {
-  font-size: $font-h2;
-  line-height: $lh-h2;
-  font-weight: $weight-semibold;
-  color: $text-primary;
-}
-
-.wheel {
-  height: 200px;
-}
-
-.wheel-item {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: $font-h1;
-  line-height: $lh-h1;
-  color: $text-primary;
-}
-
-.sheet-footer {
-  padding: $space-4;
-}
-
-.btn {
-  min-height: $touch-target-min;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: $radius-md;
-}
-
-.btn-confirm {
-  background: $brand-600;
-}
-
-.btn-text {
-  font-size: $font-body-lg;
-  line-height: $lh-body-lg;
-  font-weight: $weight-medium;
-}
-
-.confirm-text {
-  color: $text-inverse;
 }
 </style>

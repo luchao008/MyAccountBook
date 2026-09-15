@@ -123,9 +123,16 @@ for U in year quarter month week day; do
   check "summary unit=$U 200" 200 "$(code "$BASE/api/transactions/summary?unit=$U" -H "Authorization: Bearer $TOKEN")"
 done
 check "summary bad unit 422" 422 "$(code "$BASE/api/transactions/summary?unit=bad" -H "Authorization: Bearer $TOKEN")"
+# 按分类分组（底栏「分类」维度）
+check "summary groupBy=category L1 200" 200 "$(code "$BASE/api/transactions/summary?groupBy=category&level=1" -H "Authorization: Bearer $TOKEN")"
+check "summary groupBy=category L2 200" 200 "$(code "$BASE/api/transactions/summary?groupBy=category&level=2" -H "Authorization: Bearer $TOKEN")"
+check "summary bad level 422" 422 "$(code "$BASE/api/transactions/summary?groupBy=category&level=3" -H "Authorization: Bearer $TOKEN")"
+check "summary bad groupBy 422" 422 "$(code "$BASE/api/transactions/summary?groupBy=bad" -H "Authorization: Bearer $TOKEN")"
 check "summary no token 401" 401 "$(code "$BASE/api/transactions/summary?unit=month")"
 # 列表新增筛选/排序
 check "list keyword 200" 200 "$(code "$BASE/api/transactions?keyword=test" -H "Authorization: Bearer $TOKEN")"
+# 关键词现在也匹配金额
+check "list keyword=amount 200" 200 "$(code "$BASE/api/transactions?keyword=88" -H "Authorization: Bearer $TOKEN")"
 check "list amount range 200" 200 "$(code "$BASE/api/transactions?minAmount=1&maxAmount=99999" -H "Authorization: Bearer $TOKEN")"
 check "list order amountAsc 200" 200 "$(code "$BASE/api/transactions?order=amountAsc" -H "Authorization: Bearer $TOKEN")"
 check "list order amountDesc 200" 200 "$(code "$BASE/api/transactions?order=amountDesc" -H "Authorization: Bearer $TOKEN")"

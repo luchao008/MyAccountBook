@@ -30,7 +30,13 @@
 
     <!-- 时间区间统计 -->
     <view class="card range-card">
-      <view v-for="(item, index) in overview.ranges" :key="item.key" class="range-row">
+      <!-- 每行可点：跳到流水页并带上该区间的起止与分组粒度 -->
+      <view
+        v-for="(item, index) in overview.ranges"
+        :key="item.key"
+        class="range-row"
+        @click="goFlow(item)"
+      >
         <view class="range-icon" :style="{ background: iconColors[index % iconColors.length] }">
           <text class="range-icon-text">{{ iconTexts[index] || '¥' }}</text>
         </view>
@@ -103,6 +109,7 @@ import { useUserStore } from '@/store/user';
 import { useAccountStore } from '@/store/account';
 import { useCategoryStore } from '@/store/category';
 import { getOverview, getCategoryStat, type CategoryStatItem } from '@/api/statistics';
+import type { SummaryUnit } from '@/api/transaction';
 import SvgIcon from '@/components/SvgIcon.vue';
 import CategoryIcon from '@/components/CategoryIcon.vue';
 import { formatMoney } from '@/utils/format';
@@ -133,6 +140,29 @@ const monthCount = computed(() => monthRange.value?.count || 0);
  */
 const iconColors = [...SOLID_SERIES];
 const iconTexts = ['日', '周', '月', '¥', '年'];
+
+/**
+ * 区间 key → 流水页的分组粒度。
+ *
+ * 「今天」用天、「本周」用周、「本月」用月、「本年/去年」用年 ——
+ * 与参考图里底栏显示的粒度一致（图1 天 / 图2 周 / 图3 月 / 图4 年）。
+ * 「去年」也是年粒度，只是区间落在上一年。
+ */
+const RANGE_UNIT: Record<string, SummaryUnit> = {
+  today: 'day',
+  week: 'week',
+  month: 'month',
+  year: 'year',
+  lastYear: 'year',
+};
+
+/** 点区间行 → 跳到流水页，带上起止日期与分组粒度 */
+function goFlow(item: { key: string; start: string; end: string }) {
+  const unit = RANGE_UNIT[item.key] || 'month';
+  uni.navigateTo({
+    url: `/pages/flow/index?start=${item.start}&end=${item.end}&unit=${unit}`,
+  });
+}
 
 /** 进度条宽度：占比过小的也给 2% 保证可见 */
 function barWidth(ratio: number): string {

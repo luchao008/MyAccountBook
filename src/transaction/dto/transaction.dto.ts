@@ -229,7 +229,27 @@ export type SummaryUnit = 'year' | 'quarter' | 'month' | 'week' | 'day';
  */
 export class SummaryQueryDTO {
   @ApiProperty({
-    description: '分组粒度',
+    description:
+      '分组维度：`time`（按时间，用 unit 指定粒度）或 `category`（按分类，用 level 指定层级）。' +
+      '两者**互斥** —— 选分类时看的是整个账本，不带时间限制。',
+    example: 'time',
+    enum: ['time', 'category'],
+    required: false,
+  })
+  @Rule(RuleType.string().valid('time', 'category').default('time'))
+  groupBy: 'time' | 'category';
+
+  @ApiProperty({
+    description: '分类层级，仅 groupBy=category 时有意义',
+    example: 1,
+    enum: [1, 2],
+    required: false,
+  })
+  @Rule(RuleType.number().integer().valid(1, 2).default(1))
+  level: 1 | 2;
+
+  @ApiProperty({
+    description: '分组粒度，仅 groupBy=time 时有意义',
     example: 'month',
     enum: ['year', 'quarter', 'month', 'week', 'day'],
     required: false,

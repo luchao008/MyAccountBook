@@ -207,8 +207,25 @@ function go(item: TabItem) {
   overflow: visible;
 }
 
+/*
+ * ⚠️ 底部安全区**必须加进 height 本身**，不能用 padding 挤内容。
+ *
+ * 踩过（Safari 全屏 / 添加到主屏幕）：`.tabbar` 是 `box-sizing: border-box` + 固定
+ * `height: 56px`，而 border-box 下 **height 是包含 padding 的** ——
+ * 再加 `padding-bottom: 34px`（iPhone home indicator 的 safe-area）后，
+ * 内容区只剩 `56 − 34 − 1(border) = 21px`，`.tab-item` 的 `height: 100%` 随之塌到 21px，
+ * 凸起项 48px 的圆被压扁。实测：itemH 55 → **21**。
+ *
+ * 正解：height 也跟着安全区长（`56 + safe`），padding 只负责把内容顶上去。
+ * 这样 border-box 下内容区恒为 `55px`，与无安全区时完全一致。
+ *
+ * 先写不带 env 的 height 作**兜底**：不支持 `env()` 的浏览器会整条丢弃 calc 声明，
+ * 有兜底才不会连高度都没了。
+ */
 .tabbar--safe {
-  padding-bottom: env(safe-area-inset-bottom);
+  height: 56px;
+  height: calc(56px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .tab-item {

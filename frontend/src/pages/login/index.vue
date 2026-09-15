@@ -1,7 +1,8 @@
 <template>
   <view class="page">
     <view class="header">
-      <SvgIcon class="logo" name="cat-income" :size="64" />
+      <!-- 与 favicon 同一套视觉（品牌橙圆角方块 + 白 ¥），源文件 static/logo.svg -->
+      <image class="logo" src="/static/logo.png" mode="widthFix" />
       <text class="title">记账本</text>
       <text class="subtitle">简单记录每一笔收支</text>
     </view>
@@ -43,7 +44,6 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue';
 import { useUserStore } from '@/store/user';
-import SvgIcon from '@/components/SvgIcon.vue';
 
 const userStore = useUserStore();
 
@@ -97,9 +97,15 @@ async function submit() {
   padding-bottom: 60px;
 }
 
+/*
+ * 用图片而不是 SvgIcon —— 与 favicon（/static/logo.png）同一份资源，
+ * 避免"标签页一个图形、登录页另一个图形"的割裂。
+ *
+ * 尺寸 64px 与原来 SvgIcon 的 :size="64" 保持一致，登录页布局不受影响。
+ */
 .logo {
-  /* 压 $bg-page(#F5F6F8) 约 4.3:1，图形要求 ≥3:1 */
-  color: $brand-600;
+  width: 64px;
+  height: 64px;
 }
 
 .title {

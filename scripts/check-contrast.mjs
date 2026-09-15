@@ -151,8 +151,11 @@ expect('支出徽标 #B42318 on #FDECEA', contrast('#B42318', '#FDECEA'), 5.75);
 expect('品牌徽标 #B33A0C on #FFF1EB', contrast('#B33A0C', '#FFF1EB'), 5.4);
 expect('中性徽标 #4A5563 on #EEF1F5', contrast('#4A5563', '#EEF1F5'), 6.69);
 console.log('  \x1b[2m-- 反例：直接复用主语义色会掉下去，这正是要拆徽标色的原因 --\x1b[0m');
-expect('  $income #0B8038 on #E7F6ED（勉强过）', contrast('#0B8038', '#E7F6ED'), 4.52);
-expect('  $expense #D92D20 on #FDECEA（不达标）', contrast('#D92D20', '#FDECEA'), 4.22);
+// ⚠️ 2026-09-14 收支配色整体对调（收入红 / 支出绿），这两条反例的数值随之互换：
+//    「$income 压浅绿底」原本是 4.52，现在 income 是红色、压的是浅红底 → 4.22（不达标）；
+//    「$expense 压浅红底」原本是 4.22，现在 expense 是绿色、压的是浅绿底 → 4.52（勉强过）。
+expect('  $income #D92D20 on #FDECEA（不达标）', contrast('#D92D20', '#FDECEA'), 4.22);
+expect('  $expense #0B8038 on #E7F6ED（勉强过）', contrast('#0B8038', '#E7F6ED'), 4.52);
 expect('  $brand-700 #C7430F on #FFF1EB（差 0.01）', contrast('#C7430F', '#FFF1EB'), 4.49);
 
 // ---------------------------------------------------------------- 5. 文字与边界
@@ -322,8 +325,9 @@ section('9. token 文件自洽性（frontend/src/styles/tokens.scss）');
     ['$success', '#0b8038', 5.05, WHITE],
     ['$warning', '#b45309', 5.02, WHITE],
     ['$danger', '#d92d20', 4.83, WHITE],
-    ['$badge-income-text', '#0b6b33', 5.94, '#e7f6ed'],
-    ['$badge-expense-text', '#b42318', 5.75, '#fdecea'],
+    // 2026-09-14 收支对调：徽标跟着换（配对没动，对比度不变）
+    ['$badge-income-text', '#b42318', 5.75, '#fdecea'],
+    ['$badge-expense-text', '#0b6b33', 5.94, '#e7f6ed'],
     ['$badge-brand-text', '#b33a0c', 5.4, '#fff1eb'],
     ['$badge-neutral-text', '#4a5563', 6.69, '#eef1f5'],
     ['$border-input', '#8a94a6', 3.06, WHITE],
@@ -331,8 +335,9 @@ section('9. token 文件自洽性（frontend/src/styles/tokens.scss）');
     ['$text-secondary', '#5a6472', 6.0, WHITE],
     ['$text-tertiary', '#6e7787', 4.51, WHITE],
     ['$text-disabled', '#a8b0bd', 2.19, WHITE],
-    ['$income', '#0b8038', 5.05, WHITE],
-    ['$expense', '#d92d20', 4.83, WHITE],
+    // 2026-09-14 收支对调：收入红、支出绿
+    ['$income', '#d92d20', 4.83, WHITE],
+    ['$expense', '#0b8038', 5.05, WHITE],
     ['$dark-bg-card', '#24272e', 1.21, '#14161a'],
     ['$dark-divider', '#31363e', 1.23, '#24272e'],
     ['$dark-border-input', '#6b7484', 3.17, '#24272e'],
@@ -341,8 +346,9 @@ section('9. token 文件自洽性（frontend/src/styles/tokens.scss）');
     ['$dark-text-tertiary', '#98a1af', 5.73, '#24272e'],
     ['$dark-text-disabled', '#5a6270', 2.43, '#24272e'],
     ['$dark-brand', '#ff8a5b', 6.43, '#24272e'],
-    ['$dark-income', '#3dd68c', 7.97, '#24272e'],
-    ['$dark-expense', '#ff6b6b', 5.39, '#24272e'],
+    // 2026-09-14 深色模式同样对调
+    ['$dark-income', '#ff6b6b', 5.39, '#24272e'],
+    ['$dark-expense', '#3dd68c', 7.97, '#24272e'],
   ];
 
   for (const [varName, hex, claimed, bg] of TOKEN_CHECKS) {
@@ -693,8 +699,14 @@ section('13. 字号阶梯自洽（文档 §3.2 ↔ tokens.scss ↔ 各 .vue）')
   //    （名称可截断、百分比不可压缩）→ 文字 117 → 118，总数 119 → 120。
   //    2026-09-14 更新十一：新增流水页 / 日历页 / 筛选面板三个文件，
   //    并给 EmptyState 加 subText、TabBar 改文案 → 文字 118 → 161，总数 120 → 163。
-  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 163, 0);
-  expect('  其中文字字号 $font-*', nText, 161, 0);
+  //    2026-09-14 更新十二：流水页时间筛选加「自定义区间」面板（开始/结束 + 三列滚轮）
+  //    → 文字 161 → 166，总数 163 → 168。
+  //    2026-09-14 更新十三：流水页新增「已筛选」提示条 + 筛选条件摘要弹层
+  //    → 文字 166 → 171，总数 168 → 173。
+  //    2026-09-14 更新十四：流水页搜索改为**全屏搜索页**（搜索框 + 取消 + 结果概览 + 平铺结果）
+  //    → 文字 171 → 176，总数 173 → 178。
+  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 178, 0);
+  expect('  其中文字字号 $font-*', nText, 176, 0);
   expect('  其中图标尺寸 $icon-*', nIcon, 2, 0);
   expect('  其中字面量（必须为 0）', nLiteral, 0, 0);
 }
@@ -803,9 +815,11 @@ section('14. 焦点可见性（WCAG 2.4.7）');
   expect('ink-3 压 subtle（4.17 不达标）', contrast(INK3, SUBTLE), 4.17);
   expect('ink-3 压 sunken（3.98 不达标）', contrast(INK3, SUNKEN), 3.98);
   expect('ink-4 压 canvas（禁用/装饰，豁免）', contrast(INK4, CANVAS), 2.19);
-  expect('支出红 压 canvas', contrast('#D92D20', CANVAS), 4.83);
-  expect('支出红 压 subtle（4.47 不达标）', contrast('#D92D20', SUBTLE), 4.47);
-  expect('收入绿 压 canvas', contrast('#0B8038', CANVAS), 5.05);
+  // ⚠️ 2026-09-14 收支对调后：#D92D20 是**收入**红、#0B8038 是**支出**绿。
+  //    断言按色值写（不变），只是标签要跟着语义改 —— 否则读的人会以为搞反了。
+  expect('收入红 压 canvas', contrast('#D92D20', CANVAS), 4.83);
+  expect('收入红 压 subtle（4.47 不达标 → 收入金额勿放浅底）', contrast('#D92D20', SUBTLE), 4.47);
+  expect('支出绿 压 canvas', contrast('#0B8038', CANVAS), 5.05);
   expect('信息蓝 压 canvas', contrast('#1D63B8', CANVAS), 5.95);
   expect('警告琥珀 压 canvas', contrast('#B45309', CANVAS), 5.02);
   // 1.4.11 要求 ≥3:1：输入框坐白底刚好达标，坐浅灰底就废了

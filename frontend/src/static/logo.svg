@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72" fill="none">
+  <!-- 品牌色圆角方块：用 $brand-600 #CF4A12（实心按钮底同色，白字 4.52:1 达标） -->
+  <rect width="72" height="72" rx="16" fill="#CF4A12"/>
+  <!-- 白色 ¥ 符号：笔画刻意加粗，保证 16px favicon 下仍可辨 -->
+  <path d="M22 22 L36 40 L50 22" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M36 40 L36 52" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>
+  <path d="M25 42 L47 42" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>
+  <path d="M25 50 L47 50" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>
+</svg>

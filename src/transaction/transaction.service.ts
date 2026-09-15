@@ -151,6 +151,11 @@ export class TransactionService {
    * 返回按**时间倒序**（最近的组在前，与列表一致）。
    */
   async summary(userId: string, query: SummaryQueryDTO) {
+    // 分组维度二选一：按时间 / 按分类（见 DTO 注释，两者互斥）
+    if (query.groupBy === 'category') {
+      return this.summaryByCategory(userId, query);
+    }
+
     const unit = query.unit as SummaryUnit;
     const groupExpr = GROUP_FORMAT[unit];
 
@@ -179,6 +184,96 @@ export class TransactionService {
       return {
         key: r.groupKey,
         unit,
+        income,
+        expense,
+        balance: (Number(income) - Number(expense)).toFixed(2),
+        count: Number(r.count),
+      };
+    });
+  }
+
+  /**
+   * 按分类分组汇总（底栏「分类」维度）。
+   *
+   * 口径：
+   *   - `level=1`：交易挂二级 → 归到父；直接挂一级 → 归到自身；未分类单独一组
+   *   - `level=2`：交易挂哪个叶子就算哪个；未分类单独一组
+   * 与统计页 `categoryInRange` 完全一致 —— 同一批交易换个分组方式，
+   * 因此**两级各自的占比之和都是 100%**。
+   *
+   * ⚠️ 按分类分组时**不带时间限制**（用户确认）：看的是整个账本，
+   *    所以这里只应用"非时间类"的筛选（类型 / 账本 / 关键词 / 金额区间）。
+   *    这也是它与"时间维度"互斥的体现 —— 同时限制时间就没法看全账本结构了。
+   */
+  private async summaryByCategory(userId: string, query: SummaryQueryDTO) {
+    const level = Number(query.level) === 2 ? 2 : 1;
+    const conditions = ['t.user_id = ?'];
+    const params: any[] = [userId];
+
+    if (query.type) {
+      conditions.push('t.type = ?');
+      params.push(query.type);
+    }
+    if (query.accountId) {
+      conditions.push('t.account_id = ?');
+      params.push(query.accountId);
+    }
+    if (query.minAmount) {
+      conditions.push('t.amount >= ?');
+      params.push(query.minAmount);
+    }
+    if (query.maxAmount) {
+      conditions.push('t.amount <= ?');
+      params.push(query.maxAmount);
+    }
+    if (query.keyword) {
+      // 关键词匹配备注或分类名（与列表口径一致）
+      conditions.push('(t.note LIKE ? OR c.name LIKE ? OR p.name LIKE ?)');
+      const kw = `%${query.keyword}%`;
+      params.push(kw, kw, kw);
+    }
+
+    /*
+     * 一级口径用 COALESCE(父, 自身) 一步归并；二级口径直接用叶子。
+     * 两者都带出父级信息，便于前端展示"XX（所属一级）"。
+     */
+    const groupCols =
+      level === 1
+        ? `COALESCE(p.id, c.id) AS groupId,
+           COALESCE(p.name, c.name) AS groupName,
+           COALESCE(p.icon, c.icon) AS groupIcon,
+           NULL AS parentName`
+        : `c.id AS groupId,
+           c.name AS groupName,
+           c.icon AS groupIcon,
+           p.name AS parentName`;
+
+    const rows = await this.dataSource.query(
+      `SELECT
+         ${groupCols},
+         SUM(t.amount) AS sum,
+         COALESCE(SUM(CASE WHEN t.type = 'income'  THEN t.amount ELSE 0 END), 0) AS income,
+         COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END), 0) AS expense,
+         COUNT(*) AS count
+       FROM transactions t
+       LEFT JOIN categories c ON c.id = t.category_id
+       LEFT JOIN categories p ON p.id = c.parent_id
+       WHERE ${conditions.join(' AND ')}
+       GROUP BY groupId, groupName, groupIcon, parentName
+       ORDER BY sum DESC`,
+      params,
+    );
+
+    return rows.map((r: any) => {
+      const income = Number(r.income).toFixed(2);
+      const expense = Number(r.expense).toFixed(2);
+      return {
+        // key 复用同一字段名，前端分组列表不用区分两种维度
+        key: r.groupId ?? '__none__',
+        unit: 'category',
+        name: r.groupName ?? '未分类',
+        icon: r.groupIcon ?? '',
+        parentName: r.parentName ?? null,
         income,
         expense,
         balance: (Number(income) - Number(expense)).toFixed(2),
@@ -299,9 +394,19 @@ function applyFilters<T extends { andWhere: (sql: string, params?: object) => T 
 
   if (q.accountId) qb.andWhere('t.accountId = :accountId', { accountId: q.accountId });
 
-  // 关键词：备注 或 分类名（模糊、不区分大小写）
+  /*
+   * 关键词：匹配 **备注 / 分类名 / 金额**。
+   *
+   * 金额那一项：把 amount 转成字符串后 LIKE 匹配，这样搜 "3125" 能命中 3125.00。
+   * 用 CAST(... AS CHAR) 而不是直接 LIKE —— MariaDB 的 decimal 直接 LIKE 会做隐式转换，
+   * 行为在各版本间不一致（实测显式 CAST 才稳）。
+   *
+   * ⚠️ 不能写成 `t.amount LIKE :kw`：那会把 amount 当字符串比较，
+   *    "3125" 匹配不到 "3125.00"（decimal 的字符串形式带两位小数）。
+   */
   if (q.keyword) {
-    qb.andWhere('(t.note LIKE :kw OR c.name LIKE :kw)', { kw: `%${q.keyword}%` });
+    const kw = `%${q.keyword}%`;
+    qb.andWhere('(t.note LIKE :kw OR c.name LIKE :kw OR CAST(t.amount AS CHAR) LIKE :kw)', { kw });
   }
 
   if (q.minAmount) qb.andWhere('t.amount >= :minAmount', { minAmount: q.minAmount });
