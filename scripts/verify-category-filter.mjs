@@ -183,7 +183,7 @@ var layout = await page.evaluate(function(){
   /*
    * ⚠️ 必须**限定在最后一个 .sheet 内**：筛选面板与分类弹层用了同一套类名
    *    （.sheet / .body / .btn-confirm），而筛选面板在 DOM 中更靠前 ——
-   *    直接 querySelector('.body') 会量到筛选面板（实测 childCount=5 而不是 88）。
+   *    直接 querySelector('.body') 会量到筛选面板（实测 childCount=5 而不是 89）。
    */
   var sheets = document.querySelectorAll('.sheet');
   var sheet = sheets[sheets.length - 1];
@@ -207,8 +207,9 @@ var layout = await page.evaluate(function(){
   };
 });
 check('滚动区存在且高度确定（>0）', !!layout && layout.bodyH > 0, JSON.stringify(layout));
-check('量的是分类弹层（88 行），不是筛选面板',
-  !!layout && layout.bodyChildCount === 88,
+check('量的是分类弹层（89 行），不是筛选面板',
+  // ⚠️ 88 → 89（2026-09-15 补了「衣服饰品 / 🧦」）；改 preset 后要重跑 seed 才会生效
+  !!layout && layout.bodyChildCount === 89,
   layout ? ('childCount=' + layout.bodyChildCount) : 'n/a');
 check('滚动内容确实可滚（scrollHeight > clientHeight）',
   !!layout && layout.bodyScrollH > layout.bodyH,

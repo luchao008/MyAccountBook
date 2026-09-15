@@ -110,7 +110,7 @@ export type UiIconName = keyof typeof UI_ICONS;
  * 所以规则是：
  *   ① 二级命中下表 → 用专属图标（高频的那批）
  *   ② 未命中 → **继承其一级图标**（见 `resolveCategoryIcon`）
- * 这样 15 张精绘图 + 一份映射表就能覆盖全部 88 个分类，且永不出现"没有图标"。
+ * 这样 15 张精绘图 + 一份映射表就能覆盖全部 89 个分类，且永不出现"没有图标"。
  */
 export const CATEGORY_ICONS = {
   // 支出
