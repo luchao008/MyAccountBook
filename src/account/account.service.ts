@@ -2,6 +2,7 @@ import { Provide } from '@midwayjs/core';
 import { InjectDataSource } from '@midwayjs/typeorm';
 import { DataSource, Repository, In } from 'typeorm';
 import { Account } from '../entity/account.entity';
+import { IsNull } from 'typeorm';
 import { Transaction } from '../entity/transaction.entity';
 import { BusinessError } from '../common/business.error';
 import { ErrorCode } from '../common/error-code';
@@ -140,8 +141,12 @@ export class AccountService {
     if (count <= 1) {
       throw new BusinessError('至少需要保留一个账本', ErrorCode.ACCOUNT_LAST_ONE);
     }
+    /*
+     * ⚠️ 只算**未删除**的交易（deletedAt: IsNull()）：
+     *    软删除的流水已经在回收站里了，把它们算进"将连带删除 N 笔"会让用户困惑。
+     */
     const transactionCount = await this.txnRepo.count({
-      where: { userId, accountId: account.id },
+      where: { userId, accountId: account.id, deletedAt: IsNull() },
     });
     return { transactionCount };
   }
@@ -173,8 +178,9 @@ export class AccountService {
       throw new BusinessError('至少需要保留一个账本', ErrorCode.ACCOUNT_LAST_ONE);
     }
 
+    // ⚠️ 同 previewDelete：只算未删除的（软删除的已在回收站）
     const deletedTransactions = await this.txnRepo.count({
-      where: { userId, accountId: account.id },
+      where: { userId, accountId: account.id, deletedAt: IsNull() },
     });
     const wasDefault = account.isDefault;
 
@@ -205,9 +211,13 @@ export class AccountService {
     await this.findById(userId, targetId);
     await this.findById(userId, sourceId);
 
+    /*
+     * ⚠️ 只取**未删除**的交易：回收站里的那些不该参与合并去重 ——
+     *    它们已经"不属于用户的可见数据"，参与指纹比对会凭空吃掉正常流水。
+     */
     const [targetTxns, sourceTxns] = await Promise.all([
-      this.txnRepo.find({ where: { userId, accountId: targetId } }),
-      this.txnRepo.find({ where: { userId, accountId: sourceId } }),
+      this.txnRepo.find({ where: { userId, accountId: targetId, deletedAt: IsNull() } }),
+      this.txnRepo.find({ where: { userId, accountId: sourceId, deletedAt: IsNull() } }),
     ]);
 
     const existing = new Set(targetTxns.map(fingerprint));
@@ -248,11 +258,12 @@ export class AccountService {
       const txnRepo = manager.getRepository(Transaction);
       const accountRepo = manager.getRepository(Account);
 
+      // ⚠️ 同 previewMerge：只取未删除的（回收站里的不参与合并）
       const targetTxns = await txnRepo.find({
-        where: { userId, accountId: targetId },
+        where: { userId, accountId: targetId, deletedAt: IsNull() },
       });
       const sourceTxns = await txnRepo.find({
-        where: { userId, accountId: sourceId },
+        where: { userId, accountId: sourceId, deletedAt: IsNull() },
       });
 
       // 目标账本现有交易的指纹集合

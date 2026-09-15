@@ -32,6 +32,15 @@
         <text class="menu-text">收入分类管理</text>
         <SvgIcon class="menu-arrow" name="icon-chevron-right" :size="16" />
       </view>
+      <!--
+        流水回收站：删除的流水保留 7 天，超期由后端惰性真删。
+        ⚠️ 放「账本与分类」这组：它是数据管理类入口，与账本/分类同性质。
+      -->
+      <view class="menu-item" @click="goRecycle">
+        <SvgIcon class="menu-icon" name="icon-inbox" :size="28" />
+        <text class="menu-text">流水回收站</text>
+        <SvgIcon class="menu-arrow" name="icon-chevron-right" :size="16" />
+      </view>
     </view>
 
     <view class="logout-box">
@@ -74,6 +83,10 @@ function goAccount() {
 
 function goCategory(type: 'income' | 'expense') {
   uni.navigateTo({ url: `/pages/category/index?type=${type}` });
+}
+
+function goRecycle() {
+  uni.navigateTo({ url: '/pages/recycle/index' });
 }
 
 function onLogout() {

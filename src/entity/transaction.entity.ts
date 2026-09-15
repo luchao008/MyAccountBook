@@ -18,6 +18,7 @@ import { Account } from './account.entity';
 @Index('idx_user_cat', ['userId', 'categoryId'])
 @Index('idx_user_type', ['userId', 'type', 'recordDate'])
 @Index('idx_user_account_date', ['userId', 'accountId', 'recordDate'])
+@Index('idx_user_deleted', ['userId', 'deletedAt'])
 export class Transaction {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: string;
@@ -53,6 +54,24 @@ export class Transaction {
 
   @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt: Date;
+
+  /**
+   * 软删除时间戳。**NULL = 未删除**（绝大多数记录）。
+   *
+   * 删除流水时写这里（而不是真删行），于是：
+   *   · 「流水回收站」= 查 `deleted_at IS NOT NULL AND deleted_at > NOW() - 7d`
+   *   · 所有常规查询（列表 / 汇总 / 统计 / 报表 / 首页）都要加 `deleted_at IS NULL`
+   *
+   * ⚠️ **超期清理是「查询时惰性真删」**（用户确认）：查回收站时先把
+   *    `deleted_at < NOW() - 7d` 的记录物理删掉，再返回剩余的 —— 这样
+   *    「7 天内可恢复」的文案与行为严格一致，库也不会慢慢堆积。
+   *
+   * ⚠️ **删账本的级联删除不走软删除**（用户确认）：`account_id` 是
+   *    `ON DELETE CASCADE`，删账本时其下交易真删、不进回收站。
+   *    理由：回收站只服务「用户逐笔删的流水」；账本都没了，恢复的流水挂哪？
+   */
+  @Column({ name: 'deleted_at', type: 'datetime', nullable: true })
+  deletedAt: Date | null;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })

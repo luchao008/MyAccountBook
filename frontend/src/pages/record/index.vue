@@ -92,6 +92,16 @@ const accountStore = useAccountStore();
 const editId = ref('');
 const isEdit = computed(() => !!editId.value);
 
+/**
+ * 复制态：从流水页左滑「复制」进来（`?copyFrom=<id>`）。
+ *
+ * ⚠️ 与编辑态**互斥**且语义不同：
+ *   · 编辑 → `editId` 有值、`isEdit` 为 true、保存走 PUT 改原单
+ *   · 复制 → `editId` **为空**、`isEdit` 为 false、保存走 POST 新建
+ *   两者都从"加载原单详情回填"开始，但落点完全不同。
+ */
+const isCopy = ref(false);
+
 const type = ref<'income' | 'expense'>('expense');
 const amount = ref('');
 /** 只能选二级分类，所以这里必然是一个二级分类的 id */
@@ -126,7 +136,7 @@ function today(): string {
   ).padStart(2, '0')}`;
 }
 
-onLoad(async (options?: { id?: string }) => {
+onLoad(async (options?: { id?: string; copyFrom?: string }) => {
   await accountStore.load();
   await categoryStore.load();
 
@@ -135,9 +145,30 @@ onLoad(async (options?: { id?: string }) => {
     editId.value = options.id;
     uni.setNavigationBarTitle({ title: '编辑账单' });
     await loadDetail(options.id);
-  } else {
-    uni.setNavigationBarTitle({ title: `记一笔 · ${accountStore.currentName}` });
+    return;
   }
+
+  /*
+   * 带 copyFrom 进入 = **复制态**（流水页左滑「复制」）。
+   *
+   * ⚠️ **不是编辑**：`isEdit` 仍为 false，保存走 POST 新建一条，原单不动。
+   *    所以这里**不设 editId**，只回填表单。
+   *
+   * ⚠️ **时间保留原单**（用户确认选 B）：复制常用来补录同日多笔，
+   *    把时间重置成"现在"反而要多改一步。注意 recordTime 的默认值逻辑里，
+   *    非编辑态且用户没动过开关时会填"当前时刻"（见 save 里的 nowTime()），
+   *    这里回填原单时刻后它就变成"用户选过的值"，不会被覆盖。
+   */
+  if (options?.copyFrom) {
+    isCopy.value = true;
+    await loadDetail(options.copyFrom);
+    uni.setNavigationBarTitle({
+      title: type.value === 'income' ? '复制收入' : '复制支出',
+    });
+    return;
+  }
+
+  uni.setNavigationBarTitle({ title: `记一笔 · ${accountStore.currentName}` });
 });
 
 async function loadDetail(id: string) {
@@ -214,7 +245,7 @@ async function save() {
      */
     recordTime:
       recordTime.value ||
-      (!isEdit.value && !userClearedTime.value ? nowTime() : ''),
+      (!isEdit.value && !isCopy.value && !userClearedTime.value ? nowTime() : ''),
     // 新增时记入当前账本；编辑时不传，保持原账本不变
     ...(isEdit.value ? {} : { accountId: accountStore.currentId }),
   };
@@ -226,7 +257,8 @@ async function save() {
       uni.showToast({ title: '已更新', icon: 'success' });
     } else {
       await createTransaction(payload);
-      uni.showToast({ title: '已记录', icon: 'success' });
+      // 复制态与新增共用这一支：都是 POST 新建（见 onLoad 的 copyFrom 注释）
+      uni.showToast({ title: isCopy.value ? '已复制' : '已记录', icon: 'success' });
     }
     setTimeout(() => {
       // 兜底用 reLaunch 而不是 switchTab：原生 tabBar 已移除，switchTab 会失败

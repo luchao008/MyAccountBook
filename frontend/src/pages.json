@@ -70,6 +70,13 @@
       "style": {
         "navigationBarTitleText": "图标"
       }
+    },
+    {
+      "path": "pages/recycle/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "流水回收站"
+      }
     }
   ],
   "globalStyle": {

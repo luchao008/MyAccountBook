@@ -52,16 +52,20 @@
         sub-text="点击右下角加号可快速记账"
       />
       <template v-else>
-        <view v-for="t in dayItems" :key="t.id" class="txn" @click="editTransaction(t.id)">
-          <CategoryIcon class="txn-icon" :name="t.category?.icon || 'cat-misc'" :size="28" />
-          <view class="txn-main">
-            <text class="txn-name">{{ t.category?.name || '未分类' }}</text>
-            <text class="txn-meta">{{ txnMeta(t) }}</text>
-          </view>
-          <text class="txn-amount" :class="t.type === 'income' ? 'income' : 'expense'">
-            {{ t.type === 'income' ? '+' : '-' }}{{ formatMoney(t.amount) }}
-          </text>
-        </view>
+        <uni-swipe-action v-for="t in dayItems" :key="t.id">
+          <uni-swipe-action-item :right-options="SWIPE_OPTIONS" @click="onTxnSwipe($event, t)">
+            <view class="txn" @click="editTransaction(t.id)">
+              <CategoryIcon class="txn-icon" :name="t.category?.icon || 'cat-misc'" :size="28" />
+              <view class="txn-main">
+                <text class="txn-name">{{ t.category?.name || '未分类' }}</text>
+                <text class="txn-meta">{{ txnMeta(t) }}</text>
+              </view>
+              <text class="txn-amount" :class="t.type === 'income' ? 'income' : 'expense'">
+                {{ t.type === 'income' ? '+' : '-' }}{{ formatMoney(t.amount) }}
+              </text>
+            </view>
+          </uni-swipe-action-item>
+        </uni-swipe-action>
       </template>
     </view>
 
@@ -157,6 +161,7 @@ import EmptyState from '@/components/EmptyState.vue';
 import MonthGrid from '@/components/MonthGrid.vue';
 import { useAccountStore } from '@/store/account';
 import { getTransactions, getTransactionSummary, type TransactionItem } from '@/api/transaction';
+import { useTxnSwipe } from '@/utils/txnSwipe';
 import { formatMoney } from '@/utils/format';
 
 const WEEK_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -469,6 +474,17 @@ function goRecord() {
 function editTransaction(id: string) {
   uni.navigateTo({ url: `/pages/record/index?id=${id}` });
 }
+
+/** 左滑操作（复制 / 删除）—— 与流水页共用同一套逻辑（见 utils/txnSwipe.ts） */
+/*
+ * ⚠️ 解构成 `onTxnSwipe`：本页已有一个 `onSwipe`（月份 swiper 的 @change），
+ *    直接叫同名会 TS2300 重复标识符。改名比改那个既有函数安全 ——
+ *    它被模板的 `@change` 引用着。
+ */
+const { SWIPE_OPTIONS, onSwipe: onTxnSwipe } = useTxnSwipe(() => {
+  // 刷新当日明细（金额 / 笔数变了）
+  loadDetail();
+});
 
 onMounted(async () => {
   await accountStore.load();

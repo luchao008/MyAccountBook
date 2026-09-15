@@ -606,4 +606,99 @@ describe('TransactionService', () => {
       expect(rows[0].expense).toBe('30.00');
     });
   });
+
+  describe('软删除与流水回收站（2026-09-15）', () => {
+    let sUserId: string;
+
+    beforeAll(async () => {
+      const u = await authService.register({
+        username: randomUsername('tsoftdel'),
+        password: '123456',
+      });
+      sUserId = u.user.id;
+      createdUserIds.push(sUserId);
+    });
+
+    it('删除后：详情查不到（40402）、列表不含、汇总不计', async () => {
+      const t1 = await transactionService.create(sUserId, {
+        type: 'expense',
+        amount: '11.00',
+        recordDate: '2026-07-01',
+      });
+      await transactionService.delete(sUserId, t1.id);
+
+      await expect(transactionService.findById(sUserId, t1.id)).rejects.toThrow();
+
+      const page = await transactionService.page(sUserId, { page: 1, size: 50 } as any);
+      expect(page.list.find((x) => x.id === t1.id)).toBeUndefined();
+
+      const rows = await transactionService.summary(sUserId, {
+        groupBy: 'time',
+        unit: 'month',
+      } as any);
+      expect(rows.find((r) => r.key === '2026-07')).toBeUndefined();
+    });
+
+    it('回收站能查到已删的；恢复后回到列表', async () => {
+      const t2 = await transactionService.create(sUserId, {
+        type: 'expense',
+        amount: '22.00',
+        recordDate: '2026-07-02',
+      });
+      await transactionService.delete(sUserId, t2.id);
+
+      const deleted = await transactionService.listDeleted(sUserId);
+      expect(deleted.find((x) => x.id === t2.id)).toBeTruthy();
+
+      await transactionService.restore(sUserId, t2.id);
+      const back = await transactionService.findById(sUserId, t2.id);
+      expect(back.id).toBe(t2.id);
+      expect(back.deletedAt).toBeNull();
+
+      const deletedAfter = await transactionService.listDeleted(sUserId);
+      expect(deletedAfter.find((x) => x.id === t2.id)).toBeUndefined();
+    });
+
+    it('已删除的不能再删 / 不能恢复不存在的（40402）', async () => {
+      const t3 = await transactionService.create(sUserId, {
+        type: 'expense',
+        amount: '33.00',
+        recordDate: '2026-07-03',
+      });
+      await transactionService.delete(sUserId, t3.id);
+      // 再删：findById 带软删除过滤 → 40402
+      await expect(transactionService.delete(sUserId, t3.id)).rejects.toThrow();
+      // 恢复一条从未删过的：也应 40402
+      const t4 = await transactionService.create(sUserId, {
+        type: 'expense',
+        amount: '44.00',
+        recordDate: '2026-07-04',
+      });
+      await expect(transactionService.restore(sUserId, t4.id)).rejects.toThrow();
+    });
+
+    it('★ 超期记录被惰性真删（7 天前删的查不到）', async () => {
+      const t5 = await transactionService.create(sUserId, {
+        type: 'expense',
+        amount: '55.00',
+        recordDate: '2026-07-05',
+      });
+      await transactionService.delete(sUserId, t5.id);
+      /*
+       * 手工把 deleted_at 改成 8 天前 —— 越过 7 天保留期。
+       * 用 dataSource 直改（没有对外接口做这件事，这是测试专用手段）。
+       */
+      // service 的 dataSource 是 public 的（@InjectDataSource()），直接用它
+      const ds = transactionService.dataSource;
+      await ds.query(
+        'UPDATE transactions SET deleted_at = DATE_SUB(NOW(6), INTERVAL 8 DAY) WHERE id = ?',
+        [t5.id],
+      );
+      // 查回收站会触发惰性清理 → 这条既不在返回结果里，也已被物理删除
+      const list = await transactionService.listDeleted(sUserId);
+      expect(list.find((x) => x.id === t5.id)).toBeUndefined();
+      const raw = await ds.query('SELECT COUNT(*) AS c FROM transactions WHERE id = ?', [t5.id]);
+      expect(Number(raw[0].c)).toBe(0);
+    });
+  });
 });

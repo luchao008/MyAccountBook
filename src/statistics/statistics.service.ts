@@ -91,6 +91,8 @@ export class StatisticsService {
       )
       .addSelect('COUNT(*)', 'count')
       .where('t.userId = :userId', { userId })
+      // ⚠️ 软删除过滤（回收站里的流水不算区间汇总）
+      .andWhere('t.deletedAt IS NULL')
       .andWhere('t.recordDate BETWEEN :start AND :end', { start, end });
 
     if (accountId) {
@@ -129,7 +131,13 @@ export class StatisticsService {
     type: 'income' | 'expense',
     accountId?: string,
   ) {
-    const conditions = ['t.user_id = ?', 't.record_date BETWEEN ? AND ?', 't.type = ?'];
+    // ⚠️ deleted_at IS NULL = 软删除过滤（回收站里的流水不算统计）
+    const conditions = [
+      't.user_id = ?',
+      't.deleted_at IS NULL',
+      't.record_date BETWEEN ? AND ?',
+      't.type = ?',
+    ];
     const params: any[] = [userId, start, end, type];
     if (accountId) {
       conditions.push('t.account_id = ?');
@@ -225,7 +233,8 @@ export class StatisticsService {
 
   /** 某年 12 个月的收支（无数据的月份补 0） */
   private async monthlyTrend(userId: string, year: string, accountId?: string) {
-    const conditions = ['t.user_id = ?', 't.record_date BETWEEN ? AND ?'];
+    // ⚠️ deleted_at IS NULL = 软删除过滤（回收站里的流水不算趋势）
+    const conditions = ['t.user_id = ?', 't.deleted_at IS NULL', 't.record_date BETWEEN ? AND ?'];
     const params: any[] = [userId, `${year}-01-01`, `${year}-12-31`];
     if (accountId) {
       conditions.push('t.account_id = ?');
@@ -275,6 +284,8 @@ export class StatisticsService {
         'expense',
       )
       .where('t.userId = :userId', { userId })
+      // ⚠️ 软删除过滤（回收站里的流水不算月度汇总）
+      .andWhere('t.deletedAt IS NULL')
       .andWhere('t.recordDate BETWEEN :monthStart AND :monthEnd', {
         monthStart,
         monthEnd,
@@ -315,7 +326,8 @@ export class StatisticsService {
     const { monthStart, monthEnd } = this.resolveMonthRange(month);
 
     // 用 `?` 位置参数（TypeORM 的 raw query 不支持 :name 命名参数）
-    const conditions = ['t.user_id = ?', 't.record_date BETWEEN ? AND ?'];
+    // ⚠️ deleted_at IS NULL = 软删除过滤（回收站里的流水不算分类占比）
+    const conditions = ['t.user_id = ?', 't.deleted_at IS NULL', 't.record_date BETWEEN ? AND ?'];
     const params: any[] = [userId, monthStart, monthEnd];
     if (type) {
       conditions.push('t.type = ?');
@@ -397,7 +409,8 @@ export class StatisticsService {
       values.push(r.start, r.end, r.start, r.end, r.start, r.end);
     }
 
-    const where = ['user_id = ?'];
+    // ⚠️ deleted_at IS NULL = 软删除过滤（回收站里的流水不算首页总览）
+    const where = ['user_id = ?', 'deleted_at IS NULL'];
     const whereValues: any[] = [userId];
     if (accountId) {
       where.push('account_id = ?');

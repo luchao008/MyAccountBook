@@ -14,6 +14,11 @@ export interface TransactionItem {
   note: string;
   /** ISO 8601 UTC 时间 */
   createdAt: string;
+  /**
+   * 软删除时间戳（ISO 8601 UTC）。**只有「流水回收站」接口会返回它** ——
+   * 常规接口只返回未删除的流水，该字段为 undefined。
+   */
+  deletedAt?: string | null;
   category: {
     id: string;
     name: string;
@@ -114,6 +119,16 @@ export function createTransaction(data: {
   accountId?: string;
 }): Promise<TransactionItem> {
   return http.post('/transactions', data) as any;
+}
+
+/** 从回收站恢复 */
+export function restoreTransaction(id: string): Promise<TransactionItem> {
+  return http.post(`/transactions/${id}/restore`) as any;
+}
+
+/** 流水回收站列表（7 天内删除的） */
+export function getDeletedTransactions(): Promise<TransactionItem[]> {
+  return http.get('/transactions/deleted') as any;
 }
 
 export function updateTransaction(

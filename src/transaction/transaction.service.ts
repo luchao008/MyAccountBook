@@ -1,6 +1,6 @@
 import { Provide, Inject } from '@midwayjs/core';
 import { InjectDataSource } from '@midwayjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 import { Transaction } from '../entity/transaction.entity';
 import { Category } from '../entity/category.entity';
 import { Account } from '../entity/account.entity';
@@ -213,7 +213,12 @@ export class TransactionService {
    */
   private async summaryByCategory(userId: string, query: SummaryQueryDTO) {
     const level = Number(query.level) === 2 ? 2 : 1;
-    const conditions = ['t.user_id = ?'];
+    /*
+     * ⚠️ 本方法是**裸 SQL**，复用不了 applyFilters，所以要自己写一遍软删除过滤
+     *    （与 applyFilters 里的 `t.deletedAt IS NULL` 等价）。
+     *    **改 applyFilters 的筛选语义时，务必回来同步这里。**
+     */
+    const conditions = ['t.user_id = ?', 't.deleted_at IS NULL'];
     const params: any[] = [userId];
 
     if (query.start) {
@@ -318,7 +323,12 @@ export class TransactionService {
 
   async findById(userId: string, id: string): Promise<Transaction> {
     const entity = await this.repo.findOne({
-      where: { id, userId },
+      /*
+       * ⚠️ `deletedAt: IsNull()` = 软删除过滤。
+       *    这样"查已删除的流水"一律 404（编辑 / 再删 / 详情），符合直觉。
+       *    **restore() 不能用本方法** —— 它要查的正是已删除的那条（见那里的注释）。
+       */
+      where: { id, userId, deletedAt: IsNull() },
       relations: ['category', 'account'],
     });
     if (!entity) {
@@ -367,10 +377,74 @@ export class TransactionService {
     return this.findById(userId, id);
   }
 
+  /**
+   * 删除账单 —— **软删除**（写 deleted_at，不真删行）。
+   *
+   * 需求：「删除后在流水回收站存在 7 天」。真删行就无从恢复，所以只打时间戳。
+   * 所有常规查询都加了 `deletedAt IS NULL` 过滤（见 applyFilters 与各裸 SQL 的注释），
+   * 所以删掉的流水不会漏进列表 / 汇总 / 统计 / 报表 / 首页。
+   *
+   * ⚠️ 已删除的再删会返回 404：findById 自带软删除过滤（见下），找不到即 40402。
+   */
   async delete(userId: string, id: string) {
-    await this.findById(userId, id);
-    await this.repo.delete({ id, userId });
+    const entity = await this.findById(userId, id);
+    entity.deletedAt = new Date();
+    await this.repo.save(entity);
     return { success: true };
+  }
+
+  /** 回收站保留期（天）。与前端提示文案「7 天内可恢复」必须一致 */
+  private static readonly RECYCLE_DAYS = 7;
+
+  /**
+   * 流水回收站列表。
+   *
+   * ⚠️ **超期清理是「查询时惰性真删」**（用户确认）：先物理删掉
+   *    `deleted_at < NOW() - 7d` 的记录，再返回剩余的 ——
+   *    这样「7 天内可恢复」的文案与行为严格一致，库也不会慢慢堆积。
+   *
+   * ⚠️ 惰性清理**只在本接口里做**，不在别处顺手做：写操作集中一处，
+   *    出问题好定位，也不会让"读列表"这种高频动作带上写库的副作用。
+   */
+  async listDeleted(userId: string) {
+    // ① 惰性清理超期记录
+    await this.repo
+      .createQueryBuilder()
+      .delete()
+      .from(Transaction)
+      .where('user_id = :userId', { userId })
+      .andWhere('deleted_at IS NOT NULL')
+      .andWhere('deleted_at < DATE_SUB(NOW(6), INTERVAL :days DAY)', {
+        days: TransactionService.RECYCLE_DAYS,
+      })
+      .execute();
+
+    // ② 返回仍在保留期内的
+    const qb = this.repo
+      .createQueryBuilder('t')
+      .leftJoinAndSelect('t.category', 'c')
+      .leftJoinAndSelect('t.account', 'a')
+      .where('t.userId = :userId', { userId })
+      .andWhere('t.deletedAt IS NOT NULL')
+      .orderBy('t.deletedAt', 'DESC');
+
+    return qb.getMany();
+  }
+
+  /**
+   * 从回收站恢复。
+   *
+   * ⚠️ 这里**不能用 findById**（它带 `deletedAt IS NULL` 过滤，会把已删的也滤掉），
+   *    要单独查"已删除的"那条。
+   */
+  async restore(userId: string, id: string) {
+    const entity = await this.repo.findOne({ where: { id, userId } });
+    if (!entity || !entity.deletedAt) {
+      throw new BusinessError('账单不存在', ErrorCode.TRANSACTION_NOT_FOUND);
+    }
+    entity.deletedAt = null;
+    await this.repo.save(entity);
+    return this.findById(userId, id);
   }
 }
 /**
@@ -400,6 +474,15 @@ function applyFilters<T extends { andWhere: (sql: string, params?: object) => T 
   },
 ): T {
   qb.andWhere('t.userId = :userId', { userId });
+
+  /*
+   * ⚠️ **软删除过滤放在这里 = 一处生效、全部覆盖**。
+   *
+   * 列表（page）与按粒度汇总（summary）都走这个方法，所以回收站里的流水
+   * 不会漏进任何一处。**改动这里时注意：裸 SQL 的 `summaryByCategory`
+   * 复用不了本函数，它自己手写了一份等价条件（见那里的注释）。**
+   */
+  qb.andWhere('t.deletedAt IS NULL');
 
   if (q.start) qb.andWhere('t.recordDate >= :start', { start: q.start });
   if (q.end) qb.andWhere('t.recordDate <= :end', { end: q.end });

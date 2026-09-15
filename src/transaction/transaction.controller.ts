@@ -54,6 +54,34 @@ export class TransactionController {
     return this.transactionService.summary(this.userId, query);
   }
 
+  @ApiOperation({
+    summary: '流水回收站',
+    description:
+      '返回 7 天内删除的流水（软删除）。' +
+      '⚠️ 本接口会**惰性真删**超期记录（deleted_at < NOW() - 7d），' +
+      '因此「7 天内可恢复」的文案与行为严格一致。',
+  })
+  @ApiResponse({ status: 200, description: '查询成功' })
+  @Get('/deleted')
+  async listDeleted() {
+    return this.transactionService.listDeleted(this.userId);
+  }
+
+  @ApiOperation({
+    summary: '从回收站恢复',
+    description: '清空该流水的 deleted_at，重新出现在列表与统计里。',
+  })
+  @ApiResponse({ status: 200, type: TransactionDetailResponseVO, description: '恢复成功' })
+  @ApiResponse({
+    status: 200,
+    type: ErrorResponseVO,
+    description: '账单不存在或未被删除时 code=40402',
+  })
+  @Post('/:id/restore')
+  async restore(@Param('id') id: string) {
+    return this.transactionService.restore(this.userId, id);
+  }
+
   @ApiOperation({ summary: '账单详情' })
   @ApiResponse({ status: 200, type: TransactionDetailResponseVO, description: '查询成功' })
   @ApiResponse({
@@ -89,7 +117,13 @@ export class TransactionController {
     return this.transactionService.update(this.userId, id, dto);
   }
 
-  @ApiOperation({ summary: '删除账单' })
+  @ApiOperation({
+    summary: '删除账单（软删除）',
+    description:
+      '⚠️ 自 2026-09-15 起为**软删除**：只写 deleted_at，不真删行。' +
+      '删除后 7 天内在「流水回收站」可恢复，超期由回收站接口惰性真删。' +
+      '删账本的级联删除不在此列（仍是真删）。',
+  })
   @ApiResponse({ status: 200, type: DeleteResponseVO, description: '删除成功' })
   @ApiResponse({
     status: 200,

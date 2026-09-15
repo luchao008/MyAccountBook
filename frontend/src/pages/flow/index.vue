@@ -121,21 +121,24 @@
           <template v-else>
             <view v-for="day in details[g.key]" :key="day.date" class="day">
               <view class="day-head"><text class="day-head-text">{{ dayHeader(day.date) }}</text></view>
-              <view
-                v-for="t in day.items"
-                :key="t.id"
-                class="txn"
-                @click="editTransaction(t.id)"
-              >
-                <CategoryIcon class="txn-icon" :name="t.category?.icon || 'cat-misc'" :size="28" />
-                <view class="txn-main">
-                  <text class="txn-name">{{ t.category?.name || '未分类' }}</text>
-                  <text class="txn-meta">{{ txnMeta(t) }}</text>
-                </view>
-                <text class="txn-amount" :class="t.type === 'income' ? 'income' : 'expense'">
-                  {{ t.type === 'income' ? '+' : '-' }}{{ formatMoney(t.amount) }}
-                </text>
-              </view>
+              <uni-swipe-action v-for="t in day.items" :key="t.id">
+                <uni-swipe-action-item :right-options="SWIPE_OPTIONS" @click="onSwipe($event, t)">
+                  <view class="txn" @click="editTransaction(t.id)">
+                    <CategoryIcon
+                      class="txn-icon"
+                      :name="t.category?.icon || 'cat-misc'"
+                      :size="28"
+                    />
+                    <view class="txn-main">
+                      <text class="txn-name">{{ t.category?.name || '未分类' }}</text>
+                      <text class="txn-meta">{{ txnMeta(t) }}</text>
+                    </view>
+                    <text class="txn-amount" :class="t.type === 'income' ? 'income' : 'expense'">
+                      {{ t.type === 'income' ? '+' : '-' }}{{ formatMoney(t.amount) }}
+                    </text>
+                  </view>
+                </uni-swipe-action-item>
+              </uni-swipe-action>
             </view>
           </template>
         </view>
@@ -449,21 +452,20 @@
           text="没有找到相关流水"
         />
         <template v-else>
-          <view
-            v-for="t in searchResults"
-            :key="t.id"
-            class="txn search-txn"
-            @click="editTransaction(t.id)"
-          >
-            <CategoryIcon class="txn-icon" :name="t.category?.icon || 'cat-misc'" :size="28" />
-            <view class="txn-main">
-              <text class="txn-name">{{ t.category?.name || '未分类' }}</text>
-              <text class="txn-meta">{{ searchMeta(t) }}</text>
-            </view>
-            <text class="txn-amount" :class="t.type === 'income' ? 'income' : 'expense'">
-              {{ t.type === 'income' ? '+' : '-' }}{{ formatMoney(t.amount) }}
-            </text>
-          </view>
+          <uni-swipe-action v-for="t in searchResults" :key="t.id">
+            <uni-swipe-action-item :right-options="SWIPE_OPTIONS" @click="onSwipe($event, t)">
+              <view class="txn search-txn" @click="editTransaction(t.id)">
+                <CategoryIcon class="txn-icon" :name="t.category?.icon || 'cat-misc'" :size="28" />
+                <view class="txn-main">
+                  <text class="txn-name">{{ t.category?.name || '未分类' }}</text>
+                  <text class="txn-meta">{{ searchMeta(t) }}</text>
+                </view>
+                <text class="txn-amount" :class="t.type === 'income' ? 'income' : 'expense'">
+                  {{ t.type === 'income' ? '+' : '-' }}{{ formatMoney(t.amount) }}
+                </text>
+              </view>
+            </uni-swipe-action-item>
+          </uni-swipe-action>
         </template>
       </view>
     </view>
@@ -521,6 +523,7 @@ import {
 } from '@/api/transaction';
 import { formatMoney } from '@/utils/format';
 import { periodRange, periodLabel, dayHeader } from '@/utils/period';
+import { useTxnSwipe } from '@/utils/txnSwipe';
 
 const accountStore = useAccountStore();
 const categoryStore = useCategoryStore();
@@ -1342,6 +1345,12 @@ function goRecord() {
 function editTransaction(id: string) {
   uni.navigateTo({ url: `/pages/record/index?id=${id}` });
 }
+
+/**
+ * 左滑操作（复制 / 删除）—— 逻辑抽到 `utils/txnSwipe.ts`，
+ * 与日历页共用同一套（文案与刷新行为必须完全一致，各写一遍必然分叉）。
+ */
+const { SWIPE_OPTIONS, onSwipe } = useTxnSwipe(() => reloadAll());
 
 /**
  * 接收从「记账页」区间卡片传来的参数：
