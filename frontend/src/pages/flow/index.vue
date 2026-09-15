@@ -1379,6 +1379,29 @@ onLoad((options?: Record<string, string>) => {
       groupBy.value = 'time';
     }
   }
+
+  /*
+   * 首页「本月各分类支出排行」点进来时带的三件套（用户给的参考图）：
+   *   · groupBy=category + level=1 → 底栏高亮「一级分类」
+   *   · categoryIds=<一级 id>     → 只筛这一个分类（后端会连带其下二级）
+   * 时间则由上面的 start/end 分支一并设好（显示「自定义」+ 区间标题）。
+   *
+   * ⚠️ 放在 unit 分支**之后**：这样即便两处都传了 groupBy，也以这里为准。
+   * ⚠️ 标题不覆盖：分类场景下 start/end 分支已把 pageRangeText 设成日期区间，
+   *    与参考图一致（顶部显示区间，分组标题显示分类名）。
+   */
+  if (options?.groupBy === 'category') {
+    groupBy.value = 'category';
+    const lv = Number(options.level);
+    level.value = lv === 2 ? 2 : 1;
+  }
+  if (options?.categoryIds) {
+    const ids = String(options.categoryIds)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (ids.length) filterModel.categoryIds = ids;
+  }
 });
 
 onMounted(async () => {

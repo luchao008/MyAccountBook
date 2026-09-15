@@ -73,7 +73,13 @@
       <EmptyState v-if="!ranking.length" icon="icon-chart-bar" text="本月还没有支出记录" />
 
       <view v-else class="rank-list">
-        <view v-for="(item, index) in visibleRanking" :key="item.categoryId || index" class="rank-item">
+        <view
+          v-for="(item, index) in visibleRanking"
+          :key="item.categoryId || index"
+          class="rank-item"
+          :class="{ 'rank-item-link': isClickable(item) }"
+          @click="goCategoryFlow(item)"
+        >
           <text class="rank-no">{{ index + 1 }}</text>
           <view class="rank-body">
             <view class="rank-line">
@@ -185,6 +191,37 @@ function goFlow(item: { key: string; start: string; end: string }) {
 function barWidth(ratio: number): string {
   const v = Math.max(Number(ratio) || 0, 2);
   return `${Math.min(v, 100)}%`;
+}
+
+/**
+ * 该项能否点击跳转。
+ * ⚠️ **「未分类」（categoryId 为 null）不可点**（用户确认）——
+ *    分类筛选弹层刻意不提供「未分类」项、后端也没有筛选未分类的能力，
+ *    若让它跳过去，看到的是"不带分类筛选的全部流水"，与用户点它的预期不符。
+ *    与其给一个名不副实的跳转，不如不给。
+ */
+function isClickable(item: CategoryStatItem): boolean {
+  return !!item.categoryId;
+}
+
+/**
+ * 点某一项分类排行 → 跳到流水页，**带上"本月 + 该分类"**。
+ *
+ * 落点参数（与用户给的参考图一致）：
+ *   · `groupBy=category` + `level=1` → 底栏高亮「一级分类」（该分类本身就是一级）
+ *   · `categoryIds=<一级 id>` → 只筛这一个分类（后端会连带其下二级）
+ *   · `start`/`end` = 本月区间（取自 overview.ranges 的 month 项）
+ */
+function goCategoryFlow(item: CategoryStatItem) {
+  if (!isClickable(item)) return;
+  const r = monthRange.value;
+  if (!r?.start || !r?.end) return;
+  uni.navigateTo({
+    url:
+      `/pages/flow/index?groupBy=category&level=1` +
+      `&categoryIds=${encodeURIComponent(String(item.categoryId))}` +
+      `&start=${r.start}&end=${r.end}`,
+  });
 }
 
 function currentMonth(): string {
@@ -555,6 +592,15 @@ defineExpose({ activate, onPullDownRefresh });
   display: flex;
   align-items: flex-start;
   padding: 12px 0;
+}
+
+/*
+ * 可跳转项的按下反馈。
+ * ⚠️ 用底色变化（而不是缩放/阴影）—— 扁平体系里"按下"靠底色加深一阶表达。
+ *    不可点的项（「未分类」）不加这个类，也就没有任何可点暗示。
+ */
+.rank-item-link:active {
+  background: $brand-50;
 }
 
 .rank-no {
