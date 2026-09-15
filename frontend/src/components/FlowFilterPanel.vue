@@ -23,6 +23,20 @@
         </view>
 
         <!--
+          流水类型：**多选弹层**（参考图形态），点开 FlowTypePicker。
+          ⚠️ 全选 / 全不选都视为「不过滤」，所以全选时右侧不显示具体类型名，
+             而是回落到「全部」—— 如实反映"当前没有按类型过滤"。
+        -->
+        <view class="row" @click="emit('pick-type')">
+          <SvgIcon class="row-icon" name="icon-filter" :size="18" />
+          <text class="row-label">类型</text>
+          <view class="row-main">
+            <text class="row-value">{{ typeLabel }}</text>
+          </view>
+          <SvgIcon class="row-arrow" name="icon-chevron-right" :size="16" />
+        </view>
+
+        <!--
           分类**不在这里** —— 它已经是底部栏的「分组维度」（一级/二级），与「时间」平级。
           筛选面板里再放一个分类，两个入口的语义会打架（一个是"换个方式分组"、
           一个是"过滤掉一部分"），用户分不清当前到底在按什么看。
@@ -90,6 +104,11 @@ export interface FlowFilter {
   end: string;
   /** 时间预设的展示文案（'全部时间' / '本月' / '自定义' 等） */
   timeLabel: string;
+  /**
+   * 流水类型多选。**全选与全不选都视为「不过滤」**（用户确认）——
+   * 全不选若真返回空集，用户会以为"账本没数据"，而实际是筛掉了自己。
+   */
+  types: string[];
   minAmount: string;
   maxAmount: string;
   keyword: string;
@@ -104,6 +123,7 @@ const emit = defineEmits<{
   (e: 'update:visible', v: boolean): void;
   (e: 'apply', value: FlowFilter): void;
   (e: 'pick-time'): void;
+  (e: 'pick-type'): void;
 }>();
 
 /** 草稿：改完点「确定」才生效，中途关闭不污染已应用的筛选 */
@@ -132,6 +152,24 @@ watch(
 );
 
 const timeLabel = computed(() => draft.timeLabel || '全部时间');
+
+/**
+ * 流水类型选项（与 FlowTypePicker 的 options 保持一致）。
+ * 只有两项，不值得为它引一个组件常量文件；将来后端加类型时两处一起改。
+ */
+const TYPE_LABELS: Record<string, string> = { expense: '支出', income: '收入' };
+const TYPE_VALUES = Object.keys(TYPE_LABELS);
+
+/**
+ * 类型行的展示文案。
+ * ⚠️ **全选与全不选都显示「全部」** —— 二者语义上都是"没有按类型过滤"，
+ *    显示"支出、收入"反而会让用户以为筛过了。
+ */
+const typeLabel = computed(() => {
+  const sel = draft.types || [];
+  if (!sel.length || sel.length >= TYPE_VALUES.length) return '全部';
+  return sel.map((v) => TYPE_LABELS[v] || v).join('、');
+});
 
 /**
  * 日期区间的展示文案：`2026年09月01日 - 2026年09月30日`。
@@ -169,6 +207,8 @@ function reset() {
   draft.minAmount = '';
   draft.maxAmount = '';
   draft.keyword = '';
+  // 「重置」= 回到什么都没筛，类型一并复位为全选（用户确认）
+  draft.types = [...TYPE_VALUES];
 }
 
 function confirm() {

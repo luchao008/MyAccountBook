@@ -63,19 +63,22 @@
         <text class="rank-title">本月各分类支出排行</text>
         <view class="rank-summary">
           <text class="summary-item">记账笔数 {{ monthCount }}</text>
-          <text class="summary-item">总支出 {{ formatMoney(monthExpense) }}</text>
+          <text class="summary-item">
+            总支出
+            <text class="summary-val">{{ formatMoney(monthExpense) }}</text>
+          </text>
         </view>
       </view>
 
       <EmptyState v-if="!ranking.length" icon="icon-chart-bar" text="本月还没有支出记录" />
 
       <view v-else class="rank-list">
-        <view v-for="(item, index) in ranking" :key="item.categoryId || index" class="rank-item">
+        <view v-for="(item, index) in visibleRanking" :key="item.categoryId || index" class="rank-item">
           <text class="rank-no">{{ index + 1 }}</text>
           <view class="rank-body">
             <view class="rank-line">
               <view class="rank-name">
-                <CategoryIcon :name="item.icon" :size="16" />
+                <CategoryIcon :name="item.icon" :size="36" />
                 <text>{{ item.name }}</text>
               </view>
               <view class="rank-right">
@@ -94,6 +97,11 @@
               />
             </view>
           </view>
+        </view>
+
+        <view v-if="ranking.length > COLLAPSED_COUNT" class="rank-toggle" @click="expanded = !expanded">
+          <text class="rank-toggle-text">{{ expanded ? '收起' : '点击展开' }}</text>
+          <SvgIcon :name="expanded ? 'icon-chevron-up' : 'icon-chevron-down'" :size="12" />
         </view>
       </view>
     </view>
@@ -121,6 +129,15 @@ const categoryStore = useCategoryStore();
 
 const loading = ref(false);
 const ranking = ref<CategoryStatItem[]>([]);
+
+/** 折叠时展示的条数（与参考图一致：默认 5 条 + 「点击展开」） */
+const COLLAPSED_COUNT = 5;
+const expanded = ref(false);
+
+/** 折叠态：默认只显示前 COLLAPSED_COUNT 条；展开后显示全部 */
+const visibleRanking = computed(() =>
+  expanded.value ? ranking.value : ranking.value.slice(0, COLLAPSED_COUNT)
+);
 
 const overview = reactive({
   total: { income: '0.00', expense: '0.00', balance: '0.00', count: 0 },
@@ -185,8 +202,9 @@ async function loadData() {
     ]);
     overview.total = ov.total;
     overview.ranges = ov.ranges;
-    // 只展示前 10 名，避免首页过长
-    ranking.value = rank.slice(0, 10);
+    // 保留全量：折叠/展开由 visibleRanking 控制，不在这里截断
+    ranking.value = rank;
+    expanded.value = false;
   } catch (err) {
     console.error('[home] 加载失败', err);
   } finally {
@@ -494,6 +512,11 @@ defineExpose({ activate, onPullDownRefresh });
 }
 
 .rank-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
   margin-bottom: 12px;
 }
 
@@ -507,7 +530,7 @@ defineExpose({ activate, onPullDownRefresh });
 .rank-summary {
   display: flex;
   flex-wrap: wrap;
-  margin-top: 6px;
+  align-items: baseline;
 }
 
 .summary-item {
@@ -518,10 +541,20 @@ defineExpose({ activate, onPullDownRefresh });
   margin-right: 14px;
 }
 
+.summary-item:last-child {
+  margin-right: 0;
+}
+
+/* 「总支出」的数值：白卡上 5.05:1 ✅，与区间卡片的支出色一致 */
+.summary-val {
+  color: $expense;
+  font-weight: $weight-medium;
+}
+
 .rank-item {
   display: flex;
   align-items: flex-start;
-  padding: 10px 0;
+  padding: 12px 0;
 }
 
 .rank-no {
@@ -532,7 +565,6 @@ defineExpose({ activate, onPullDownRefresh });
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
   color: $text-tertiary;
-  padding-top: 2px;
 }
 
 .rank-body {
@@ -549,9 +581,9 @@ defineExpose({ activate, onPullDownRefresh });
 .rank-name {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: $font-body-sm;
-  line-height: $lh-body-sm;
+  gap: 8px;
+  font-size: $font-body;
+  line-height: $lh-body;
   color: $text-primary;
   min-width: 0;
 }
@@ -593,16 +625,33 @@ defineExpose({ activate, onPullDownRefresh });
 }
 
 .bar-bg {
-  height: 4px;
+  height: 6px;
   background: $bg-subtle;
-  border-radius: 2px;
-  margin-top: 8px;
+  border-radius: $radius-pill;
+  margin-top: 10px;
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
-  border-radius: 2px;
+  border-radius: $radius-pill;
   transition: width 0.3s;
+}
+
+/* 「点击展开 / 收起」——与 RankList.vue 的 .toggle 同一套做法 */
+.rank-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $space-1;
+  /* 上下留白凑够 44px 触控目标（WCAG 2.5.8 建议值） */
+  padding: 12px 0 4px;
+  margin-top: 4px;
+  color: $text-secondary;
+}
+
+.rank-toggle-text {
+  font-size: $font-body-sm;
+  line-height: $lh-body-sm;
 }
 </style>

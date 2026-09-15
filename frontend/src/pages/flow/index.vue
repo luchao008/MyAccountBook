@@ -246,8 +246,12 @@
       :model="filterModel"
       @apply="onFilterApply"
       @pick-time="timeOpen = true"
+      @pick-type="typeOpen = true"
       @pick-category="openCategoryLevelPicker"
     />
+
+    <!-- ── 弹层 ④'：流水类型多选（叠在筛选面板之上，z-index 1100） ── -->
+    <FlowTypePicker v-model:visible="typeOpen" :model="filterModel.types" @apply="onTypeApply" />
 
     <!-- ── 弹层 ⑤：时间预设 ── -->
     <view v-if="timeOpen" class="mask" @click="timeOpen = false; timeCustomOpen = false">
@@ -347,6 +351,11 @@
             <SvgIcon class="summary-icon" name="icon-clock" :size="18" />
             <text class="summary-label">时间</text>
             <text class="summary-value">{{ filterSummary.time }}</text>
+          </view>
+          <view v-if="filterSummary.type" class="summary-row">
+            <SvgIcon class="summary-icon" name="icon-filter" :size="18" />
+            <text class="summary-label">流水类型</text>
+            <text class="summary-value">{{ filterSummary.type }}</text>
           </view>
           <view v-if="filterSummary.amount" class="summary-row">
             <SvgIcon class="summary-icon" name="icon-card" :size="18" />
@@ -487,6 +496,7 @@ import SvgIcon from '@/components/SvgIcon.vue';
 import CategoryIcon from '@/components/CategoryIcon.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import FlowFilterPanel, { type FlowFilter } from '@/components/FlowFilterPanel.vue';
+import FlowTypePicker from '@/components/FlowTypePicker.vue';
 import { useAccountStore } from '@/store/account';
 import { useCategoryStore } from '@/store/category';
 import {
@@ -612,10 +622,19 @@ const searchTotal = computed(() => {
   };
 });
 
+/**
+ * 流水类型选项。当前后端 ENUM 只有两种，选项写在这里（与 FlowFilterPanel / FlowTypePicker 的
+ * 选项集合保持一致）；将来后端扩展类型时三处一起改。
+ */
+const TYPE_VALUES = ['expense', 'income'];
+const TYPE_LABELS: Record<string, string> = { expense: '支出', income: '收入' };
+
 const filterModel = reactive<FlowFilter>({
   start: '',
   end: '',
   timeLabel: '全部时间',
+  // 默认全选 = 不过滤
+  types: [...TYPE_VALUES],
   minAmount: '',
   maxAmount: '',
   keyword: '',
@@ -636,6 +655,7 @@ const summaryOpen = ref(false);
 const unitOpen = ref(false);
 const levelOpen = ref(false);
 const filterVisible = ref(false);
+const typeOpen = ref(false);
 const timeOpen = ref(false);
 const sortOpen = ref(false);
 const timeLabel = computed(() => filterModel.timeLabel);
@@ -815,8 +835,16 @@ const total = computed(() => {
  */
 function filterOnlyParams() {
   const kw = filterModel.keyword || searchKeyword.value || '';
+  /*
+   * 流水类型：**只在恰好选中 1 种时**才传 `type`。
+   * 全选（= 不筛）与全不选（= 用户清空了，同样按"不筛"处理）都传 undefined ——
+   * 后者若真返回空集会让人误以为"账本没有数据"，与"取消筛选"的直觉不符（用户确认）。
+   */
+  const sel = filterModel.types || [];
+  const onlyType = sel.length === 1 ? (sel[0] as 'income' | 'expense') : undefined;
   return {
     accountId: accountStore.currentId || undefined,
+    type: onlyType,
     keyword: kw || undefined,
     minAmount: filterModel.minAmount || undefined,
     maxAmount: filterModel.maxAmount || undefined,
@@ -1073,7 +1101,9 @@ const hasFilter = computed(
       filterModel.minAmount ||
       filterModel.maxAmount ||
       filterModel.keyword ||
-      searchKeyword.value
+      searchKeyword.value ||
+      // 类型：全选 / 全不选都视为"没筛"，只有恰好选中 1 种才算缩小了结果集
+      (filterModel.types || []).length === 1
     )
 );
 
@@ -1090,9 +1120,17 @@ const filterSummary = computed(() => {
   else if (min) amount = `${min}以上`;
   else if (max) amount = `${max}以下`;
 
+  /*
+   * 类型：**只有恰好选中 1 种时才出现在摘要里**。
+   * 全选（= 支出、收入都在）不算筛选，写进去会让人以为筛过了（用户确认）。
+   */
+  const types = filterModel.types || [];
+  const typeText = types.length === 1 ? TYPE_LABELS[types[0]] || types[0] : '';
+
   return {
     time: parts[0] || '',
     amount,
+    type: typeText,
     keyword: filterModel.keyword || searchKeyword.value || '',
   };
 });
@@ -1115,6 +1153,8 @@ function viewAll() {
   filterModel.minAmount = '';
   filterModel.maxAmount = '';
   filterModel.keyword = '';
+  // 「查看全部」= 清掉所有筛选条件，类型一并复位为全选
+  filterModel.types = [...TYPE_VALUES];
   searchKeyword.value = '';
   searchVisible.value = false;
   summaryOpen.value = false;
@@ -1133,6 +1173,20 @@ function openFilterFromSheet() {
 }
 function onFilterApply(v: FlowFilter) {
   Object.assign(filterModel, v);
+  reloadAll();
+}
+
+/**
+ * 类型弹层的「确定」：直接落到 filterModel 并重新加载。
+ *
+ * ⚠️ **不经过筛选面板的草稿**：类型弹层是叠在筛选面板之上的独立弹层，
+ *    用户在这一层点「确定」的预期就是"立即生效"（参考图也是这个交互）。
+ *    若还要回到筛选面板再点一次「确定」才生效，用户会以为点了没用。
+ *    筛选面板关闭时不会回滚 draft 里的类型（draft 只在面板可见时同步），
+ *    但它下次打开会从 props.model 重新同步（watch visible），所以不会残留。
+ */
+function onTypeApply(types: string[]) {
+  filterModel.types = types;
   reloadAll();
 }
 
