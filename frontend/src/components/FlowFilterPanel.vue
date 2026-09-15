@@ -137,18 +137,29 @@ watch(
 );
 
 /*
- * ⚠️ 时间弹层（由父级承载）改的是 `props.model`，而不是本组件的 draft ——
- *    只监听 `visible` 的话，用户在时间弹层里选完自定义区间、回到筛选面板，
- *    draft 里还是旧值，点「确定」会把改动**丢掉**（实测：面板仍显示「全部时间」）。
- *    这里把与时间相关的三个字段做成受控同步。
+ * ⚠️ 由父级承载的子弹层（时间 / 类型）改的是 `props.model`，而不是本组件的 draft ——
+ *    只监听 `visible` 的话，用户在这些子弹层里选完、回到筛选面板，
+ *    draft 里还是旧值，点「确定」会把改动**丢掉**（实测过两次）。
+ *
+ *    **尤其注意类型弹层**：它是**叠在本面板之上**的（z-index 1100 > 1000），
+ *    本面板的 `visible` 全程为 true，`watch(visible)` 根本不会触发 ——
+ *    必须像这里一样按字段受控同步，否则「选完类型 → 回面板 → 点确定」会被旧值覆盖
+ *    （这正是用户报的 bug：选了"支出"，确定后又变回全选）。
+ *
+ *    做法：把「时间三件套」与「类型」都做成受控同步。
+ *    将来再加叠层子弹层时，**把它的字段也加到这里**，别指望 watch(visible)。
  */
 watch(
-  () => [props.model.timeLabel, props.model.start, props.model.end],
+  () => [props.model.timeLabel, props.model.start, props.model.end, props.model.types],
   () => {
     draft.timeLabel = props.model.timeLabel;
     draft.start = props.model.start;
     draft.end = props.model.end;
-  }
+    // 数组要换新引用：直接赋同一个引用时，父级用 filterModel.types = [...] 换掉的
+    // 是新数组，这里同步没问题；但若父级原地 push/splice，同一引用会导致 watch 判不出变化。
+    draft.types = [...(props.model.types || [])];
+  },
+  { deep: true }
 );
 
 const timeLabel = computed(() => draft.timeLabel || '全部时间');
