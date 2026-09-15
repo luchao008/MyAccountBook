@@ -231,7 +231,9 @@ export class SummaryQueryDTO {
   @ApiProperty({
     description:
       '分组维度：`time`（按时间，用 unit 指定粒度）或 `category`（按分类，用 level 指定层级）。' +
-      '两者**互斥** —— 选分类时看的是整个账本，不带时间限制。',
+      '两者**互斥**（只能选一种分组方式）。' +
+      '2026-09-15 起：**两种维度都应用全部筛选条件**（含时间与分类）—— ' +
+      '「按分类分组」只是换个展示形态，不再忽略时间限制（旧的"分类维度不带时间"约定已反转）。',
     example: 'time',
     enum: ['time', 'category'],
     required: false,

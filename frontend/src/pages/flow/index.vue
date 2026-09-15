@@ -247,11 +247,18 @@
       @apply="onFilterApply"
       @pick-time="timeOpen = true"
       @pick-type="typeOpen = true"
-      @pick-category="openCategoryLevelPicker"
+      @pick-category-filter="categoryOpen = true"
     />
 
     <!-- ── 弹层 ④'：流水类型多选（叠在筛选面板之上，z-index 1100） ── -->
     <FlowTypePicker v-model:visible="typeOpen" :model="filterModel.types" @apply="onTypeApply" />
+
+    <!-- ── 弹层 ④''：分类多选（与类型弹层同级，同样叠在筛选面板之上） ── -->
+    <FlowCategoryPicker
+      v-model:visible="categoryOpen"
+      :model="filterModel.categoryIds"
+      @apply="onCategoryFilterApply"
+    />
 
     <!-- ── 弹层 ⑤：时间预设 ── -->
     <view v-if="timeOpen" class="mask" @click="timeOpen = false; timeCustomOpen = false">
@@ -351,6 +358,11 @@
             <SvgIcon class="summary-icon" name="icon-clock" :size="18" />
             <text class="summary-label">时间</text>
             <text class="summary-value">{{ filterSummary.time }}</text>
+          </view>
+          <view v-if="filterSummary.category" class="summary-row">
+            <SvgIcon class="summary-icon" name="icon-tag" :size="18" />
+            <text class="summary-label">分类</text>
+            <text class="summary-value">{{ filterSummary.category }}</text>
           </view>
           <view v-if="filterSummary.type" class="summary-row">
             <SvgIcon class="summary-icon" name="icon-filter" :size="18" />
@@ -497,6 +509,7 @@ import CategoryIcon from '@/components/CategoryIcon.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import FlowFilterPanel, { type FlowFilter } from '@/components/FlowFilterPanel.vue';
 import FlowTypePicker from '@/components/FlowTypePicker.vue';
+import FlowCategoryPicker from '@/components/FlowCategoryPicker.vue';
 import { useAccountStore } from '@/store/account';
 import { useCategoryStore } from '@/store/category';
 import {
@@ -635,6 +648,8 @@ const filterModel = reactive<FlowFilter>({
   timeLabel: '全部时间',
   // 默认全选 = 不过滤
   types: [...TYPE_VALUES],
+  // 空数组 = 不过滤（与 types 同口径）
+  categoryIds: [],
   minAmount: '',
   maxAmount: '',
   keyword: '',
@@ -656,6 +671,7 @@ const unitOpen = ref(false);
 const levelOpen = ref(false);
 const filterVisible = ref(false);
 const typeOpen = ref(false);
+const categoryOpen = ref(false);
 const timeOpen = ref(false);
 const sortOpen = ref(false);
 const timeLabel = computed(() => filterModel.timeLabel);
@@ -827,11 +843,14 @@ const total = computed(() => {
  *    分类筛选（categoryIds）已经去掉 —— 底栏的「分类」现在是**分组维度**而不是筛选条件。
  */
 /**
- * 筛选条件里与"分组"无关的部分（类型/账本/关键词/金额）。
+ * 筛选条件里与"分组"无关的部分（类型 / 分类 / 账本 / 关键词 / 金额）。
  *
- * ⚠️ 这里**不含 start/end** —— 时间范围只对"时间维度"有意义；
- *    分类维度看的是整个账本（用户确认），带时间就没法看全结构。
+ * ⚠️ 这里**不含 start/end** —— 时间范围只对"时间维度"有意义。
  *    把它单独拆出来，是为了让"展开明细"复用同一份条件而不会误带分组参数。
+ *
+ * ⚠️ **2026-09-15 约定反转**：原先"分类维度看整个账本、不带时间"（用户当时确认）。
+ *    现在改为「底栏『分类』只是换个展示形态，筛选条件照常生效」，所以
+ *    `baseParams()` 里的分类分支**也带上了 start/end**（见该函数）。
  */
 function filterOnlyParams() {
   const kw = filterModel.keyword || searchKeyword.value || '';
@@ -842,9 +861,15 @@ function filterOnlyParams() {
    */
   const sel = filterModel.types || [];
   const onlyType = sel.length === 1 ? (sel[0] as 'income' | 'expense') : undefined;
+  /*
+   * 分类：**空数组 = 不过滤**（与类型同口径）。
+   * 传一级分类时后端会连带其下全部二级，与统计口径一致。
+   */
+  const cats = filterModel.categoryIds || [];
   return {
     accountId: accountStore.currentId || undefined,
     type: onlyType,
+    categoryIds: cats.length ? cats.join(',') : undefined,
     keyword: kw || undefined,
     minAmount: filterModel.minAmount || undefined,
     maxAmount: filterModel.maxAmount || undefined,
@@ -861,8 +886,20 @@ function filterOnlyParams() {
 function baseParams() {
   const common = filterOnlyParams();
   if (groupBy.value === 'category') {
-    // 分类维度：不带时间限制
-    return { groupBy: 'category' as const, level: level.value, unit: undefined, start: undefined, end: undefined, ...common };
+    /*
+     * ⚠️ **2026-09-15 约定反转**：原先这里是「不带时间限制」（用户当时确认，
+     *    理由是"分类维度看的是整个账本结构"）。现已改为：
+     *    **底栏「分类」只是换个展示形态，筛选面板的条件（含时间）都照常生效。**
+     *    后端 summaryByCategory() 同步补上了 start/end/categoryIds。
+     */
+    return {
+      groupBy: 'category' as const,
+      level: level.value,
+      unit: undefined,
+      start: filterModel.start || undefined,
+      end: filterModel.end || undefined,
+      ...common,
+    };
   }
   return {
     groupBy: 'time' as const,
@@ -1103,7 +1140,9 @@ const hasFilter = computed(
       filterModel.keyword ||
       searchKeyword.value ||
       // 类型：全选 / 全不选都视为"没筛"，只有恰好选中 1 种才算缩小了结果集
-      (filterModel.types || []).length === 1
+      (filterModel.types || []).length === 1 ||
+      // 分类：空数组 = 不过滤
+      (filterModel.categoryIds || []).length > 0
     )
 );
 
@@ -1127,10 +1166,28 @@ const filterSummary = computed(() => {
   const types = filterModel.types || [];
   const typeText = types.length === 1 ? TYPE_LABELS[types[0]] || types[0] : '';
 
+  /*
+   * 分类：**空数组不算筛选**，所以不进摘要。
+   * 非空时用与筛选面板一致的文案规则（恰好 1 个 → 显示名字，否则「已选 N 项」）。
+   */
+  const cats = filterModel.categoryIds || [];
+  let categoryText = '';
+  if (cats.length === 1) {
+    categoryText = categoryStore.fullNameOf(cats[0]);
+  } else if (cats.length > 1) {
+    const roots = new Set<string>();
+    for (const id of cats) {
+      const item = categoryStore.byId(id);
+      if (item) roots.add(item.parentId || item.id);
+    }
+    categoryText = `已选 ${roots.size} 项`;
+  }
+
   return {
     time: parts[0] || '',
     amount,
     type: typeText,
+    category: categoryText,
     keyword: filterModel.keyword || searchKeyword.value || '',
   };
 });
@@ -1153,8 +1210,9 @@ function viewAll() {
   filterModel.minAmount = '';
   filterModel.maxAmount = '';
   filterModel.keyword = '';
-  // 「查看全部」= 清掉所有筛选条件，类型一并复位为全选
+  // 「查看全部」= 清掉所有筛选条件：类型复位为全选、分类复位为"不过滤"
   filterModel.types = [...TYPE_VALUES];
+  filterModel.categoryIds = [];
   searchKeyword.value = '';
   searchVisible.value = false;
   summaryOpen.value = false;
@@ -1187,6 +1245,16 @@ function onFilterApply(v: FlowFilter) {
  */
 function onTypeApply(types: string[]) {
   filterModel.types = types;
+  reloadAll();
+}
+
+/**
+ * 分类弹层的「确定」：与类型弹层同一套做法 —— 直接落到 filterModel 并重新加载，
+ * **不经过筛选面板的 draft**（用户在这层点「确定」的预期就是立即生效）。
+ * 筛选面板下次打开会从 `props.model` 重新同步（见其 watch），不会残留旧值。
+ */
+function onCategoryFilterApply(ids: string[]) {
+  filterModel.categoryIds = ids;
   reloadAll();
 }
 

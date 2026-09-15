@@ -709,8 +709,10 @@ section('13. 字号阶梯自洽（文档 §3.2 ↔ tokens.scss ↔ 各 .vue）')
   //    → 文字 176 → 177，总数 178 → 179。
   //    2026-09-15 更新十六：流水页新增「流水类型」多选弹层（FlowTypePicker.vue）
   //    → 文字 177 → 181，总数 179 → 183。
-  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 183, 0);
-  expect('  其中文字字号 $font-*', nText, 181, 0);
+  //    2026-09-15 更新十七：流水页新增「分类」多选弹层（FlowCategoryPicker.vue）
+  //    → 文字 181 → 185，总数 183 → 187。
+  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 187, 0);
+  expect('  其中文字字号 $font-*', nText, 185, 0);
   expect('  其中图标尺寸 $icon-*', nIcon, 2, 0);
   expect('  其中字面量（必须为 0）', nLiteral, 0, 0);
 }

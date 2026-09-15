@@ -201,18 +201,52 @@ export class TransactionService {
    * 与统计页 `categoryInRange` 完全一致 —— 同一批交易换个分组方式，
    * 因此**两级各自的占比之和都是 100%**。
    *
-   * ⚠️ 按分类分组时**不带时间限制**（用户确认）：看的是整个账本，
-   *    所以这里只应用"非时间类"的筛选（类型 / 账本 / 关键词 / 金额区间）。
-   *    这也是它与"时间维度"互斥的体现 —— 同时限制时间就没法看全账本结构了。
+   * ⚠️ **2026-09-15 约定反转**：本方法原先**不应用时间与分类筛选**（当时的理由是
+   *    "按分类分组看的是整个账本结构，同时限制时间就没法看全"）。用户已改为：
+   *    **底栏「分类」只是"换个展示形态"，筛选面板里的条件（含时间、分类）都该照常生效。**
+   *    因此这里补上了 `start` / `end` / `categoryIds` 三个条件。
+   *
+   *    ⚠️ 这三个条件必须与 `applyFilters()` **同口径**，否则会出现
+   *    "列表筛了、汇总没筛"这类不一致（这正是当初把筛选抽成 `applyFilters` 要避免的问题）。
+   *    因为这里是裸 SQL（不是 QueryBuilder），没法复用那个函数，只能逐条对齐 ——
+   *    **改 `applyFilters` 的筛选语义时，务必回来同步这里。**
    */
   private async summaryByCategory(userId: string, query: SummaryQueryDTO) {
     const level = Number(query.level) === 2 ? 2 : 1;
     const conditions = ['t.user_id = ?'];
     const params: any[] = [userId];
 
+    if (query.start) {
+      conditions.push('t.record_date >= ?');
+      params.push(query.start);
+    }
+    if (query.end) {
+      conditions.push('t.record_date <= ?');
+      params.push(query.end);
+    }
     if (query.type) {
       conditions.push('t.type = ?');
       params.push(query.type);
+    }
+
+    /*
+     * 分类多选：与 applyFilters 完全同口径 —— 传一级分类时，其下二级也要命中
+     * （用户选「食品酒水」时想看的是这个大类，而不是恰好直接挂在一级上的那几笔）。
+     */
+    if (query.categoryIds) {
+      const catIds = query.categoryIds
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (catIds.length) {
+        const ph = catIds.map(() => '?').join(',');
+        conditions.push(
+          `(t.category_id IN (${ph}) OR t.category_id IN (
+             SELECT c2.id FROM categories c2 WHERE c2.parent_id IN (${ph})
+           ))`,
+        );
+        params.push(...catIds, ...catIds);
+      }
     }
     if (query.accountId) {
       conditions.push('t.account_id = ?');

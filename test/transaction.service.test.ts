@@ -552,20 +552,58 @@ describe('TransactionService', () => {
       expect(sum(l1, 'income').toFixed(2)).toBe(sum(l2, 'income').toFixed(2));
     });
 
-    it('summary 按分类分组：不带时间限制（整个账本）', async () => {
-      // 再插一笔更早日期的交易，验证它同样被统计（时间维度下会被 start/end 排除）
+    /*
+     * ⚠️ **2026-09-15 约定反转**：原先"按分类分组不带时间限制"（用户当时确认）。
+     * 现在改为「底栏『分类』只是换个展示形态，筛选条件照常生效」。
+     *
+     * ⚠️ 下面三条**各自建自己的数据**（独立日期），不依赖其它用例的执行顺序 ——
+     *    项目铁律：共享 fixture 的用例之间会互相污染（曾出现"未分类 100 变 103"假失败）。
+     */
+    it('summary 按分类分组：不传 start/end 时不限时间（整个账本）', async () => {
+      // 独立日期 2019-05-05：不与本 describe 其它用例的数据重叠
       await transactionService.create(qUserId, {
         type: 'expense',
-        amount: '20.00',
+        amount: '7.00',
         categoryId: catTraffic,
-        recordDate: '2020-01-01',
+        recordDate: '2019-05-05',
       });
       const rows = await transactionService.summary(qUserId, {
         groupBy: 'category',
         level: 1,
       } as any);
       const traffic = rows.find((r) => r.name === '交通Q');
-      expect(traffic?.expense).toBe('100.00'); // 80 + 20
+      // 80（既有 2026-06-02）+ 7（2019）—— 不传时间就都在
+      expect(traffic?.expense).toBe('87.00');
+    });
+
+    it('summary 按分类分组：传 start/end 时按时间过滤（2026-09-15 反转）', async () => {
+      // 独立日期 2019-06-06
+      await transactionService.create(qUserId, {
+        type: 'expense',
+        amount: '9.00',
+        categoryId: catTraffic,
+        recordDate: '2019-06-06',
+      });
+      const rows = await transactionService.summary(qUserId, {
+        groupBy: 'category',
+        level: 1,
+        start: '2026-06-01',
+        end: '2026-06-30',
+      } as any);
+      const traffic = rows.find((r) => r.name === '交通Q');
+      // 只算 2026-06 的 80，2019 那笔被排除
+      expect(traffic?.expense).toBe('80.00');
+    });
+
+    it('summary 按分类分组：categoryIds 生效，且传一级会连带其下二级', async () => {
+      // 传一级「餐饮Q」→ 其下二级「午餐Q」的 30.00 也要命中
+      const rows = await transactionService.summary(qUserId, {
+        groupBy: 'category',
+        level: 1,
+        categoryIds: catFood,
+      } as any);
+      expect(rows.map((r) => r.name)).toEqual(['餐饮Q']);
+      expect(rows[0].expense).toBe('30.00');
     });
   });
 });

@@ -60,10 +60,6 @@ async function openFilterPanel() {
   await page.waitForTimeout(900);
 }
 
-/** 元素是否存在（不等待）—— 给"失败后仍要继续"的路径用 */
-async function exists(sel) {
-  return await page.evaluate(function(s){ return !!document.querySelector(s); }, sel);
-}
 // 读筛选面板里「类型」行的右侧文案
 async function typeRowText() {
   return await page.evaluate(function(){

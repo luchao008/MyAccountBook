@@ -23,6 +23,21 @@
         </view>
 
         <!--
+          分类：**多选弹层**（参考图形态），点开 FlowCategoryPicker。
+          ⚠️ 与流水类型同一套语义：**空数组 = 不过滤**，显示「全部」。
+          ⚠️ 与底栏的「分类」分组维度**不冲突** —— 那里是"换个方式组织"，
+             这里是"过滤掉一部分"（用户已确认两者共存）。
+        -->
+        <view class="row" @click="emit('pick-category-filter')">
+          <SvgIcon class="row-icon" name="icon-tag" :size="18" />
+          <text class="row-label">分类</text>
+          <view class="row-main">
+            <text class="row-value">{{ categoryLabel }}</text>
+          </view>
+          <SvgIcon class="row-arrow" name="icon-chevron-right" :size="16" />
+        </view>
+
+        <!--
           流水类型：**多选弹层**（参考图形态），点开 FlowTypePicker。
           ⚠️ 全选 / 全不选都视为「不过滤」，所以全选时右侧不显示具体类型名，
              而是回落到「全部」—— 如实反映"当前没有按类型过滤"。
@@ -97,6 +112,7 @@
  */
 import { reactive, computed, watch } from 'vue';
 import SvgIcon from '@/components/SvgIcon.vue';
+import { useCategoryStore } from '@/store/category';
 
 export interface FlowFilter {
   /** YYYY-MM-DD，空串表示不限 */
@@ -109,6 +125,11 @@ export interface FlowFilter {
    * 全不选若真返回空集，用户会以为"账本没数据"，而实际是筛掉了自己。
    */
   types: string[];
+  /**
+   * 分类多选。**空数组 = 不过滤**（与 types 同口径）。
+   * 元素可能是"一级分类 id"（后端会连带其下全部二级）或"二级分类 id"。
+   */
+  categoryIds: string[];
   minAmount: string;
   maxAmount: string;
   keyword: string;
@@ -124,6 +145,7 @@ const emit = defineEmits<{
   (e: 'apply', value: FlowFilter): void;
   (e: 'pick-time'): void;
   (e: 'pick-type'): void;
+  (e: 'pick-category-filter'): void;
 }>();
 
 /** 草稿：改完点「确定」才生效，中途关闭不污染已应用的筛选 */
@@ -150,14 +172,21 @@ watch(
  *    将来再加叠层子弹层时，**把它的字段也加到这里**，别指望 watch(visible)。
  */
 watch(
-  () => [props.model.timeLabel, props.model.start, props.model.end, props.model.types],
+  () => [
+    props.model.timeLabel,
+    props.model.start,
+    props.model.end,
+    props.model.types,
+    props.model.categoryIds,
+  ],
   () => {
     draft.timeLabel = props.model.timeLabel;
     draft.start = props.model.start;
     draft.end = props.model.end;
-    // 数组要换新引用：直接赋同一个引用时，父级用 filterModel.types = [...] 换掉的
-    // 是新数组，这里同步没问题；但若父级原地 push/splice，同一引用会导致 watch 判不出变化。
+    // 数组要换新引用：父级用 filterModel.types = [...] 换掉的是新数组，
+    // 这里同步没问题；但若父级原地 push/splice，同一引用会让 watch 判不出变化。
     draft.types = [...(props.model.types || [])];
+    draft.categoryIds = [...(props.model.categoryIds || [])];
   },
   { deep: true }
 );
@@ -180,6 +209,35 @@ const typeLabel = computed(() => {
   const sel = draft.types || [];
   if (!sel.length || sel.length >= TYPE_VALUES.length) return '全部';
   return sel.map((v) => TYPE_LABELS[v] || v).join('、');
+});
+
+/** 分类 store：把 id 翻译成名字，以及判断"一级 / 二级" */
+const categoryStore = useCategoryStore();
+
+/**
+ * 分类行的展示文案。
+ * ⚠️ N 按**"用户视角的大类数"**算，不是选中的节点数：
+ *    勾一级「食品酒水」（连带 8 个二级 = 9 个节点）显示的是「食品酒水」；
+ *    只散勾 3 个二级则显示「已选 3 项」（这 3 个可能分属不同大类）。
+ *    做法：把每个选中 id 归到它所属的一级，再去重计数。
+ */
+const categoryLabel = computed(() => {
+  const sel = draft.categoryIds || [];
+  if (!sel.length) return '全部';
+  if (sel.length === 1) {
+    const one = sel[0];
+    const item = categoryStore.byId(one);
+    if (!item) return '全部';
+    // 选二级 → "一级 / 二级"；选一级 → 只显示一级名
+    return categoryStore.fullNameOf(one);
+  }
+  const roots = new Set<string>();
+  for (const id of sel) {
+    const item = categoryStore.byId(id);
+    if (!item) continue;
+    roots.add(item.parentId || item.id);
+  }
+  return `已选 ${roots.size} 项`;
 });
 
 /**
@@ -218,8 +276,9 @@ function reset() {
   draft.minAmount = '';
   draft.maxAmount = '';
   draft.keyword = '';
-  // 「重置」= 回到什么都没筛，类型一并复位为全选（用户确认）
+  // 「重置」= 回到什么都没筛，类型一并复位为全选、分类复位为"不过滤"（用户确认）
   draft.types = [...TYPE_VALUES];
+  draft.categoryIds = [];
 }
 
 function confirm() {
