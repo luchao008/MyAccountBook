@@ -176,6 +176,52 @@ if (tip) {
   check('分类行回到「全部」（跳过）', false);
 }
 
-console.log('\n结果：PASS='+pass+' FAIL='+fail);
+console.log('[7] 布局：滚动区有确定高度 + 「确定」按钮不被覆盖');
+await clickByText('.row .row-label', '分类');
+await page.waitForTimeout(1000);
+var layout = await page.evaluate(function(){
+  /*
+   * ⚠️ 必须**限定在最后一个 .sheet 内**：筛选面板与分类弹层用了同一套类名
+   *    （.sheet / .body / .btn-confirm），而筛选面板在 DOM 中更靠前 ——
+   *    直接 querySelector('.body') 会量到筛选面板（实测 childCount=5 而不是 88）。
+   */
+  var sheets = document.querySelectorAll('.sheet');
+  var sheet = sheets[sheets.length - 1];
+  if (!sheet) return null;
+  var body = sheet.querySelector('.body');
+  var btn = sheet.querySelector('.btn-confirm');
+  if (!body || !btn) return null;
+  var br = body.getBoundingClientRect();
+  var tr = btn.getBoundingClientRect();
+  var sr = sheet.getBoundingClientRect();
+  var content = body.querySelector('.uni-scroll-view-content') || body;
+  return {
+    bodyH: Math.round(br.height),
+    bodyBottom: Math.round(br.bottom),
+    bodyScrollH: content.scrollHeight,
+    bodyChildCount: content.children.length,
+    btnTop: Math.round(tr.top),
+    btnBottom: Math.round(tr.bottom),
+    sheetBottom: Math.round(sr.bottom),
+    vh: window.innerHeight,
+  };
+});
+check('滚动区存在且高度确定（>0）', !!layout && layout.bodyH > 0, JSON.stringify(layout));
+check('量的是分类弹层（88 行），不是筛选面板',
+  !!layout && layout.bodyChildCount === 88,
+  layout ? ('childCount=' + layout.bodyChildCount) : 'n/a');
+check('滚动内容确实可滚（scrollHeight > clientHeight）',
+  !!layout && layout.bodyScrollH > layout.bodyH,
+  layout ? (layout.bodyScrollH + ' > ' + layout.bodyH) : 'n/a');
+check('「确定」按钮完整可见（不超出 sheet 也不超出视口）',
+  !!layout && layout.btnBottom <= Math.min(layout.sheetBottom, layout.vh) + 1,
+  layout ? ('btnBottom=' + layout.btnBottom + ' sheetBottom=' + layout.sheetBottom + ' vh=' + layout.vh) : 'n/a');
+check('滚动区底部不越过「确定」按钮顶部（用户报的穿透）',
+  !!layout && layout.bodyBottom <= layout.btnTop + 1,
+  layout ? ('bodyBottom=' + layout.bodyBottom + ' btnTop=' + layout.btnTop) : 'n/a');
+await page.screenshot({ path: '/tmp/cat-picker-layout.png' });
+
+console.log('\\n结果：PASS='+pass+' FAIL='+fail);
 await browser.close();
 process.exit(fail ? 1 : 0);
+

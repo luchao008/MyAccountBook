@@ -9,7 +9,13 @@
         </view>
       </view>
 
-      <scroll-view class="body" scroll-y>
+      <!--
+        高度**由 JS 算出**（见 bodyHeight），不依赖 flex 推导。
+        ⚠️ uni-app 的 scroll-view 不吃 flex：`flex:1 + min-height:0` 会按内容撑开，
+           溢出并**盖住底部「确定」按钮**（用户实测报过）；`flex:1 + height:0` 会把
+           footer 挤出容器。项目里时间弹层踩过同样三轮，最终都是 JS 算高度。
+      -->
+      <scroll-view class="body" scroll-y :style="{ height: bodyHeight + 'px' }">
         <template v-for="root in roots" :key="root.id">
           <!-- 一级：点整行 = 勾选/取消（连带其下全部二级）；点箭头 = 折叠 -->
           <view class="row" @click="toggleRoot(root)">
@@ -92,6 +98,30 @@ const emit = defineEmits<{
 
 const categoryStore = useCategoryStore();
 const draft = ref<string[]>([]);
+
+/** 视口高度（uni-app 下 scroll-view 需要确定高度，不能靠 flex 推导） */
+const windowHeight = ref(812);
+try {
+  const info = uni.getSystemInfoSync();
+  windowHeight.value = info.windowHeight || 812;
+} catch {
+  windowHeight.value = 812;
+}
+
+/**
+ * 列表区高度**由 JS 算出**。
+ *
+ * ⚠️ **不要让 scroll-view 走 flex**（项目已踩三轮）：
+ *    `flex: 1; min-height: 0` → 它按内容撑开，溢出并**盖住底部「确定」**（用户实测报过）；
+ *    `flex: 1; height: 0` → footer 被挤出容器。
+ *    取值 = 视口高 × 72%（与 .sheet 的 max-height 一致）− header − footer。
+ *    header ≈ 44（按钮高）+ 16×2（padding）= 76；footer 同理 = 76，合计 152。
+ *    下限 160 保证极端窄屏下仍能滚动。
+ */
+const bodyHeight = computed(() => {
+  const vh = windowHeight.value || 812;
+  return Math.max(160, Math.round(vh * 0.72) - 152);
+});
 
 /** 折叠状态：记"被折叠的"，未记录 = 展开（默认全展开，新分类也自动展开） */
 const collapsed = ref<Set<string>>(new Set());
@@ -240,6 +270,10 @@ function close() {
   border-radius: $radius-lg $radius-lg 0 0;
   display: flex;
   flex-direction: column;
+  /* ⚠️ 不能省：只写 max-height 时它**约束不住 flex 子项**，
+     内容超长会直接溢出（footer 落到屏幕外 / 内容盖住按钮并拦截点击）。
+     加上它 max-height 才真正生效，配合 JS 算出的 body 高度让中间区滚动。 */
+  overflow: hidden;
 }
 
 .header {
@@ -281,9 +315,9 @@ function close() {
   color: $brand-700;
 }
 
+/* 高度由 JS 算出（模板上的 :style），这里只负责不参与 flex 拉伸 */
 .body {
-  flex: 1;
-  min-height: 0;
+  flex: none;
 }
 
 .row {

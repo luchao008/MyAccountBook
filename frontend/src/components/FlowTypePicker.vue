@@ -9,7 +9,14 @@
         </view>
       </view>
 
-      <scroll-view class="body" scroll-y>
+      <!--
+        高度**由 JS 算出**（见 bodyHeight），不依赖 flex 推导。
+        ⚠️ uni-app 的 scroll-view 不吃 flex：`flex:1 + min-height:0` 会按内容撑开，
+           溢出并**盖住底部「确定」**；`flex:1 + height:0` 会把 footer 挤出容器。
+           本项目时间弹层踩过同样三轮，最终都是 JS 算高度。
+           本弹层目前只有 2 项、看起来正常，但选项一多就会复现，故一并修。
+      -->
+      <scroll-view class="body" scroll-y :style="{ height: bodyHeight + 'px' }">
         <view v-for="opt in options" :key="opt.value" class="row" @click="toggle(opt.value)">
           <text class="row-label">{{ opt.label }}</text>
           <view class="checkbox" :class="{ checked: draft.includes(opt.value) }">
@@ -39,7 +46,7 @@
  * ⚠️ **全选与全不选都视为「不过滤」**（用户确认）：全不选若真的返回空集，
  *    用户会以为"账本没数据"，而实际是筛掉了自己 —— 与"取消筛选"的直觉不符。
  */
-import { reactive, computed, watch } from 'vue';
+import { ref, reactive, computed, watch } from 'vue';
 import SvgIcon from '@/components/SvgIcon.vue';
 
 export interface FlowTypeOption {
@@ -52,6 +59,25 @@ const options: FlowTypeOption[] = [
   { value: 'expense', label: '支出' },
   { value: 'income', label: '收入' },
 ];
+
+/** 视口高度（uni-app 下 scroll-view 需要确定高度，不能靠 flex 推导） */
+const windowHeight = ref(812);
+try {
+  const info = uni.getSystemInfoSync();
+  windowHeight.value = info.windowHeight || 812;
+} catch {
+  windowHeight.value = 812;
+}
+
+/**
+ * 列表区高度**由 JS 算出**。
+ * 取值 = 视口高 × 72%（与 .sheet 的 max-height 一致）− header − footer。
+ * header / footer 各 = 44（按钮高）+ 16×2（padding）= 76，合计 152；下限 160。
+ */
+const bodyHeight = computed(() => {
+  const vh = windowHeight.value || 812;
+  return Math.max(160, Math.round(vh * 0.72) - 152);
+});
 
 const props = defineProps<{
   visible: boolean;
@@ -117,6 +143,9 @@ function close() {
   border-radius: $radius-lg $radius-lg 0 0;
   display: flex;
   flex-direction: column;
+  /* ⚠️ 不能省：只写 max-height 时它**约束不住 flex 子项**，内容超长会溢出
+     （footer 落到屏幕外 / 内容盖住按钮并拦截点击）。 */
+  overflow: hidden;
 }
 
 .header {
@@ -159,9 +188,9 @@ function close() {
   color: $brand-700;
 }
 
+/* 高度由 JS 算出（模板上的 :style），这里只负责不参与 flex 拉伸 */
 .body {
-  flex: 1;
-  min-height: 0;
+  flex: none;
 }
 
 .row {
