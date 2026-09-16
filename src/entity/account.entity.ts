@@ -15,8 +15,9 @@ import { User } from './user.entity';
  * 设计要点：
  *   - 账本从属于用户，用户名下账本名唯一（uk_user_account_name）
  *   - isDefault 标记"默认账本"：注册时自动建一个，切换账本时作为兜底
- *   - 多账本只影响交易的归属，**分类仍是用户级共享**（与随手记一致，
- *     分类属于记账习惯而非某个账本）
+ *   - **分类自 2026-09-16 起改为账本级隔离**：每个账本拥有独立的一套分类
+ *     （见 docs/账本级分类设计文档.md）。本注释所在代码尚未实现该变更，
+ *     实现时须同步删除本条旧说明。
  */
 @Entity('accounts')
 @Index('uk_user_account_name', ['userId', 'name'], { unique: true })
