@@ -189,7 +189,7 @@ onShow(async () => {
    ============================================================ */
 .page {
   min-height: $page-min-height;
-  background: $bg-canvas;
+  background: $v11-bg-page;
   display: flex;
   flex-direction: column;
 }
@@ -215,7 +215,7 @@ onShow(async () => {
 .tip {
   text-align: center;
   padding: $space-8 0;
-  color: $text-secondary;
+  color: $v11-text-secondary;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
 }
@@ -229,24 +229,24 @@ onShow(async () => {
 }
 
 .state-icon {
-  color: $text-disabled;
+  color: $v11-text-disabled;
 }
 
 .state-text {
   margin-top: $space-3;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .retry-btn {
   margin-top: $space-4;
   padding: $space-2 $space-5;
-  border: 1px solid $brand-700;
-  border-radius: $radius-md;
+  border: 1px solid $v11-gold;
+  border-radius: $v11-radius-btn;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $brand-700;
+  color: $v11-gold;
 }
 
 /* ── 账本行 ── */
@@ -255,26 +255,26 @@ onShow(async () => {
   align-items: center;
   min-height: 64px;
   padding: $space-3 $space-4;
-  background: $bg-canvas;
-  border-bottom: 1px solid $line;
+  background: $v11-bg-page;
+  border-bottom: 1px solid $v11-line;
 }
 
 /* 选中态：底色 + 左侧竖条 + 右侧对勾（形状/底色/图标三处同时变化，不依赖单一颜色） */
 .account-item.selected {
-  background: $brand-50;
-  box-shadow: inset 3px 0 0 $brand-600;
+  background: $v11-gold-soft;
+  box-shadow: inset 3px 0 0 $v11-gold;
 }
 
 .item-icon {
   width: 40px;
   height: 40px;
   border-radius: $radius-md;
-  background: $bg-sunken;
+  background: $v11-bg-inset;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .item-main {
@@ -294,7 +294,7 @@ onShow(async () => {
 .item-name {
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
   font-weight: $weight-medium;
   @include text-safe;
 }
@@ -313,14 +313,14 @@ onShow(async () => {
 .item-meta {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   margin-top: 2px;
 }
 
 .item-check {
   flex-shrink: 0;
   margin-left: $space-2;
-  color: $brand-700;
+  color: $v11-gold;
 }
 
 /* ── 管理入口 ── */
@@ -331,9 +331,9 @@ onShow(async () => {
   gap: $space-1;
   margin: $space-4 $space-4 0;
   padding: $space-3 0;
-  border: 1px solid $line-strong;
+  border: 1px solid $v11-line-strong;
   border-radius: $radius-md;
-  color: $brand-700;
+  color: $v11-gold;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
 }

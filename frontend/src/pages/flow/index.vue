@@ -6,8 +6,12 @@
       结构上 nav 与 hero 合成**同一块渐变容器**，而不是"白色 nav + 下方渐变 hero"两块：
       融合后渐变从**屏幕最顶端（状态栏之上）**开始，视觉上是一个整体。
 
-      代价与对策：nav 里的图标/文字原先压白底用的是深墨色，现在压在深橙渐变上，
-      必须全部改白（`$text-inverse`）。实测白字压 `$gradient-banner` 最浅端 4.52:1 ✅。
+      v1.1 变更：渐变由「深橙」改为「浅金」($v11-hero-gradient #FDF6EF → #FBF0E4)，
+      因此 nav / hero 里的前景色**必须同时由白字改回深金字** ($v11-hero-ink #8F5312) ——
+      白字压在浅金上只有 1.07:1，等于完全消失。
+      ⚠️ 实测 $v11-hero-ink 压渐变最浅端 5.74:1 / 最暗端 5.47:1，两端都达标。
+      ⚠️ 通用教训：**换背景色时，前景色不能靠"看起来还行"来判断** ——
+         这类错误不报错、不警告，只有肉眼看图才会发现。
     -->
     <view class="header" :style="{ paddingTop: navHeight + 'px' }">
       <view class="nav" :class="{ solid: navSolid }" :style="{ paddingTop: statusBarHeight + 'px' }">
@@ -1209,7 +1213,7 @@ onMounted(async () => {
 <style scoped lang="scss">
 .page {
   min-height: $page-min-height;
-  background: $bg-canvas;
+  background: $v11-bg-page;
   /* 底部筛选栏是 fixed，留出高度避免遮住最后一组 */
   padding-bottom: calc(52px + env(safe-area-inset-bottom));
 }
@@ -1224,7 +1228,7 @@ onMounted(async () => {
  * 渐变背景仍覆盖整块（含状态栏与顶栏区域），视觉上 nav 与 hero 依旧是"一块"。
  */
 .header {
-  background: $gradient-banner;
+  background: $v11-hero-gradient;
 }
 
 /*
@@ -1243,18 +1247,23 @@ onMounted(async () => {
     box-shadow 0.2s ease;
 }
 
-/* 吸顶后的实心态：白底 + 发丝下边线，图标与文字转为深墨 */
+/*
+ * 吸顶态：iOS 毛玻璃材质（与 TabBar 用同一个 mixin，含 @supports 降级）。
+ * 内容会从导航栏下穿过 —— 这正是「像个 iOS 应用」最直接的来源。
+ * ⚠️ 下面 .nav.solid 的深字规则是**必需的**：nav 从浅金渐变滚到 #F8F8F8 之后，
+ *    深金字仍然达标，所以这里不改色；但换成实色底后若还留着浅色字就会失读。
+ */
 .nav.solid {
-  background: $bg-canvas;
-  box-shadow: 0 1px 0 $line;
+  @include ios-material;
+  box-shadow: 0 1px 0 $v11-line;
 }
 
 .nav.solid .nav-btn {
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .nav.solid .nav-title {
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .nav-inner {
@@ -1264,14 +1273,15 @@ onMounted(async () => {
   padding: 0 $space-2;
 }
 
-/* 压在深橙渐变上，图标改白（白压 $gradient-banner 最浅端 4.52:1 ✅） */
+/* 压在浅金渐变上 → 用深金字（$v11-hero-ink 压最浅端 5.74:1 ✅）。
+   ⚠️ 不要用 $text-inverse —— 白字压浅金只有 1.07:1，图标会整个消失。 */
 .nav-btn {
   width: $touch-target-min;
   height: $touch-target-min;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-inverse;
+  color: $v11-hero-ink;
 }
 
 .nav-title {
@@ -1280,7 +1290,7 @@ onMounted(async () => {
   font-size: $font-h2;
   line-height: $lh-h2;
   font-weight: $weight-semibold;
-  color: $text-inverse;
+  color: $v11-hero-ink;
 }
 
 .nav-actions {
@@ -1296,7 +1306,7 @@ onMounted(async () => {
   position: fixed;
   inset: 0;
   z-index: 300;
-  background: $bg-canvas;
+  background: $v11-bg-page;
   display: flex;
   flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom);
@@ -1306,7 +1316,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   padding: $space-2 $space-3 0;
-  background: $bg-canvas;
+  background: $v11-bg-page;
 }
 
 .search-box {
@@ -1315,12 +1325,12 @@ onMounted(async () => {
   align-items: center;
   height: 36px;
   padding: 0 $space-3;
-  background: $bg-sunken;
+  background: $v11-bg-inset;
   border-radius: $radius-pill;
 }
 
 .search-box-icon {
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   margin-right: $space-2;
   flex-shrink: 0;
 }
@@ -1329,7 +1339,7 @@ onMounted(async () => {
   flex: 1;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .search-box-clear {
@@ -1338,7 +1348,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   flex-shrink: 0;
 }
 
@@ -1353,7 +1363,7 @@ onMounted(async () => {
 .search-cancel-text {
   font-size: $font-body;
   line-height: $lh-body;
-  color: $brand-700;
+  color: $v11-gold;
 }
 
 /* 结果概览：标题 + 该次搜索的收支合计 */
@@ -1362,14 +1372,14 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: $space-4 $space-4 $space-3;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 .search-summary-title {
   font-size: $font-h1;
   line-height: $lh-h1;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .search-summary-right {
@@ -1388,7 +1398,7 @@ onMounted(async () => {
 .search-summary-key {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   margin-left: $space-2;
 }
 
@@ -1402,7 +1412,7 @@ onMounted(async () => {
 
 .search-summary-sep {
   margin: 0 $space-1;
-  color: $text-disabled;
+  color: $v11-text-disabled;
   font-size: $font-caption;
   line-height: $lh-caption;
 }
@@ -1415,7 +1425,7 @@ onMounted(async () => {
 
 /* 搜索结果的明细行与主列表同款，只是不需要分组缩进 */
 .search-txn {
-  background: $bg-canvas;
+  background: $v11-bg-page;
 }
 
 /* ── 结余区（与 nav 同处一块渐变，故自身背景透明）── */
@@ -1440,7 +1450,7 @@ onMounted(async () => {
   font-size: $font-display;
   line-height: $lh-display;
   font-weight: $weight-semibold;
-  color: $text-inverse;
+  color: $v11-hero-ink;
   @include text-safe;
 }
 
@@ -1448,7 +1458,7 @@ onMounted(async () => {
   margin-left: $space-2;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-inverse;
+  color: $v11-hero-ink;
 }
 
 .hero-io {
@@ -1461,12 +1471,13 @@ onMounted(async () => {
   @include tabular-nums;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-inverse;
+  color: $v11-hero-ink;
 }
 
+/* 分隔符是装饰：用主色金的半透明，比正文再弱一档但仍有形状 */
 .hero-io-sep {
   margin: 0 $space-2;
-  color: $text-inverse;
+  color: rgba(143, 83, 18, 0.45);
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
 }
@@ -1477,14 +1488,14 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: $space-3 $space-4;
-  background: $bg-subtle;
-  border-bottom: 1px solid $line;
+  background: $v11-bg-inset;
+  border-bottom: 1px solid $v11-line;
 }
 
 .filter-tip-text {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-secondary;
+  color: $v11-text-secondary;
   @include text-safe;
 }
 
@@ -1494,13 +1505,13 @@ onMounted(async () => {
   gap: $space-1;
   flex-shrink: 0;
   margin-left: $space-2;
-  color: $brand-700;
+  color: $v11-gold;
 }
 
 .filter-tip-action-text {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $brand-700;
+  color: $v11-gold;
 }
 
 /* ── 筛选条件摘要弹层 ── */
@@ -1515,7 +1526,7 @@ onMounted(async () => {
 }
 
 .summary-icon {
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   margin-right: $space-3;
   flex-shrink: 0;
 }
@@ -1523,7 +1534,7 @@ onMounted(async () => {
 .summary-label {
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
   flex-shrink: 0;
 }
 
@@ -1532,7 +1543,7 @@ onMounted(async () => {
   text-align: right;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-secondary;
+  color: $v11-text-secondary;
   @include text-safe;
 }
 
@@ -1552,11 +1563,11 @@ onMounted(async () => {
 }
 
 .summary-btn-ghost {
-  background: $brand-50;
+  background: $v11-gold-soft;
 }
 
 .summary-btn-solid {
-  background: $brand-600;
+  background: $v11-gold;
 }
 
 .summary-btn-text {
@@ -1566,7 +1577,7 @@ onMounted(async () => {
 }
 
 .ghost-text {
-  color: $brand-700;
+  color: $v11-gold;
 }
 
 .solid-text {
@@ -1584,13 +1595,13 @@ onMounted(async () => {
 .state-text {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 /* ── 分组 ── */
 .group {
-  background: $bg-canvas;
-  border-bottom: 1px solid $line;
+  background: $v11-bg-page;
+  border-bottom: 1px solid $v11-line;
 }
 
 /*
@@ -1606,8 +1617,8 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   padding: $space-3 $space-4;
-  background: $bg-canvas;
-  border-bottom: 1px solid $line;
+  background: $v11-bg-page;
+  border-bottom: 1px solid $v11-line;
 }
 
 .group-title-wrap {
@@ -1620,13 +1631,13 @@ onMounted(async () => {
   font-size: $font-h1;
   line-height: $lh-h1;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .group-sub {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .group-right {
@@ -1652,7 +1663,7 @@ onMounted(async () => {
 .group-key {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   margin-left: $space-2;
 }
 
@@ -1665,20 +1676,20 @@ onMounted(async () => {
 
 .group-sep {
   margin: 0 $space-1;
-  color: $text-disabled;
+  color: $v11-text-disabled;
   font-size: $font-caption;
   line-height: $lh-caption;
 }
 
 .group-arrow {
   margin-left: $space-2;
-  color: $text-disabled;
+  color: $v11-text-disabled;
   flex-shrink: 0;
 }
 
 /* ── 明细 ── */
 .group-body {
-  background: $bg-canvas;
+  background: $v11-bg-page;
 }
 
 .detail-loading {
@@ -1688,20 +1699,20 @@ onMounted(async () => {
 
 .day-head {
   padding: $space-2 $space-4;
-  background: $bg-subtle;
+  background: $v11-bg-inset;
 }
 
 .day-head-text {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .txn {
   display: flex;
   align-items: center;
   padding: $space-3 $space-4;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 .txn-icon {
@@ -1719,7 +1730,7 @@ onMounted(async () => {
 .txn-name {
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
   @include text-safe;
 }
 
@@ -1727,7 +1738,7 @@ onMounted(async () => {
   margin-top: 2px;
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   @include text-safe;
 }
 
@@ -1745,7 +1756,7 @@ onMounted(async () => {
 }
 
 .expense {
-  color: $expense;
+  color: $v11-teal-amount;
 }
 
 /* ── 底部筛选栏 ── */
@@ -1761,8 +1772,8 @@ onMounted(async () => {
   bottom: 0;
   z-index: 100;
   display: flex;
-  background: $bg-canvas;
-  border-top: 1px solid $line;
+  background: $v11-bg-page;
+  border-top: 1px solid $v11-line;
   height: 48px;
   height: calc(48px + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -1774,11 +1785,11 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   gap: $space-1;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .filter-item.active {
-  color: $brand-700;
+  color: $v11-gold;
 }
 
 .filter-text {
@@ -1838,8 +1849,8 @@ onMounted(async () => {
 .sheet {
   width: 100%;
   max-height: 72vh;
-  background: $bg-card;
-  border-radius: $radius-lg $radius-lg 0 0;
+  background: $v11-bg-card;
+  border-radius: $v11-radius-sheet-top $v11-radius-sheet-top 0 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1874,7 +1885,7 @@ onMounted(async () => {
   font-size: $font-h2;
   line-height: $lh-h2;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .sheet-sub {
@@ -1882,7 +1893,7 @@ onMounted(async () => {
   margin-top: $space-1;
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .sheet-item {
@@ -1890,7 +1901,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-top: 1px solid $line;
+  border-top: 1px solid $v11-line;
 }
 
 .sheet-item-row {
@@ -1901,16 +1912,16 @@ onMounted(async () => {
 .sheet-item-text {
   font-size: $font-body-lg;
   line-height: $lh-body-lg;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .sheet-item-active {
-  color: $brand-700;
+  color: $v11-gold;
   font-weight: $weight-medium;
 }
 
 .sheet-check {
-  color: $brand-700;
+  color: $v11-gold;
 }
 
 .sheet-cancel {
@@ -1931,14 +1942,14 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .sheet-header-title {
   font-size: $font-h2;
   line-height: $lh-h2;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 /* ── 自定义区间（参考图形态）──
@@ -1957,7 +1968,7 @@ onMounted(async () => {
 }
 
 .btn-confirm {
-  background: $brand-600;
+  background: $v11-gold;
 }
 
 .btn-text {
@@ -1975,8 +1986,8 @@ onMounted(async () => {
   .page {
     max-width: 480px;
     margin: 0 auto;
-    border-left: 1px solid $line;
-    border-right: 1px solid $line;
+    border-left: 1px solid $v11-line;
+    border-right: 1px solid $v11-line;
   }
   .filter-bar {
     max-width: 480px;

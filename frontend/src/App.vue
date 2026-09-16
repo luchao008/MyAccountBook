@@ -10,8 +10,8 @@ onLaunch(() => {
 /* 全局样式（不加 scoped，作用于所有页面） */
 
 page {
-  background-color: $bg-page;
-  color: $text-primary;
+  background-color: $v11-bg-page;
+  color: $v11-text-primary;
   font-size: $font-body;
   // 基准行高必须显式声明：各端默认值不一致（浏览器约 1.2，小程序继承行为又有差异），
   // 不写就等于把正文行距交给渲染引擎抽签。这里也用不上「继承默认值」那套。
@@ -36,7 +36,7 @@ button::after {
 
 /* 输入框占位符颜色统一 */
 input::-webkit-input-placeholder {
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 /* 键盘焦点环（WCAG 2.4.7）。
@@ -51,7 +51,7 @@ input::-webkit-input-placeholder {
    这是独立的一轮工作，本阶段只保证「本来就该亮的地方能亮，且没有任何地方把焦点环一刀切掉」。
    详见 docs/移动端配色与字体方案.md §7.3。 */
 :focus-visible {
-  outline: $focus-ring;
+  outline: $v11-focus-ring;
   outline-offset: $focus-ring-offset;
 }
 

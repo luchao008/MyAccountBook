@@ -284,8 +284,8 @@ function close() {
 .sheet {
   width: 100%;
   max-height: 72vh;
-  background: $bg-card;
-  border-radius: $radius-lg $radius-lg 0 0;
+  background: $v11-bg-card;
+  border-radius: $v11-radius-sheet-top $v11-radius-sheet-top 0 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -310,14 +310,14 @@ function close() {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .sheet-header-title {
   font-size: $font-h2;
   line-height: $lh-h2;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .sheet-item {
@@ -325,7 +325,7 @@ function close() {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-top: 1px solid $line;
+  border-top: 1px solid $v11-line;
 }
 
 .sheet-item-row {
@@ -336,20 +336,20 @@ function close() {
 .sheet-item-text {
   font-size: $font-body-lg;
   line-height: $lh-body-lg;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .sheet-item-active {
-  color: $brand-700;
+  color: $v11-gold;
   font-weight: $weight-medium;
 }
 
 .sheet-check {
-  color: $brand-700;
+  color: $v11-gold;
 }
 
 .range-panel {
-  border-top: 1px solid $line;
+  border-top: 1px solid $v11-line;
   padding: $space-3 0 0;
 }
 
@@ -368,19 +368,19 @@ function close() {
 .range-tab-label {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .range-tab-value {
   margin-top: $space-1;
   font-size: $font-body-lg;
   line-height: $lh-body-lg;
-  color: $text-primary;
+  color: $v11-text-primary;
   @include tabular-nums;
 }
 
 .range-tab-value.active {
-  color: $brand-700;
+  color: $v11-gold;
   font-weight: $weight-medium;
 }
 
@@ -388,7 +388,7 @@ function close() {
   margin-top: $space-2;
   height: 2px;
   width: 100%;
-  background: $brand-600;
+  background: $v11-gold;
   border-radius: $radius-pill;
 }
 
@@ -396,7 +396,7 @@ function close() {
   margin: $space-5 $space-2 0;
   font-size: $font-body-lg;
   line-height: $lh-body-lg;
-  color: $text-disabled;
+  color: $v11-text-disabled;
 }
 
 .range-wheel {
@@ -409,7 +409,7 @@ function close() {
   justify-content: center;
   font-size: $font-h1;
   line-height: $lh-h1;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .sheet-footer {
@@ -427,7 +427,7 @@ function close() {
 
 .btn-confirm {
   flex: 1;
-  background: $brand-600;
+  background: $v11-gold;
 }
 
 .btn-text {

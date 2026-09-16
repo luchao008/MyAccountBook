@@ -154,14 +154,14 @@ watch(
 <style scoped lang="scss">
 .body {
   /* 高度由调用方通过 :style 传入 */
-  background: $bg-card;
+  background: $v11-bg-card;
 }
 
 .row {
   display: flex;
   align-items: center;
   padding: 14px 16px;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 .row-child {
   padding-left: 44px;
@@ -180,7 +180,7 @@ watch(
   min-width: 0;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .checkbox {
@@ -194,12 +194,12 @@ watch(
   justify-content: center;
 }
 .checkbox.checked {
-  background: $brand-600;
-  border-color: $brand-600;
+  background: $v11-gold;
+  border-color: $v11-gold;
 }
 .checkbox.indeterminate {
-  background: $brand-600;
-  border-color: $brand-600;
+  background: $v11-gold;
+  border-color: $v11-gold;
 }
 .checkbox-dash {
   width: 10px;

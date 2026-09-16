@@ -1,7 +1,9 @@
 <template>
   <view class="page">
     <view class="header">
-      <!-- 与 favicon 同一套视觉（品牌橙圆角方块 + 白 ¥），源文件 static/logo.svg -->
+      <!-- 与 favicon 同一套视觉（v1.1 主色金圆角方块 #A85F12 + 白 ¥），源文件 static/logo.svg
+           ⚠️ 这里用的是生成产物 logo.png，不是 SVG。改 logo.svg 后必须重跑
+              `node scripts/gen-logo.mjs`，否则页面显示的仍是旧颜色。 -->
       <image class="logo" src="/static/logo.png" mode="widthFix" />
       <text class="title">记账本</text>
       <text class="subtitle">简单记录每一笔收支</text>
@@ -85,7 +87,7 @@ async function submit() {
 <style scoped lang="scss">
 .page {
   min-height: $page-min-height;
-  background: linear-gradient(180deg, $brand-50 0%, $bg-page 40%);
+  background: linear-gradient(180deg, $v11-gold-soft 0%, $v11-bg-page 40%);
   padding: 0 32px;
 }
 
@@ -112,19 +114,19 @@ async function submit() {
   font-size: $font-display;
   line-height: $lh-display;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
   margin-top: 12px;
 }
 
 .subtitle {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-secondary;
+  color: $v11-text-secondary;
   margin-top: 8px;
 }
 
 .form {
-  background: $bg-card;
+  background: $v11-bg-card;
   border-radius: 16px;
   padding: 24px 20px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
@@ -136,7 +138,7 @@ async function submit() {
 
 .submit {
   margin-top: 12px;
-  background: $brand-600;
+  background: $v11-gold;
   color: $text-inverse;
   border-radius: 24px;
   font-size: $font-body-lg;
@@ -169,6 +171,6 @@ async function submit() {
 .tip-text {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 </style>

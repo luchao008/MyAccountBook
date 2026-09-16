@@ -254,15 +254,15 @@ accountStore.load();
 <style scoped lang="scss">
 .page {
   min-height: $page-min-height;
-  background: $bg-page;
+  background: $v11-bg-page;
   display: flex;
   flex-direction: column;
 }
 
 /* ===== 自绘顶栏 ===== */
 .nav {
-  background: $bg-card;
-  border-bottom: 1px solid $line;
+  background: $v11-bg-card;
+  border-bottom: 1px solid $v11-line;
 }
 
 .nav-inner {
@@ -279,31 +279,31 @@ accountStore.load();
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .nav-title {
   font-size: $font-h2;
   line-height: $lh-h2;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 /* ===== 说明条 ===== */
 .tip {
   padding: $space-3 $space-4;
-  background: $bg-subtle;
+  background: $v11-bg-inset;
 }
 
 .tip-text {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 /* ===== 配置行 ===== */
 .rows {
-  background: $bg-card;
+  background: $v11-bg-card;
 }
 
 .row {
@@ -311,7 +311,7 @@ accountStore.load();
   align-items: center;
   min-height: 56px;
   padding: $space-3 $space-4;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 .row:last-child {
@@ -321,14 +321,14 @@ accountStore.load();
 .row-icon {
   flex-shrink: 0;
   margin-right: $space-3;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .row-label {
   flex-shrink: 0;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .row-main {
@@ -342,7 +342,7 @@ accountStore.load();
 .row-value {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-secondary;
+  color: $v11-text-secondary;
   @include text-safe;
 }
 
@@ -350,14 +350,14 @@ accountStore.load();
   margin-top: 2px;
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   @include text-safe;
 }
 
 .row-arrow {
   flex-shrink: 0;
   margin-left: $space-1;
-  color: $text-disabled;
+  color: $v11-text-disabled;
 }
 
 /* ===== 底部导出按钮 ===== */
@@ -373,11 +373,21 @@ accountStore.load();
   align-items: center;
   justify-content: center;
   border-radius: $radius-md;
-  background: $brand-600;
+  background: $v11-gold;
 }
 
+/*
+ * 禁用态：底改 $v11-gold-fill，**文字必须同时换深色** ——
+ * 否则是白字压 #E4AD77 = 1.99:1（禁用态虽豁免 WCAG，但用户连按钮写什么都看不清）。
+ * #8F5312 压 #E4AD77 = 3.09:1，可读性够用。
+ * ⚠️ 这是既有问题：改造前是白字压 #FFE3D6，只有 1.25 —— 比现在更差。
+ */
 .btn-disabled {
-  background: $brand-200;
+  background: $v11-gold-fill;
+}
+
+.btn-disabled .btn-text {
+  color: $v11-gold-pressed;
 }
 
 .btn-text {

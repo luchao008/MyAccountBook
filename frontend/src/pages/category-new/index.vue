@@ -170,7 +170,7 @@ async function save() {
 .page {
   /* 同 icon-picker：flex 容器要固定高度，否则「保存」按钮不会被推到页面底部 */
   height: $page-min-height;
-  background: $bg-canvas;
+  background: $v11-bg-page;
   display: flex;
   flex-direction: column;
 }
@@ -182,7 +182,7 @@ async function save() {
 
 .field {
   padding: $space-3 $space-4;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 .field-row {
@@ -198,14 +198,14 @@ async function save() {
   font-size: $font-caption;
   line-height: $lh-caption;
   /* 压白底 4.51:1 ✅（tertiary 只能用于白底） */
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .label-inline {
   flex: 1;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .level {
@@ -213,7 +213,7 @@ async function save() {
   margin-top: $space-2;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .input-row {
@@ -227,7 +227,7 @@ async function save() {
   min-width: 0;
   font-size: $font-h2;
   line-height: $lh-h2;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .counter {
@@ -235,7 +235,7 @@ async function save() {
   margin-left: $space-3;
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   @include tabular-nums;
 }
 
@@ -244,17 +244,17 @@ async function save() {
   width: 36px;
   height: 36px;
   border-radius: $radius-md;
-  background: $bg-sunken;
+  background: $v11-bg-inset;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .arrow {
   flex: none;
   margin-left: $space-2;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .submit-box {
@@ -268,7 +268,7 @@ async function save() {
   line-height: 48px;
   border-radius: $radius-pill;
   /* 白字压 brand-600 = 4.52:1 ✅ */
-  background: $brand-600;
+  background: $v11-gold;
   color: $text-inverse;
   font-size: $font-body-lg;
 }

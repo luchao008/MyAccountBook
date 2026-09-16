@@ -116,7 +116,7 @@ function shortMoney(v: number): string {
   text-align: center;
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .day-grid {
@@ -146,7 +146,7 @@ function shortMoney(v: number): string {
   align-items: center;
   justify-content: flex-start;
   padding: 4px 1px;
-  background: $brand-50;
+  background: $v11-gold-soft;
 }
 
 /* 无数据的日子不铺底色，避免整屏都是色块 */
@@ -155,18 +155,18 @@ function shortMoney(v: number): string {
 }
 
 .day.today {
-  border: 1.5px solid $brand-600;
+  border: 1.5px solid $v11-gold;
   padding: 2.5px 0.5px;
 }
 
 .day.selected {
-  background: $brand-600;
+  background: $v11-gold;
 }
 
 .day-num {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-primary;
+  color: $v11-text-primary;
   @include tabular-nums;
 }
 
@@ -202,11 +202,11 @@ function shortMoney(v: number): string {
  */
 .day.empty .day-amount,
 .day .day-amount.income {
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .day .day-amount.expense {
-  color: $expense;
+  color: $v11-teal-amount;
 }
 
 .day.selected .day-amount {

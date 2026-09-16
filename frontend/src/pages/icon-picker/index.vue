@@ -98,7 +98,7 @@ function pick(key: string) {
    * 「网格占满剩余空间、Tab 钉在底部」分对。
    */
   height: $page-min-height;
-  background: $bg-canvas;
+  background: $v11-bg-page;
   display: flex;
   flex-direction: column;
 }
@@ -133,20 +133,20 @@ function pick(key: string) {
   align-items: center;
   justify-content: center;
   /* 单色图标（标准 Tab）跟随这个颜色；彩色图标自带颜色，不受影响 */
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .cell.picked .cell-box {
-  background: $brand-50;
-  border-color: $brand-600;
+  background: $v11-gold-soft;
+  border-color: $v11-gold;
 }
 
 /* ── 底部图标集切换 ── */
 .tabs {
   flex: none;
   display: flex;
-  background: $bg-canvas;
-  border-top: 1px solid $line;
+  background: $v11-bg-page;
+  border-top: 1px solid $v11-line;
   padding-bottom: env(safe-area-inset-bottom);
 }
 
@@ -157,7 +157,7 @@ function pick(key: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .tab-text {
@@ -166,7 +166,7 @@ function pick(key: string) {
 }
 
 .tab.active {
-  color: $brand-700;
+  color: $v11-gold;
   font-weight: $weight-medium;
 }
 
@@ -179,6 +179,6 @@ function pick(key: string) {
   width: 24px;
   height: 2px;
   border-radius: 1px;
-  background: $brand-600;
+  background: $v11-gold;
 }
 </style>

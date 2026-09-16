@@ -496,13 +496,13 @@ onMounted(async () => {
 <style scoped lang="scss">
 .page {
   min-height: $page-min-height;
-  background: $bg-canvas;
+  background: $v11-bg-page;
   padding-bottom: calc(80px + env(safe-area-inset-bottom));
 }
 
 /* ── 顶栏（两种形态共用同一套布局，过渡时才显得连续）── */
 .nav {
-  background: $bg-canvas;
+  background: $v11-bg-page;
 }
 
 .nav-inner {
@@ -518,7 +518,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .nav-title-wrap {
@@ -533,11 +533,11 @@ onMounted(async () => {
   font-size: $font-h2;
   line-height: $lh-h2;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .nav-title-arrow {
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .today-btn {
@@ -545,20 +545,20 @@ onMounted(async () => {
   height: 28px;
   display: flex;
   align-items: center;
-  border: 1px solid $brand-600;
+  border: 1px solid $v11-gold;
   border-radius: $radius-pill;
 }
 
 .today-text {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $brand-700;
+  color: $v11-gold;
 }
 
 /* ── 收起态 swiper ── */
 .month-swiper {
   height: 486px;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 .swiper-month {
@@ -573,7 +573,7 @@ onMounted(async () => {
   bottom: 0;
   left: 0;
   z-index: 200;
-  background: $bg-canvas;
+  background: $v11-bg-page;
   display: flex;
   flex-direction: column;
   /*
@@ -597,7 +597,7 @@ onMounted(async () => {
 .week-row {
   display: flex;
   padding: 0 $space-2;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 .week-label {
@@ -605,7 +605,7 @@ onMounted(async () => {
   text-align: center;
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   padding-bottom: $space-1;
 }
 
@@ -632,7 +632,7 @@ onMounted(async () => {
   line-height: 36px;
   font-size: $font-body-lg;
   font-weight: $weight-medium;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 /* ── 当日明细 ── */
@@ -650,14 +650,14 @@ onMounted(async () => {
 .state-text {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .txn {
   display: flex;
   align-items: center;
   padding: $space-3 $space-4;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 .txn-icon {
@@ -675,7 +675,7 @@ onMounted(async () => {
 .txn-name {
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
   @include text-safe;
 }
 
@@ -683,7 +683,7 @@ onMounted(async () => {
   margin-top: 2px;
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   @include text-safe;
 }
 
@@ -701,7 +701,7 @@ onMounted(async () => {
 }
 
 .expense {
-  color: $expense;
+  color: $v11-teal-amount;
 }
 
 /* ── FAB ── */
@@ -712,7 +712,7 @@ onMounted(async () => {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: $brand-600;
+  background: $v11-gold;
   color: $text-inverse;
   display: flex;
   align-items: center;
@@ -721,6 +721,6 @@ onMounted(async () => {
 }
 
 .fab:active {
-  background: $brand-800;
+  background: $v11-gold-pressed;
 }
 </style>

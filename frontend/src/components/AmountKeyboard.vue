@@ -75,7 +75,7 @@ function clear() {
 
    ⚠️ v1.1 只把「线」与「底」两处刻度调淡，**键盘几何一行未动**：
       键高 48、4 列栅格、主操作跨两行 —— 这些是拇指落点的物理尺寸，
-      不随视觉语言变化。改动仅限 $line → $v11-line、$bg-subtle → $v11-bg-inset。
+      不随视觉语言变化。改动仅限 $v11-line → $v11-line、$v11-bg-inset → $v11-bg-inset。
    ============================================================ */
 .keyboard {
   display: grid;
@@ -100,7 +100,7 @@ function clear() {
 
 .key:active {
   /* 按下态：v1.1 用 $v11-bg-inset（#F5F5F5，对白键 1.04:1）——
-     比旧 $bg-subtle 更轻，与新的分隔线刻度同一档 */
+     比旧 $v11-bg-inset 更轻，与新的分隔线刻度同一档 */
   background: $v11-bg-inset;
 }
 

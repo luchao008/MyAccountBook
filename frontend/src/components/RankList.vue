@@ -64,7 +64,14 @@ const visibleRows = computed(() =>
   expanded.value ? props.rows : props.rows.slice(0, props.maxVisible)
 );
 
-/** 进度条颜色：与环形图同一套序列，按行序取色 */
+/**
+ * 进度条颜色：与环形图**同一套序列**，按**行序（名次）**取色。
+ *
+ * ⚠️ 这里的「按下标取色」是**有意的**，不要照 TrendChart 的教训把它改掉：
+ *    排名条的语义就是「第 n 名 = 序列第 n 色」，序列重排后第 1 名换色是**预期行为**。
+ *    而 TrendChart 的坑在于「收入」是语义角色（必须永远是橙红），与下标无关 ——
+ *    判断标准是：**这个颜色的含义会随顺序变吗？** 会 → 可以按下标；不会 → 必须命名常量。
+ */
 function colorAt(index: number): string {
   return CHART_SERIES[index % CHART_SERIES.length];
 }
@@ -105,7 +112,7 @@ function barWidth(ratio: number): string {
   @include tabular-nums;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .rank-icon {
@@ -118,7 +125,7 @@ function barWidth(ratio: number): string {
   min-width: 0;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
   @include text-safe;
 }
 
@@ -129,7 +136,8 @@ function barWidth(ratio: number): string {
   @include tabular-nums;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-tertiary;
+  /* 占比是这一屏的核心信息之一，用 secondary —— tertiary 只有 2.80:1，读不了 */
+  color: $v11-text-secondary;
 }
 
 .rank-dot {
@@ -137,7 +145,7 @@ function barWidth(ratio: number): string {
   margin: 0 $space-1;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-disabled;
+  color: $v11-text-disabled;
 }
 
 .rank-sum {
@@ -145,13 +153,13 @@ function barWidth(ratio: number): string {
   @include tabular-nums;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .bar-track {
   height: 4px;
   margin-top: $space-2;
-  background: $bg-sunken;
+  background: $v11-bg-inset;
   border-radius: $radius-pill;
   overflow: hidden;
 }
@@ -167,7 +175,7 @@ function barWidth(ratio: number): string {
   justify-content: center;
   gap: $space-1;
   padding: $space-3 0 0;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .toggle-text {

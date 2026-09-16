@@ -196,7 +196,7 @@ import TrendChart from '@/components/TrendChart.vue';
 import PeriodPicker from '@/components/PeriodPicker.vue';
 import { useAccountStore } from '@/store/account';
 import { getReport, type ReportData, type ReportCategory } from '@/api/statistics';
-import { CHART_SERIES } from '@/constants/chart';
+import { CHART_SERIES, CHART_OTHER_COLOR } from '@/constants/chart';
 import { formatMoney } from '@/utils/format';
 
 const accountStore = useAccountStore();
@@ -275,7 +275,7 @@ function toChartItems(rows: ReportCategory[]) {
   const rest = sorted.slice(MAX);
   const restSum = rest.reduce((s, r) => s + Number(r.sum), 0);
   const items = sorted.slice(0, MAX).map((r, i) => ({ name: r.name, value: Number(r.sum), color: CHART_SERIES[i] }));
-  items.push({ name: '其他', value: restSum, color: CHART_SERIES[6] });
+  items.push({ name: '其他', value: restSum, color: CHART_OTHER_COLOR });
   return items;
 }
 

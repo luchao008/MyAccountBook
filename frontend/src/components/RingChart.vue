@@ -293,7 +293,7 @@ const trackColor = computed(() => (segments.value.length ? CHART_TRACK : CHART_T
 .ring-label-name {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-secondary;
+  color: $v11-text-secondary;
   /* 名称可压缩：min-width:0 是 flex 子项能收缩的前提（默认 min-width:auto 不许窄于内容） */
   flex: 0 1 auto;
   min-width: 0;
@@ -305,7 +305,8 @@ const trackColor = computed(() => (segments.value.length ? CHART_TRACK : CHART_T
 .ring-label-ratio {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  /* 占比绝不能用 tertiary —— 它是这一屏的核心信息，tertiary 只有 2.80:1 */
+  color: $v11-text-secondary;
   /* 百分比绝不压缩、绝不换行 */
   flex: none;
   white-space: nowrap;
@@ -323,7 +324,7 @@ const trackColor = computed(() => (segments.value.length ? CHART_TRACK : CHART_T
 .center-label {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .center-value {
@@ -331,7 +332,7 @@ const trackColor = computed(() => (segments.value.length ? CHART_TRACK : CHART_T
   font-size: $font-h1;
   line-height: $lh-h1;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
   margin-top: 2px;
 }
 </style>

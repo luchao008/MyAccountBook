@@ -356,7 +356,7 @@ async function onBatchHide(hidden: boolean) {
    min-height 下 flex 子项会按内容撑开、把底栏顶出屏幕（icon-picker 踩过） */
 .page {
   height: $page-min-height;
-  background: $bg-canvas;
+  background: $v11-bg-page;
   display: flex;
   flex-direction: column;
 }
@@ -368,7 +368,7 @@ async function onBatchHide(hidden: boolean) {
   display: flex;
   align-items: center;
   padding: 0 $space-3;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 .nav-btn {
@@ -377,7 +377,7 @@ async function onBatchHide(hidden: boolean) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .nav-title {
@@ -387,7 +387,7 @@ async function onBatchHide(hidden: boolean) {
   font-size: $font-h2;
   line-height: $lh-h2;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .nav-action {
@@ -396,7 +396,7 @@ async function onBatchHide(hidden: boolean) {
   padding: $space-2 0;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $brand-700;
+  color: $v11-gold;
 }
 
 /* ═══ 搜索条 ═══ */
@@ -406,12 +406,12 @@ async function onBatchHide(hidden: boolean) {
   align-items: center;
   gap: $space-2;
   padding: $space-2 $space-4;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 .search-icon {
   flex: none;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .search-input {
@@ -420,7 +420,7 @@ async function onBatchHide(hidden: boolean) {
   height: 36px;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 /* ═══ 列表 ═══ */
@@ -434,7 +434,7 @@ async function onBatchHide(hidden: boolean) {
 }
 
 .group + .group {
-  border-top: 8px solid $bg-subtle;
+  border-top: 8px solid $v11-bg-inset;
 }
 
 .row {
@@ -451,7 +451,7 @@ async function onBatchHide(hidden: boolean) {
 
 .caret {
   flex: none;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   transition: transform 0.2s;
 }
 
@@ -468,16 +468,16 @@ async function onBatchHide(hidden: boolean) {
   font-size: $font-body;
   line-height: $lh-body;
   font-weight: $weight-medium;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .children {
-  border-top: 1px solid $line;
+  border-top: 1px solid $v11-line;
 }
 
 .child-row {
   padding-left: 46px;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 .child-name {
@@ -488,12 +488,12 @@ async function onBatchHide(hidden: boolean) {
   overflow-wrap: anywhere;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 /* 隐藏态用换色而不是 opacity：文字加透明度会静默吃掉对比度 */
 .dimmed {
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .hidden-tag {
@@ -518,7 +518,7 @@ async function onBatchHide(hidden: boolean) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 /* 选择框：24×24，选中后实心 + 白勾 */
@@ -534,8 +534,8 @@ async function onBatchHide(hidden: boolean) {
 }
 
 .check.on {
-  background: $brand-600;
-  border-color: $brand-600;
+  background: $v11-gold;
+  border-color: $v11-gold;
 }
 
 .add-child {
@@ -548,13 +548,13 @@ async function onBatchHide(hidden: boolean) {
 }
 
 .add-child-icon {
-  color: $brand-700;
+  color: $v11-gold;
 }
 
 .add-child-text {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $brand-700;
+  color: $v11-gold;
 }
 
 /* ═══ 底部固定栏 ═══ */
@@ -566,8 +566,8 @@ async function onBatchHide(hidden: boolean) {
      wrap 在正常字号下是 no-op（两段共需约 296px，320px 放得下）。 */
   flex-wrap: wrap;
   align-items: center;
-  border-top: 1px solid $line;
-  background: $bg-canvas;
+  border-top: 1px solid $v11-line;
+  background: $v11-bg-page;
   padding-bottom: env(safe-area-inset-bottom);
 }
 
@@ -583,7 +583,7 @@ async function onBatchHide(hidden: boolean) {
 
 .batch-entry-icon {
   flex: none;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .batch-entry-text {
@@ -595,14 +595,14 @@ async function onBatchHide(hidden: boolean) {
   font-size: $font-body;
   line-height: $lh-body;
   font-weight: $weight-medium;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .batch-entry-sub {
   display: block;
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .add-root {
@@ -615,7 +615,7 @@ async function onBatchHide(hidden: boolean) {
   min-height: 60px;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $brand-700;
+  color: $v11-gold;
   /* 这里**刻意不放分隔线**：参考图两段之间有一条竖线，但 ×2 字号下两段必须换行，
      换行后 border-left 会变成第二行左侧一道孤立的竖线，看着像渲染坏了。
      装饰性元素不值得为它牺牲布局正确性 —— 顶栏那条横线已经完成了"与列表分隔"。 */
@@ -636,25 +636,25 @@ async function onBatchHide(hidden: boolean) {
   width: 40px;
   height: 40px;
   border-radius: $radius-md;
-  background: $bg-sunken;
+  background: $v11-bg-inset;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .batch-act-label {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 /* 禁用态：换色而不是 opacity（同 .dimmed 的理由） */
 .batch-act.disabled .batch-act-icon {
-  color: $text-disabled;
+  color: $v11-text-disabled;
 }
 
 .batch-act.disabled .batch-act-label {
-  color: $text-disabled;
+  color: $v11-text-disabled;
 }
 </style>

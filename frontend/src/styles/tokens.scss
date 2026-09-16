@@ -364,6 +364,17 @@ $v11-gold-shadow:    rgba(168, 95, 18, 0.35);  // 品牌金投影（FAB 光晕�
 $v11-hero-gradient: linear-gradient(180deg, #FDF6EF 0%, #FBF0E4 100%);
 $v11-hero-ink:      #8F5312;   // 5.74（亮端）/ 5.47（暗端）✅ 两端都达标
 
+// ⚠️ **已知缺口（实测，2026-09-16）**：v1.1 没有「能压白卡被看见、又能让金字保持 4.5:1」的
+//    浅金表面 —— 两个条件在金色家族里**数学上互斥**：
+//      · $v11-gold-soft #FDF6EF 压白卡只有 **1.07**（白卡上等于不存在）
+//      · 一旦加深到能区分白卡（≥1.15），#A85F12 就跌到 **4.06 以下**（正文需 4.5）
+//      · $v11-gold-fill #E4AD77 虽可见（1.99），但 #A85F12 压它只有 **2.45**、#8F5312 只有 3.09
+//    **所以：浅金底只能作为「氛围」，不能单独承担「这是个可点表面」的信号。**
+//    凡在白卡上要用浅金底的地方，必须再给一条金色细边（$v11-gold-fill 或 $v11-gold）——
+//    当前实例：CategoryGrid/.icon-active、CategoryPicker/.icon-picked（2px $v11-gold）、
+//    DateTimePicker/.today（1.5px inset $v11-gold-fill）、recycle/.restore（1px $v11-gold-fill）。
+//    ⚠️ 删掉那些边 = 选中态/按钮形状直接消失。
+
 // —— 青绿（三档，比正绿更怕背景变深）——
 $v11-teal:           #56C4C5;   //  2.08:1 ⚠️ **仅图形**：图表扇区 / 进度条
 $v11-teal-large:     #2E9496;   //  3.63:1 ✅ **仅 ≥24px 大号金额**（过大字 3:1）
@@ -405,6 +416,15 @@ $v11-dark-expense:   #3DD6C8;   //  7.73（卡片）/  9.44（页面底）✅ �
 $v11-dark-income:    #FF6B6B;   //  5.02（卡片）/  6.13（页面底）✅
 $v11-dark-blue:      #0A84FF;   //  4.66 ✅（v1.1 未用到，留给后续）
 
+// —— 焦点环（键盘无障碍）——
+// 与 FL-1（§3 的 $focus-ring）同规格：2px 实线 + 2px 外扩，只把颜色换到 v1.1 主色金。
+// ⚠️ **必须跟随主色一起改** —— 焦点环留在旧橙 #C7430F 上，金色 UI 里会像另一个产品的东西。
+// ⚠️ 仍然用 `outline` 而不是 `box-shadow`：本项目的卡片 / 弹窗 / 列表项几乎全是
+//    `overflow: hidden`，用阴影做焦点环会经常只剩半圈（踩过）。
+$v11-focus-ring:        2px solid $v11-gold;
+$v11-focus-ring-offset: 2px;
+$v11-focus-ring-shadow: 0 0 0 2px #ffffff, 0 0 0 4px $v11-gold;
+
 // ==========================================================================
 // 11. v1.1 Mixin
 // ==========================================================================
@@ -435,4 +455,11 @@ $v11-dark-blue:      #0A84FF;   //  4.66 ✅（v1.1 未用到，留给后续）
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
   }
+}
+
+// v1.1 焦点环：与 §8 的 `focus-visible-ring` 同构，只有颜色不同。
+// 存量页面逐步从 `@include focus-visible-ring` 切到本 mixin（阶段 5 收口时统一）。
+@mixin focus-visible-ring-v11 {
+  outline: $v11-focus-ring;
+  outline-offset: $v11-focus-ring-offset;
 }

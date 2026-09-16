@@ -279,11 +279,19 @@ export const ICON_FRAME = {
   lg: { size: 48, radius: 14, glyph: 26 },
 } as const;
 
-/** 分类图标外框的配色 token（供样式层使用，不要在这里写死 hex） */
+/**
+ * 分类图标外框的配色 token（供样式层使用，不要在这里写死 hex）。
+ *
+ * ⚠️ 2026-09-16 v1.1：**本常量当前无人引用，属死代码** ——
+ *    全项目搜索 `ICON_FRAME_THEME` 只有本处声明，且它引用的 `$ink-1` / `$ink-4`
+ *    在 tokens.scss 里早已不存在（改名前就已失效）。这里仅把仍存在的 token 名
+ *    更新到 v1.1，避免全项目残留 v1.0 token 名造成误判。
+ *    **阶段 5 收口时删除**（连同 `$divider` / `$border-card` 等废弃 token）。
+ */
 export const ICON_FRAME_THEME = {
-  default: { bg: '$bg-sunken', fg: '$ink-1' }, // 13.93:1 ✅
-  selected: { bg: '$brand-600', fg: '$text-inverse' }, // 4.52:1 ✅
-  disabled: { bg: '$bg-sunken', fg: '$ink-4' }, // 装饰/禁用，豁免
+  default: { bg: '$v11-bg-inset', fg: '$v11-text-primary' }, // 14.53:1 ✅
+  selected: { bg: '$v11-gold', fg: '$text-inverse' }, // 4.87:1 ✅
+  disabled: { bg: '$v11-bg-inset', fg: '$v11-text-disabled' }, // 装饰/禁用，豁免
 } as const;
 
 /**

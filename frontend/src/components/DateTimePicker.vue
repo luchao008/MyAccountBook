@@ -206,7 +206,7 @@ watch(
 }
 
 .sheet {
-  background: $bg-card;
+  background: $v11-bg-card;
   border-radius: 16px 16px 0 0;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
 }
@@ -221,7 +221,7 @@ watch(
 .done {
   font-size: $font-body;
   line-height: $lh-body;
-  color: $brand-700;
+  color: $v11-gold;
   font-weight: $weight-medium;
   /* 24px 行盒 + 上下各 10px = 44（原 padding: 4px 8px 只有 32） */
   padding: 10px 12px;
@@ -247,7 +247,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .cal-title {
@@ -256,7 +256,7 @@ watch(
   font-size: $font-body-lg;
   line-height: $lh-body-lg;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .week-row {
@@ -269,7 +269,7 @@ watch(
   text-align: center;
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .day-grid {
@@ -295,28 +295,36 @@ watch(
 }
 
 .day:active {
-  background: $bg-subtle;
+  background: $v11-bg-inset;
 }
 
 .day-text {
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
-/* 今天：橙色圆底白字（未选中时） */
+/*
+ * 今天（未选中态）：浅金底 + 深金字 + 1.5px 金色内描边。
+ *
+ * ⚠️ 内描边是必需的，不是装饰 —— $v11-gold-soft 压白卡只有 1.07 可见度，
+ *    没有它就完全看不出这里是个圆。（这是 v1.1 调色板的已知缺口，见 tokens.scss §10）
+ * 文字 #8F5312 压 #FDF6EF = 5.74:1 ✅
+ * 选中态由后面的 .selected 覆盖（实心金 + 白字 4.87:1），两者可同时存在，靠源码顺序决胜。
+ */
 .today {
-  background: $brand-100;
+  background: $v11-gold-soft;
+  box-shadow: inset 0 0 0 1.5px $v11-gold-fill;
 }
 
 .today .day-text {
-  color: $brand-800;
+  color: $v11-gold-pressed;
 }
 
 /* 选中：实心橙 */
 .selected {
-  background: $brand-600;
-  box-shadow: 0 2px 8px $shadow-brand-soft;
+  background: $v11-gold;
+  box-shadow: 0 2px 8px $v11-gold-shadow;
 }
 
 .selected .day-text {
@@ -330,14 +338,14 @@ watch(
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  border-top: 1px solid $line;
+  border-top: 1px solid $v11-line;
   margin-top: 8px;
 }
 
 .time-label {
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .wheel {
@@ -350,6 +358,6 @@ watch(
   justify-content: center;
   font-size: $font-h1;
   line-height: $lh-h1;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 </style>

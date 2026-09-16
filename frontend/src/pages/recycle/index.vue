@@ -184,14 +184,14 @@ onMounted(load);
 <style scoped lang="scss">
 .page {
   min-height: $page-min-height;
-  background: $bg-page;
+  background: $v11-bg-page;
   padding-bottom: calc(16px + env(safe-area-inset-bottom));
 }
 
 /* ===== 自绘顶栏 ===== */
 .nav {
-  background: $bg-card;
-  border-bottom: 1px solid $line;
+  background: $v11-bg-card;
+  border-bottom: 1px solid $v11-line;
 }
 
 .nav-inner {
@@ -208,26 +208,26 @@ onMounted(load);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .nav-title {
   font-size: $font-h2;
   line-height: $lh-h2;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 /* ===== 说明条 ===== */
 .tip {
   padding: $space-3 $space-4;
-  background: $bg-subtle;
+  background: $v11-bg-inset;
 }
 
 .tip-text {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .state {
@@ -238,7 +238,7 @@ onMounted(load);
 .state-text {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 /* ===== 列表 ===== */
@@ -253,19 +253,19 @@ onMounted(load);
 .group-head-text {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .card {
-  background: $bg-card;
-  border-radius: $radius-lg;
+  background: $v11-bg-card;
+  border-radius: $v11-radius-card;
   overflow: hidden;
   margin-bottom: $space-3;
 }
 
 .item {
   padding: $space-3 $space-4;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 .item:last-child {
@@ -281,7 +281,7 @@ onMounted(load);
   @include tabular-nums;
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   margin-right: $space-2;
 }
 
@@ -290,7 +290,7 @@ onMounted(load);
   min-width: 0;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .item-main {
@@ -309,7 +309,7 @@ onMounted(load);
   min-width: 0;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
   @include text-safe;
 }
 
@@ -327,10 +327,14 @@ onMounted(load);
 }
 
 .expense {
-  color: $expense;
+  color: $v11-teal-amount;
 }
 
-/* 「恢复」按钮：浅橙底 + 品牌深字（5.40:1 ✅），与参考图一致 */
+/*
+ * 「恢复」按钮：浅金底 + 深金字 + 金色细边。
+ * 文字 #A85F12 压 #FDF6EF = 4.55:1 ✅；那 1px 金色边保证胶囊形状在白卡上可见
+ * （浅金底本身压白卡只有 1.07 —— v1.1 调色板的已知缺口）。
+ */
 .restore {
   flex-shrink: 0;
   min-height: 32px;
@@ -339,14 +343,15 @@ onMounted(load);
   align-items: center;
   justify-content: center;
   border-radius: $radius-pill;
-  background: $brand-100;
+  background: $v11-gold-soft;
+  border: 1px solid $v11-gold-fill;
 }
 
 .restore-text {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
   font-weight: $weight-medium;
-  color: $brand-800;
+  color: $v11-gold;
 }
 
 .item-meta {
@@ -354,7 +359,7 @@ onMounted(load);
   margin-top: $space-1;
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   @include text-safe;
 }
 </style>

@@ -144,8 +144,8 @@ function close() {
 
 .sheet {
   width: 100%;
-  background: $bg-card;
-  border-radius: $radius-lg $radius-lg 0 0;
+  background: $v11-bg-card;
+  border-radius: $v11-radius-sheet-top $v11-radius-sheet-top 0 0;
   padding-bottom: env(safe-area-inset-bottom);
 }
 
@@ -161,7 +161,7 @@ function close() {
   font-size: $font-h2;
   line-height: $lh-h2;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .close {
@@ -172,7 +172,7 @@ function close() {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .mode-switch {
@@ -188,22 +188,22 @@ function close() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: $bg-subtle;
+  background: $v11-bg-inset;
   border-radius: $radius-md;
 }
 
 .mode-item.active {
-  background: $brand-50;
+  background: $v11-gold-soft;
 }
 
 .mode-text {
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .mode-item.active .mode-text {
-  color: $brand-700;
+  color: $v11-gold;
   font-weight: $weight-semibold;
 }
 
@@ -217,7 +217,7 @@ function close() {
   justify-content: center;
   font-size: $font-h1;
   line-height: $lh-h1;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .confirm {
@@ -226,8 +226,8 @@ function close() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: $brand-600;
-  border-radius: $radius-md;
+  background: $v11-gold;
+  border-radius: $v11-radius-btn;
 }
 
 .confirm-text {

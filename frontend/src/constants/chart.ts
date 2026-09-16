@@ -41,6 +41,24 @@ export const CHART_SERIES = [
 ] as const;
 
 /**
+ * 「其他」聚合段的固定色（= 序列末位的中性灰）。
+ *
+ * ⚠️ 为什么不能继续在调用处写 `CHART_SERIES[6]`：**魔法下标会在序列重排时静默失效** ——
+ *    这正是 `TrendChart` 已经踩过的同一个坑（见下方 `TREND_*` 的说明）。
+ *    「其他」在语义上永远是最后一段，但它的下标不是。固定成命名常量后，
+ *    序列再怎么重排，这一段的颜色都不会漂移。
+ *
+ * 3.06:1 —— **只做图表填充，严禁压白字**（`SOLID_SERIES` 已排除它）。
+ *
+ * ⚠️ 这里写死下标 6 是有意的：`CHART_SERIES` 是 `as const` 字面量元组，
+ *    取值处（ReportView 的 items 数组）是按元组元素类型推断的联合类型，
+ *    用 `length - 1` 之类算出来的下标会被推断成 `string`，赋值时 TS2322。
+ *    「末位是中性灰」这条不变式由 `scripts/check-ios-tokens.mjs` 断言（CHART[6] === #8a94a6），
+ *    改序列时那条断言会先报错。
+ */
+export const CHART_OTHER_COLOR = CHART_SERIES[6];
+
+/**
  * 可承载白字的实心色序列（= CHART_SERIES 去掉中性灰）。
  * 白字压其上实测 **4.95 / 5.70 / 5.28 / 5.87 / 5.95 / 5.18 : 1**，全部 ≥4.5 ✅
  * （按 v1.1 重排后的顺序列出；数值集合与重排前相同，最低值 5.18 → **4.95**，
@@ -90,7 +108,9 @@ export const TREND_BALANCE_COLOR = '#1d63b8';
 export const CHART_TRACK = '#ffffff';
 
 /** 无数据时的底环：白环压在白色卡片上不可见，所以退回浅灰示意 */
-export const CHART_TRACK_EMPTY = '#edeff3';
+// v1.1：`#edeff3` 是 FL-1 的分隔线灰，偏冷偏深；改用 v1.1 的内嵌槽色 `$v11-bg-inset #F5F5F5`，
+// 与「空轨道」的语义一致（RankList 的 .bar-track 用的是同一个值）。
+export const CHART_TRACK_EMPTY = '#F5F5F5';
 
 /**
  * 相邻扇区之间的白缝宽度（px，沿圆周方向，两侧各分走一半）。

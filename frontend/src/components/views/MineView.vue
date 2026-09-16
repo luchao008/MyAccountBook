@@ -119,7 +119,7 @@ function onLogout() {
    ============================================================ */
 .page {
   min-height: $page-min-height;
-  background: $bg-canvas;
+  background: $v11-bg-page;
   padding: 0;
   /*
    * 底部留白 = 底栏高度（若宿主底栏有凸起按钮，还要加上圆的越出量）。
@@ -141,11 +141,11 @@ function onLogout() {
 
 /* ── 身份区：白底（原渐变）+ 品牌色头像块 ── */
 .user-card {
-  background: $bg-canvas;
+  background: $v11-bg-page;
   padding: $space-5 $space-4;
   display: flex;
   align-items: center;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 .avatar {
@@ -154,7 +154,7 @@ function onLogout() {
   flex-shrink: 0;
   border-radius: 50%;
   /* 品牌底 + 白字首字母：4.52:1 ✅ */
-  background: $brand-600;
+  background: $v11-gold;
   color: $text-inverse;
   display: flex;
   align-items: center;
@@ -182,7 +182,7 @@ function onLogout() {
   font-size: $font-h2;
   line-height: $lh-h2;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
   /* 用户名是标识符，可能无空格无断点；用 anywhere 折行而不是 ellipsis ——
      截断等于把用户身份信息吃掉一半（WCAG 1.4.4） */
   overflow-wrap: anywhere;
@@ -193,7 +193,7 @@ function onLogout() {
   line-height: $lh-caption;
   margin-top: $space-1;
   /* 压白底 4.51:1 ✅（tertiary 只能用于白底） */
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   overflow-wrap: anywhere;
 }
 
@@ -202,13 +202,13 @@ function onLogout() {
   padding: $space-4 $space-4 $space-2;
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 /* ── 设置行：通栏 + 发丝线，行高 56 ── */
 .menu {
-  background: $bg-canvas;
-  border-top: 1px solid $line;
+  background: $v11-bg-page;
+  border-top: 1px solid $v11-line;
 }
 
 .menu-item {
@@ -216,7 +216,7 @@ function onLogout() {
   align-items: center;
   min-height: 56px;
   padding: $space-2 $space-4;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 .menu-item:last-child {
@@ -225,7 +225,7 @@ function onLogout() {
 
 .menu-icon {
   /* 图标不是「字」：颜色显式声明（压白底 15.78:1），尺寸走图标阶梯 */
-  color: $text-primary;
+  color: $v11-text-primary;
   flex-shrink: 0;
 }
 
@@ -234,20 +234,20 @@ function onLogout() {
   margin-left: $space-3;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
   min-width: 0;
 }
 
 .menu-hint {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   margin-right: $space-2;
   flex-shrink: 0;
 }
 
 .menu-arrow {
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   flex-shrink: 0;
 }
 
@@ -262,7 +262,7 @@ function onLogout() {
 }
 
 .logout {
-  background: $bg-canvas;
+  background: $v11-bg-page;
   color: $danger;
   font-size: $font-body-lg;
   line-height: $lh-body-lg;

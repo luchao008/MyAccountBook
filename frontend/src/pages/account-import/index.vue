@@ -89,11 +89,11 @@ async function onSubmit() {
 <style scoped lang="scss">
 .page {
   min-height: $page-min-height;
-  background: $bg-canvas;
+  background: $v11-bg-page;
   padding-bottom: 96px;
 }
 .form-section {
-  background: $bg-card;
+  background: $v11-bg-card;
   padding: 16px;
   margin-bottom: 12px;
 }
@@ -105,20 +105,20 @@ async function onSubmit() {
 .section-title {
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
   font-weight: $weight-medium;
 }
 .section-action {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $brand-700;
+  color: $v11-gold;
 }
 .section-hint {
   display: block;
   margin-top: 6px;
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 .footer {
   position: fixed;
@@ -126,13 +126,13 @@ async function onSubmit() {
   right: 0;
   bottom: 0;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
-  background: $bg-card;
-  border-top: 1px solid $line;
+  background: $v11-bg-card;
+  border-top: 1px solid $v11-line;
 }
 .btn {
   height: 48px;
-  background: $brand-600;
-  border-radius: $radius-md;
+  background: $v11-gold;
+  border-radius: $v11-radius-btn;
   display: flex;
   align-items: center;
   justify-content: center;

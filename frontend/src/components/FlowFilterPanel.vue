@@ -310,8 +310,8 @@ function close() {
 .sheet {
   width: 100%;
   max-height: 72vh;
-  background: $bg-card;
-  border-radius: $radius-lg $radius-lg 0 0;
+  background: $v11-bg-card;
+  border-radius: $v11-radius-sheet-top $v11-radius-sheet-top 0 0;
   display: flex;
   flex-direction: column;
 }
@@ -328,7 +328,7 @@ function close() {
   font-size: $font-h2;
   line-height: $lh-h2;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .header-close {
@@ -339,7 +339,7 @@ function close() {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .body {
@@ -352,11 +352,11 @@ function close() {
   align-items: center;
   min-height: $touch-target-min;
   padding: $space-3 $space-4;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 .row-icon {
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   margin-right: $space-2;
   flex-shrink: 0;
 }
@@ -364,7 +364,7 @@ function close() {
 .row-label {
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
   flex-shrink: 0;
 }
 
@@ -379,7 +379,7 @@ function close() {
 .row-value {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-secondary;
+  color: $v11-text-secondary;
   @include text-safe;
 }
 
@@ -388,13 +388,13 @@ function close() {
   margin-top: 2px;
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   @include text-safe;
 }
 
 .row-arrow {
   margin-left: $space-1;
-  color: $text-disabled;
+  color: $v11-text-disabled;
   flex-shrink: 0;
 }
 
@@ -410,17 +410,17 @@ function close() {
   width: 84px;
   height: 32px;
   padding: 0 $space-2;
-  background: $bg-sunken;
+  background: $v11-bg-inset;
   border-radius: $radius-sm;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-primary;
+  color: $v11-text-primary;
   text-align: center;
   @include tabular-nums;
 }
 
 .amount-sep {
-  color: $text-disabled;
+  color: $v11-text-disabled;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
 }
@@ -430,7 +430,7 @@ function close() {
   text-align: right;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .footer {
@@ -449,12 +449,12 @@ function close() {
 
 .btn-reset {
   width: 96px;
-  background: $brand-50;
+  background: $v11-gold-soft;
 }
 
 .btn-confirm {
   flex: 1;
-  background: $brand-600;
+  background: $v11-gold;
 }
 
 .btn-text {
@@ -464,7 +464,7 @@ function close() {
 }
 
 .reset-text {
-  color: $brand-700;
+  color: $v11-gold;
 }
 
 .confirm-text {

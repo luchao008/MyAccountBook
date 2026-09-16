@@ -257,19 +257,19 @@ async function execMerge(source: AccountItem, target: AccountItem) {
 <style scoped lang="scss">
 .page {
   min-height: $page-min-height;
-  background: $bg-page;
+  background: $v11-bg-page;
   padding: 16px;
 }
 
 .list {
-  background: $bg-card;
+  background: $v11-bg-card;
   border-radius: 12px;
   overflow: hidden;
 }
 
 .list-item {
   padding: 14px 16px;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 .list-item:last-child {
@@ -284,7 +284,7 @@ async function execMerge(source: AccountItem, target: AccountItem) {
 .item-name {
   font-size: $font-body-lg;
   line-height: $lh-body-lg;
-  color: $text-primary;
+  color: $v11-text-primary;
   font-weight: $weight-medium;
 }
 
@@ -302,7 +302,7 @@ async function execMerge(source: AccountItem, target: AccountItem) {
   display: block;
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   margin-top: 4px;
 }
 
@@ -322,20 +322,20 @@ async function execMerge(source: AccountItem, target: AccountItem) {
 }
 
 .danger {
-  color: $expense;
+  color: $v11-teal-amount;
 }
 
 .add-box {
   margin-top: 16px;
-  background: $bg-card;
+  background: $v11-bg-card;
   border-radius: 12px;
   padding: 16px;
 }
 
 .add-btn-block {
   height: 46px;
-  background: $brand-600;
-  border-radius: $radius-md;
+  background: $v11-gold;
+  border-radius: $v11-radius-btn;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -350,13 +350,13 @@ async function execMerge(source: AccountItem, target: AccountItem) {
   margin-top: 12px;
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   line-height: $lh-caption;
 }
 
 .rules {
   margin-top: 16px;
-  background: $bg-card;
+  background: $v11-bg-card;
   border-radius: 12px;
   padding: 16px;
 }
@@ -364,7 +364,7 @@ async function execMerge(source: AccountItem, target: AccountItem) {
 .rules-title {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-primary;
+  color: $v11-text-primary;
   font-weight: $weight-medium;
 }
 
@@ -373,7 +373,7 @@ async function execMerge(source: AccountItem, target: AccountItem) {
   margin-top: 8px;
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   line-height: $lh-caption;
 }
 </style>

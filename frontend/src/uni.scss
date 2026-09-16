@@ -20,26 +20,26 @@
  * ⚠️ 实测：uni-ui 各组件会在自己的样式块里重新声明 $uni-* 且**不带 !default**，
  *    那种情况下本文件的赋值会被组件覆盖，改这里对它们无效（uni-ui 的已知限制）。
  *    只有带 !default 的变量（如 uni-easyinput 的 $uni-border-1）才吃得到这里的值。 */
-$uni-color-primary: $brand-600;
+$uni-color-primary: $v11-gold;
 $uni-color-success: $success;
 $uni-color-warning: $warning;
 $uni-color-error: $danger;
 
 /* 文字基本颜色 */
-$uni-text-color: $text-primary; // 基本色
+$uni-text-color: $v11-text-primary; // 基本色
 $uni-text-color-inverse: $text-inverse; // 反色
-$uni-text-color-grey: $text-tertiary; // 辅助灰色，如加载更多的提示信息
-$uni-text-color-placeholder: $text-tertiary;
-$uni-text-color-disable: $text-disabled;
+$uni-text-color-grey: $v11-text-secondary; // 辅助灰（tertiary 在 v1.1 只有 2.80:1，已降级为仅装饰）
+$uni-text-color-placeholder: $v11-text-tertiary; // 占位符豁免：一填入即换回主色
+$uni-text-color-disable: $v11-text-disabled;
 
 /* 背景颜色 */
-$uni-bg-color: $bg-card;
-$uni-bg-color-grey: $bg-page;
-$uni-bg-color-hover: $bg-subtle; // 点击状态颜色
+$uni-bg-color: $v11-bg-card;
+$uni-bg-color-grey: $v11-bg-page;
+$uni-bg-color-hover: $v11-bg-inset; // 点击状态颜色
 $uni-bg-color-mask: $bg-mask; // 遮罩颜色
 
-/* 边框颜色 */
-$uni-border-color: $border-card;
+/* 边框颜色：v1.1 卡片一律零描边，此为 uni-ui 内部组件（非本项目卡片）留的兜底色 */
+$uni-border-color: $v11-line-strong;
 
 /* 表单控件边界：uni-easyinput 声明的是 $uni-border-1: #dcdfe6 !default，
  * 原值对白底仅约 1.3:1，输入框边界在弱视用户眼里等于不存在。

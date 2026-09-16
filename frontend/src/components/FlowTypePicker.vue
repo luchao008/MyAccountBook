@@ -139,8 +139,8 @@ function close() {
 .sheet {
   width: 100%;
   max-height: 72vh;
-  background: $bg-card;
-  border-radius: $radius-lg $radius-lg 0 0;
+  background: $v11-bg-card;
+  border-radius: $v11-radius-sheet-top $v11-radius-sheet-top 0 0;
   display: flex;
   flex-direction: column;
   /* ⚠️ 不能省：只写 max-height 时它**约束不住 flex 子项**，内容超长会溢出
@@ -160,7 +160,7 @@ function close() {
   font-size: $font-h2;
   line-height: $lh-h2;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .header-btn {
@@ -171,7 +171,7 @@ function close() {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 /* 右侧「取消全选 / 全选」——用品牌橙文字色，白卡 4.95:1 ✅ */
@@ -185,7 +185,7 @@ function close() {
 .header-action-text {
   font-size: $font-body;
   line-height: $lh-body;
-  color: $brand-700;
+  color: $v11-gold;
 }
 
 /* 高度由 JS 算出（模板上的 :style），这里只负责不参与 flex 拉伸 */
@@ -198,7 +198,7 @@ function close() {
   align-items: center;
   min-height: $touch-target-min;
   padding: $space-3 $space-4;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 .row-label {
@@ -206,7 +206,7 @@ function close() {
   min-width: 0;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
   @include text-safe;
 }
 
@@ -216,7 +216,7 @@ function close() {
   height: 20px;
   flex-shrink: 0;
   border-radius: 50%;
-  border: 1.5px solid $line-strong;
+  border: 1.5px solid $v11-line-strong;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -224,8 +224,8 @@ function close() {
 }
 
 .checkbox.checked {
-  background: $brand-600;
-  border-color: $brand-600;
+  background: $v11-gold;
+  border-color: $v11-gold;
 }
 
 .footer {
@@ -243,7 +243,7 @@ function close() {
 }
 
 .btn-confirm {
-  background: $brand-600;
+  background: $v11-gold;
 }
 
 .btn-text {

@@ -431,7 +431,7 @@ watch(
 }
 
 .sheet {
-  background: $bg-card;
+  background: $v11-bg-card;
   border-radius: 16px 16px 0 0;
   height: 70vh;
   display: flex;
@@ -445,7 +445,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
   flex-shrink: 0;
 }
 
@@ -465,26 +465,26 @@ watch(
 }
 
 .tool:active {
-  background: $bg-subtle;
+  background: $v11-bg-inset;
 }
 
 .tool-icon {
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .collapse {
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .search-bar {
   padding: 8px 16px;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
   flex-shrink: 0;
 }
 
 .search-input {
   height: 36px;
-  background: $bg-subtle;
+  background: $v11-bg-inset;
   border-radius: 8px;
   padding: 0 12px;
   font-size: $font-body-sm;
@@ -506,7 +506,7 @@ watch(
 
 .sidebar {
   width: 92px;
-  background: $bg-subtle;
+  background: $v11-bg-inset;
   height: 100%;
   flex-shrink: 0;
   /* 隐藏滚动条（Firefox / 旧 IE） */
@@ -542,7 +542,7 @@ watch(
 }
 
 .side-item.active {
-  background: $bg-card;
+  background: $v11-bg-card;
 }
 
 .side-item.active::before {
@@ -552,18 +552,18 @@ watch(
   top: 13px;
   bottom: 13px;
   width: 3px;
-  background: $brand-500;
+  background: $v11-gold-fill;
   border-radius: 0 2px 2px 0;
 }
 
 .side-text {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .side-item.active .side-text {
-  color: $brand-700;
+  color: $v11-gold;
   font-weight: $weight-medium;
 }
 
@@ -580,7 +580,7 @@ watch(
 .group-title {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   display: block;
   margin-bottom: 10px;
 }
@@ -602,39 +602,41 @@ watch(
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  background: $bg-subtle;
+  background: $v11-bg-inset;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.15s;
 }
 
+/* 选中图标：与 CategoryGrid 的 .icon-active 同一套处理 ——
+   浅金底（压白卡仅 1.07 可见）+ 2px 金色描边承担选中信号。不要去掉描边。 */
 .icon-picked {
-  background: $brand-100;
-  border: 2px solid $brand-600;
+  background: $v11-gold-soft;
+  border: 2px solid $v11-gold;
 }
 
 .icon {
-  /* 压 $bg-subtle(#EEF1F5) 13.93:1 */
-  color: $text-primary;
+  /* 压 $v11-bg-inset(#EEF1F5) 13.93:1 */
+  color: $v11-text-primary;
 }
 
 .icon-picked .icon {
-  /* 压 $brand-100(#FFE3D6) 4.06:1 */
-  color: $brand-700;
+  /* 压 $v11-gold-soft(#FDF6EF) 4.55:1 ✅ */
+  color: $v11-gold;
 }
 
 .name {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-secondary;
+  color: $v11-text-secondary;
   margin-top: 6px;
   text-align: center;
   line-height: $lh-caption;
 }
 
 .picked .name {
-  color: $brand-700;
+  color: $v11-gold;
   font-weight: $weight-medium;
 }
 
@@ -651,7 +653,7 @@ watch(
 .empty-text {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   line-height: $lh-caption;
 }
 </style>

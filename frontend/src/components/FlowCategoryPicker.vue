@@ -286,8 +286,8 @@ function close() {
 .sheet {
   width: 100%;
   max-height: 72vh;
-  background: $bg-card;
-  border-radius: $radius-lg $radius-lg 0 0;
+  background: $v11-bg-card;
+  border-radius: $v11-radius-sheet-top $v11-radius-sheet-top 0 0;
   display: flex;
   flex-direction: column;
   /* ⚠️ 不能省：只写 max-height 时它**约束不住 flex 子项**，
@@ -308,7 +308,7 @@ function close() {
   font-size: $font-h2;
   line-height: $lh-h2;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .header-btn {
@@ -319,7 +319,7 @@ function close() {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .header-action {
@@ -332,7 +332,7 @@ function close() {
 .header-action-text {
   font-size: $font-body;
   line-height: $lh-body;
-  color: $brand-700;
+  color: $v11-gold;
 }
 
 /* 高度由 JS 算出（模板上的 :style），这里只负责不参与 flex 拉伸 */
@@ -345,7 +345,7 @@ function close() {
   align-items: center;
   min-height: $touch-target-min;
   padding: $space-2 $space-4;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 /* 二级缩进：与一级的文字左边缘对齐（折叠箭头 14 + 间距 6 = 20） */
@@ -356,7 +356,7 @@ function close() {
 .row-caret {
   flex-shrink: 0;
   margin-right: $space-1;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .row-icon {
@@ -369,17 +369,19 @@ function close() {
   min-width: 0;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
   @include text-safe;
 }
 
-/* 勾选框：未选 = 描边空框；选中 = brand-600 实心 + 白勾；半选 = 描边 + 横线 */
+/* 勾选框：未选 = 描边空框；选中 = $v11-gold 实心 + 白勾（4.87:1 ✅）；半选 = 描边 + 横线。
+   ⚠️ 描边用的是 $v11-line-strong 而不是 $border-input —— 它是*已勾选*控件的一部分，
+      不是唯一的边界依据（白勾本身已经是形状信号），故不适用 WCAG 1.4.11 的 3:1 边界要求。 */
 .checkbox {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
   border-radius: 50%;
-  border: 1.5px solid $line-strong;
+  border: 1.5px solid $v11-line-strong;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -387,21 +389,21 @@ function close() {
 }
 
 .checkbox.checked {
-  background: $brand-600;
-  border-color: $brand-600;
+  background: $v11-gold;
+  border-color: $v11-gold;
 }
 
 /* 半选态：形状（横线）与底色同时区别于"已选"和"未选" */
 .checkbox.indeterminate {
-  background: $brand-50;
-  border-color: $brand-600;
+  background: $v11-gold-soft;
+  border-color: $v11-gold;
 }
 
 .checkbox-dash {
   width: 10px;
   height: 2px;
   border-radius: 1px;
-  background: $brand-600;
+  background: $v11-gold;
 }
 
 .footer {
@@ -415,11 +417,11 @@ function close() {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: $radius-md;
+  border-radius: $v11-radius-btn;
 }
 
 .btn-confirm {
-  background: $brand-600;
+  background: $v11-gold;
 }
 
 .btn-text {

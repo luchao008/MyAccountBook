@@ -1,6 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72" fill="none">
-  <!-- 品牌色圆角方块：用 $brand-600 #CF4A12（实心按钮底同色，白字 4.52:1 达标） -->
-  <rect width="72" height="72" rx="16" fill="#CF4A12"/>
+  <!--
+    品牌色圆角方块：v1.1 主色金 #A85F12（与 $v11-gold 同值）。
+    白色「¥」压它实测 **4.87:1** ✅（旧的 #CF4A12 是 4.52，改完反而更清楚）。
+    ⚠️ 改完本文件**必须重跑生成脚本**产出 logo.png / logo-512.png ——
+       只改 SVG 不重跑，页面显示的还是旧橙色 PNG，源文件却是金色，下一个人会更困惑。
+  -->
+  <rect width="72" height="72" rx="16" fill="#A85F12"/>
   <!-- 白色 ¥ 符号：笔画刻意加粗，保证 16px favicon 下仍可辨 -->
   <path d="M22 22 L36 40 L50 22" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M36 40 L36 52" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>
