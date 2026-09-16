@@ -125,12 +125,47 @@ console.log('\n[3] 时段选择弹窗');
   check('年粒度下出现「月度收支趋势」', t2.includes('月度收支趋势'), '');
 }
 
-console.log('\n[4] 折线图渲染（uCharts canvas）');
+console.log('\n[4] 趋势图渲染（uCharts canvas：收入/支出折线 + 结余面积）');
 {
   const canvasCount = await page.evaluate(
     () => document.querySelectorAll('canvas').length
   );
   check('canvas 已渲染', canvasCount > 0, `canvas=${canvasCount}`);
+
+  /*
+   * ⚠️ uCharts 画在 canvas 上，**图例文字/序列都不在 DOM 里** ——
+   *    只断言"canvas 存在"抓不到"某条序列没渲染"。改为**采样像素**：
+   *    统计出现过的颜色，确认三条序列色都在画布上。
+   *    （2026-09-16 加结余面积时就是这么发现 area 配置要放对位置的。）
+   */
+  const pix = await page.evaluate(() => {
+    const cv = document.querySelector('canvas');
+    if (!cv) return null;
+    const ctx = cv.getContext('2d');
+    if (!ctx) return null;
+    const img = ctx.getImageData(0, 0, cv.width, cv.height).data;
+    let income = 0; // #c2410c 橙红 194,65,12
+    let expense = 0; // #0e7490 青 14,116,144
+    let balanceLine = 0; // #1d63b8 蓝 29,99,184
+    let balanceArea = 0; // 蓝色低透明度与白底混合（b 明显大于 r 且大于 g）
+    for (let i = 0; i < img.length; i += 4) {
+      const a = img[i + 3];
+      if (a < 10) continue;
+      const r = img[i];
+      const g = img[i + 1];
+      const b = img[i + 2];
+      if (Math.abs(r - 194) < 20 && Math.abs(g - 65) < 20 && Math.abs(b - 12) < 20) income++;
+      else if (Math.abs(r - 14) < 20 && Math.abs(g - 116) < 20 && Math.abs(b - 144) < 20) expense++;
+      else if (Math.abs(r - 29) < 20 && Math.abs(g - 99) < 20 && Math.abs(b - 184) < 20) balanceLine++;
+      else if (b > r + 15 && b > g + 20) balanceArea++;
+    }
+    return { income, expense, balanceLine, balanceArea };
+  });
+  check('收入折线（橙红 #c2410c）已渲染', !!pix && pix.income > 50, pix ? `px=${pix.income}` : 'n/a');
+  check('支出折线（青 #0e7490）已渲染', !!pix && pix.expense > 50, pix ? `px=${pix.expense}` : 'n/a');
+  check('结余折线（蓝 #1d63b8）已渲染', !!pix && pix.balanceLine > 20, pix ? `px=${pix.balanceLine}` : 'n/a');
+  // 面积填充 = 蓝与白底的混合色，像素量应远大于折线本身
+  check('结余面积填充已渲染（蓝色调像素 > 500）', !!pix && pix.balanceArea > 500, pix ? `px=${pix.balanceArea}` : 'n/a');
 }
 
 console.log('\n[5] 顶栏 + Tab 吸顶');

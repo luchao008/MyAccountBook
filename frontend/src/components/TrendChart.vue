@@ -1,7 +1,7 @@
 <template>
   <view class="trend-chart">
     <qiun-data-charts
-      type="line"
+      type="mix"
       :chartData="chartData"
       :opts="opts"
       :ontouch="true"
@@ -14,20 +14,28 @@
 
 <script setup lang="ts">
 /**
- * 月度收支趋势折线图（uCharts / qiun-data-charts 封装）。
+ * 月度收支趋势图（uCharts / qiun-data-charts 封装）。
  *
- * 为什么引入 uCharts 而不是继续自绘：折线图需要坐标轴、触摸 tooltip、动画，
- * 自绘成本远高于环形图（环形图只有扇区计算，折线图有轴刻度 + 手势交互）。
- * uCharts 是 uni-app 生态的图表标准（Apache 2.0），组件已在 uni_modules 中，
- * easycom 自动扫描，无需手动 import。
+ * 形态（2026-09-16 加「结余」）：
+ *   · 收入 / 支出 —— **折线**（原有）
+ *   · 结余 = 收入 − 支出 —— **面积**（新增，可为负）
  *
- * 配色沿用项目的图表序列：收入 = CHART_SERIES[0] 橙红、支出 = CHART_SERIES[3] 青，
- * 与参考图一致；两条线都带图例文字标签，颜色不作为唯一区分手段（WCAG 1.4.1）。
+ * 为什么引入 uCharts 而不是自绘：折线图需要坐标轴、触摸 tooltip、动画，
+ * 自绘成本远高于环形图。uCharts 是 uni-app 生态的图表标准（Apache 2.0）。
+ *
+ * 配色：收入 = CHART_SERIES[0] 橙红、支出 = CHART_SERIES[3] 青、结余 = CHART_SERIES[1] 蓝。
+ *
+ * ⚠️ **颜色不作为唯一区分手段**（WCAG 1.4.1）：三条序列都有图例文字标签，
+ *    且结余是**面积**（与两条折线形态不同）。之所以接受"结余蓝 vs 支出青在红绿色盲
+ *    模拟下可区分度偏低（1.13）"：图例文字 + 形态差异已足够区分，
+ *    这与项目「颜色非唯一手段」的既定原则一致（环形图标注也是靠文字而非纯色）。
+ *
+ * ⚠️ 结余可以为负（支出 > 收入），面积图对负值的渲染依赖 uCharts 的正负支持，
+ *    已实测（见 verify-report 的断言）。
  */
 import { computed } from 'vue';
 import type { ReportTrendItem } from '@/api/statistics';
 import { CHART_SERIES } from '@/constants/chart';
-import { formatMoney } from '@/utils/format';
 
 const props = defineProps<{
   trend: ReportTrendItem[];
@@ -35,20 +43,34 @@ const props = defineProps<{
 
 const INCOME_COLOR = CHART_SERIES[0]; // #c2410c 橙红
 const EXPENSE_COLOR = CHART_SERIES[3]; // #0e7490 青
+const BALANCE_COLOR = CHART_SERIES[1]; // #1d63b8 蓝
 
-/** qiun-data-charts 的 chartData 格式：categories + series */
+/** 结余 = 收入 − 支出（可为负） */
+const balances = computed(() =>
+  props.trend.map((t) => Number(t.income) - Number(t.expense))
+);
+
+/** qiun-data-charts 的 chartData 格式：categories + series（每项可指定 type） */
 const chartData = computed(() => ({
   categories: props.trend.map((t) => t.label),
   series: [
     {
       name: '收入',
+      type: 'line',
       data: props.trend.map((t) => Number(t.income)),
       color: INCOME_COLOR,
     },
     {
       name: '支出',
+      type: 'line',
       data: props.trend.map((t) => Number(t.expense)),
       color: EXPENSE_COLOR,
+    },
+    {
+      name: '结余',
+      type: 'area',
+      data: balances.value,
+      color: BALANCE_COLOR,
     },
   ],
 }));
@@ -58,11 +80,12 @@ const chartData = computed(() => ({
  *
  * ⚠️ uCharts 的 yAxis 配置与 ECharts 完全不同：它放在 opts.yAxis.data 数组里，
  *    每个元素是一个轴分组，formatter 也在轴对象上。照抄 ECharts 的写法不会生效。
- * ⚠️ 图例文字必须给 fontColor —— uCharts 默认用序列色，橙红/青在浅底上做小字
- *    对比度不足；统一换成 $text-secondary #5a6472（6.00:1 ✅）。
+ * ⚠️ 图例文字必须给 fontColor —— uCharts 默认用序列色，小字在浅底上对比度不足；
+ *    统一换成 $text-secondary #5a6472（6.00:1 ✅）。
+ * ⚠️ 结余可能为负 → y 轴要能显示负值，**不设 min 让它自适应**。
  */
 const opts = computed(() => ({
-  color: [INCOME_COLOR, EXPENSE_COLOR],
+  color: [INCOME_COLOR, EXPENSE_COLOR, BALANCE_COLOR],
   padding: [15, 15, 0, 10],
   legend: {
     show: true,
@@ -98,20 +121,27 @@ const opts = computed(() => ({
       type: 'curve',
       width: 2,
     },
+    // 混合图里的面积配置（uCharts：opts.extra.mix.area）
+    mix: {
+      area: {
+        gradient: true,
+        opacity: 0.2,
+      },
+      line: {
+        width: 2,
+      },
+    },
     tooltip: {
       showBox: true,
       bgColor: 'rgba(31, 35, 41, 0.9)',
       fontColor: '#ffffff',
       borderRadius: 6,
-      // 自定义 tooltip 内容：显示「收入 x / 支出 y」两行
-      // uCharts 的 tooltip 默认格式已够用，此处保留默认，靠图例区分
     },
   },
 }));
 
 /** 触摸索引（当前未使用，保留用于将来高亮联动） */
 function onGetIndex(e: any) {
-  // e.currentIndex 是当前触摸的月份下标
   return e;
 }
 </script>
