@@ -179,7 +179,7 @@
           <text class="sheet-title">批量操作</text>
           <text class="sheet-sub">编辑、复制(含跨账本)、分享及删除流水</text>
         </view>
-        <view class="sheet-item" @click="doExport"><text class="sheet-item-text">流水导出</text></view>
+        <view class="sheet-item" @click="goExport"><text class="sheet-item-text">流水导出</text></view>
         <view class="sheet-item" @click="openFilterFromSheet">
           <text class="sheet-item-text">筛选</text>
         </view>
@@ -263,82 +263,17 @@
       @apply="onCategoryFilterApply"
     />
 
-    <!-- ── 弹层 ⑤：时间预设 ── -->
-    <view v-if="timeOpen" class="mask" @click="timeOpen = false; timeCustomOpen = false">
-      <view class="sheet" @click.stop>
-        <view class="sheet-header">
-          <view class="sheet-header-btn" @click="timeOpen = false">
-            <SvgIcon name="icon-close" :size="20" />
-          </view>
-          <text class="sheet-header-title">选择时间</text>
-          <view class="sheet-header-btn" />
-        </view>
-        <!--
-          中间内容（预设列表 + 自定义滚轮）放在 scroll-view 里：
-          否则「自定义」展开后总高超过 .sheet 的 max-height，会把底部「确定」挤出屏幕。
-        -->
-        <!-- 高度由 JS 算出（见 timeSheetBodyHeight），不依赖 flex 推导 -->
-        <scroll-view class="sheet-body" scroll-y :style="{ height: timeSheetBodyHeight + 'px' }">
-          <view
-            v-for="opt in TIME_PRESETS"
-            :key="opt.label"
-            class="sheet-item sheet-item-row"
-            @click="pickTimePreset(opt)"
-          >
-            <text class="sheet-item-text" :class="{ 'sheet-item-active': timeLabel === opt.label }">
-              {{ opt.label }}
-            </text>
-            <SvgIcon v-if="timeLabel === opt.label" class="sheet-check" name="icon-check" :size="18" />
-          </view>
+    <!--
+      ── 弹层 ⑤：时间预设 ──
+      ⚠️ 2026-09-15 起改用公共组件 TimeRangePicker（原本是内联实现）——
+          「数据导出」页要用同一套交互，抽出来避免两份逻辑分叉。
+    -->
+    <TimeRangePicker
+      v-model:visible="timeOpen"
+      :model-value="timeRangeModel"
+      @pick="onTimePicked"
+    />
 
-        <!--
-          自定义区间：选「自定义」后就地展开（参考图形态）——
-          上方两个可点的"开始/结束"、下方三列滚轮（年/月/日）、底部「确定」。
-          ⚠️ 这两处日期与滚轮是**双向绑定**的：点上方切换编辑对象、滚轮改的是同一个值。
-        -->
-        <view v-if="timeCustomOpen" class="range-panel">
-          <view class="range-tabs">
-            <view class="range-tab" @click="switchRangeEnd('start')">
-              <text class="range-tab-label">开始时间</text>
-              <text
-                class="range-tab-value"
-                :class="{ active: activeEnd === 'start' }"
-              >
-                {{ formatCn(customStart) }}
-              </text>
-              <view v-if="activeEnd === 'start'" class="range-tab-line" />
-            </view>
-            <text class="range-sep">-</text>
-            <view class="range-tab" @click="switchRangeEnd('end')">
-              <text class="range-tab-label">结束时间</text>
-              <text class="range-tab-value" :class="{ active: activeEnd === 'end' }">
-                {{ formatCn(customEnd) }}
-              </text>
-              <view v-if="activeEnd === 'end'" class="range-tab-line" />
-            </view>
-          </view>
-
-          <picker-view class="range-wheel" :value="wheelValue" @change="onWheelChange">
-              <picker-view-column>
-                <view v-for="y in RANGE_YEARS" :key="'y' + y" class="wheel-item">{{ y }}年</view>
-              </picker-view-column>
-              <picker-view-column>
-                <view v-for="m in 12" :key="'m' + m" class="wheel-item">{{ m }}月</view>
-              </picker-view-column>
-              <picker-view-column>
-                <view v-for="d in wheelDays" :key="'d' + d" class="wheel-item">{{ d }}日</view>
-              </picker-view-column>
-            </picker-view>
-          </view>
-        </scroll-view>
-
-        <view class="sheet-footer">
-          <view class="btn btn-confirm" @click="confirmTime">
-            <text class="btn-text confirm-text">确定</text>
-          </view>
-        </view>
-      </view>
-    </view>
 
     <!--
       ── 弹层 ⑦：筛选条件摘要（参考图）──
@@ -512,6 +447,7 @@ import EmptyState from '@/components/EmptyState.vue';
 import FlowFilterPanel, { type FlowFilter } from '@/components/FlowFilterPanel.vue';
 import FlowTypePicker from '@/components/FlowTypePicker.vue';
 import FlowCategoryPicker from '@/components/FlowCategoryPicker.vue';
+import TimeRangePicker, { type TimeRange } from '@/components/TimeRangePicker.vue';
 import { useAccountStore } from '@/store/account';
 import { useCategoryStore } from '@/store/category';
 import {
@@ -578,12 +514,9 @@ onPageScroll((e) => {
 });
 
 const statusBarHeight = ref(0);
-/** 视口高度（算弹层中间区高度用；uni-app 下 scroll-view 需要确定高度） */
-const windowHeight = ref(812);
 try {
   const info = uni.getSystemInfoSync();
   statusBarHeight.value = info.statusBarHeight || 0;
-  windowHeight.value = info.windowHeight || 812;
 } catch {
   statusBarHeight.value = 0;
 }
@@ -676,6 +609,27 @@ const filterVisible = ref(false);
 const typeOpen = ref(false);
 const categoryOpen = ref(false);
 const timeOpen = ref(false);
+
+/**
+ * 时间选择组件的受控值 —— computed 双向绑定到 filterModel 的三个字段。
+ * ⚠️ 不在组件里另存一份："选"由组件负责、"何时应用"由本页决定（等筛选面板的「确定」）。
+ */
+const timeRangeModel = computed<TimeRange>(() => ({
+  label: filterModel.timeLabel,
+  start: filterModel.start,
+  end: filterModel.end,
+}));
+
+/**
+ * 用户选中了预设 / 自定义区间 → 写回 filterModel。
+ * ⚠️ **不调 reloadAll()**：还没点筛选面板的「确定」，提前刷新会让列表在用户
+ *    还在编辑其他条件时就变；真正的应用发生在 onFilterApply。
+ */
+function onTimePicked(v: TimeRange) {
+  filterModel.timeLabel = v.label;
+  filterModel.start = v.start;
+  filterModel.end = v.end;
+}
 const sortOpen = ref(false);
 const timeLabel = computed(() => filterModel.timeLabel);
 
@@ -701,127 +655,6 @@ const SORT_OPTIONS = [
   { value: 'amountAsc', label: '按金额从低到高' },
 ] as const;
 
-/** 时间预设。「自定义」的 start/end 为空，选它时展开滚轮让用户自己选 */
-const TIME_PRESETS = [
-  { label: '全部时间', start: '', end: '' },
-  { label: '本月', ...monthRange(0) },
-  { label: '上月', ...monthRange(-1) },
-  { label: '本年', start: `${new Date().getFullYear()}-01-01`, end: `${new Date().getFullYear()}-12-31` },
-  {
-    label: '去年',
-    start: `${new Date().getFullYear() - 1}-01-01`,
-    end: `${new Date().getFullYear() - 1}-12-31`,
-  },
-  { label: '自定义', start: '', end: '' },
-];
-
-/**
- * 时间弹层中间区的高度（px）。
- *
- * ⚠️ 必须由 JS 算：uni-app 的 `scroll-view` 不吃 flex 推导（见样式里的注释）。
- *    取值 = 视口高 × 72%（与 .sheet 的 max-height 一致） − header − footer。
- *    下限 160 保证极端窄屏下滚轮仍可见。
- */
-const timeSheetBodyHeight = computed(() => {
-  const vh = windowHeight.value || 812;
-  return Math.max(160, Math.round(vh * 0.72) - 144);
-});
-
-/* ── 自定义区间 ── */
-/** 可选年份范围（与日历页一致，2000~2049） */
-const RANGE_YEARS = Array.from({ length: 50 }, (_, i) => 2000 + i);
-
-const pad2 = (n: number) => String(n).padStart(2, '0');
-const todayStr = (() => {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-})();
-
-/** 当前正在编辑哪一端 */
-/**
- * 「自定义」滚轮是否展开。
- *
- * ⚠️ 单独用状态，不要拿 `timeLabel === '自定义'` 当判据 ——
- *    那样必须在点「自定义」的瞬间就把 timeLabel 改掉，于是
- *    **用户还没选日期，筛选面板就已经显示「自定义」+ 空区间**了。
- *    正确做法：点「自定义」只展开滚轮，点「确定」才写值。
- */
-const timeCustomOpen = ref(false);
-
-const activeEnd = ref<'start' | 'end'>('start');
-const customStart = ref(todayStr);
-const customEnd = ref(todayStr);
-
-/** 滚轮当前年/月/日的下标 */
-const wheelYear = ref(RANGE_YEARS.indexOf(new Date().getFullYear()));
-const wheelMonth = ref(new Date().getMonth());
-const wheelDay = ref(new Date().getDate() - 1);
-
-/** 滚轮当前月份的天数（闰年/大小月都要算对，否则 2 月 31 日会出现） */
-const wheelDays = computed(() => {
-  const y = RANGE_YEARS[wheelYear.value] ?? 2000;
-  const m = wheelMonth.value;
-  return new Date(y, m + 1, 0).getDate();
-});
-
-/** 选中的那一端 → 滚轮应显示的值 */
-const wheelValue = computed(() => [wheelYear.value, wheelMonth.value, wheelDay.value]);
-
-function formatCn(d: string): string {
-  const [y, m, day] = d.split('-');
-  return `${y}年${m}月${day}日`;
-}
-
-/** 切换编辑对象：把滚轮同步到那一端当前的值 */
-function switchRangeEnd(which: 'start' | 'end') {
-  activeEnd.value = which;
-  const cur = which === 'start' ? customStart.value : customEnd.value;
-  const [y, m, d] = cur.split('-').map(Number);
-  wheelYear.value = Math.max(0, RANGE_YEARS.indexOf(y));
-  wheelMonth.value = m - 1;
-  wheelDay.value = d - 1;
-}
-
-function onWheelChange(e: any) {
-  const [yi, mi, di] = e.detail.value;
-  wheelYear.value = yi;
-  wheelMonth.value = mi;
-  // 换月后当月天数可能变少（如 1/31 → 2 月），把日下标收敛到合法范围
-  const maxDay = new Date(RANGE_YEARS[yi], mi + 1, 0).getDate();
-  wheelDay.value = Math.min(di, maxDay - 1);
-
-  const y = RANGE_YEARS[wheelYear.value];
-  const value = `${y}-${pad2(mi + 1)}-${pad2(wheelDay.value + 1)}`;
-  if (activeEnd.value === 'start') customStart.value = value;
-  else customEnd.value = value;
-}
-
-/** 确定：把自定义区间写进筛选条件 */
-function confirmTime() {
-  if (timeCustomOpen.value) {
-    // 起止颠倒时自动交换 —— 与其报错不如顺手修正（用户意图明确）
-    const [s, e] = [customStart.value, customEnd.value].sort();
-    filterModel.timeLabel = '自定义';
-    filterModel.start = s;
-    filterModel.end = e;
-  }
-  timeCustomOpen.value = false;
-  timeOpen.value = false;
-  // 同上：不在这里 reload，等筛选面板的「确定」
-}
-
-function monthRange(offset: number) {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m0 = d.getMonth() + offset;
-  const start = new Date(y, m0, 1);
-  const end = new Date(y, m0 + 1, 0);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return {
-    start: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-01`,
-    end: `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`,
-  };
-}
 
 /** 头部总额 = 各分组之和（与筛选条件联动，口径自洽） */
 const total = computed(() => {
@@ -1261,33 +1094,6 @@ function onCategoryFilterApply(ids: string[]) {
   reloadAll();
 }
 
-function pickTimePreset(opt: { label: string; start: string; end: string }) {
-  /*
-   * 「自定义」**不立即应用**，而是就地展开滚轮让用户选 ——
-   * 其余预设是确定区间，点了直接生效并关闭。
-   */
-  if (opt.label === '自定义') {
-    // 只展开滚轮，**不改** filterModel（见 timeCustomOpen 的注释）
-    timeCustomOpen.value = true;
-    // 展开时把滚轮定位到当前已选区间的起始端；没选过就用今天
-    if (filterModel.start) customStart.value = filterModel.start;
-    if (filterModel.end) customEnd.value = filterModel.end;
-    switchRangeEnd('start');
-    return;
-  }
-  timeCustomOpen.value = false;
-  filterModel.timeLabel = opt.label;
-  filterModel.start = opt.start;
-  filterModel.end = opt.end;
-  /*
-   * ⚠️ 这里**不**调 reloadAll()：用户只是选完了"时间"这一项，
-   *    还没点筛选面板的「确定」。提前刷新会让列表在用户还在编辑其他条件时就变，
-   *    而且若用户随后点「取消」/关闭面板，这次刷新就白做了。
-   *    真正的应用发生在筛选面板的「确定」（onFilterApply）。
-   */
-  timeOpen.value = false;
-}
-
 function openSortPicker() {
   actionVisible.value = false;
   sortOpen.value = true;
@@ -1298,36 +1104,16 @@ function pickSort(v: 'time' | 'amountDesc' | 'amountAsc') {
   reloadAll();
 }
 
-/** 导出当前分组为 CSV */
-function doExport() {
+/**
+ * 「流水导出」改为**跳到独立的数据导出页**（2026-09-15）。
+ *
+ * ⚠️ 原来这里是"直接导出当前分组为 CSV"。改成跳页的原因：
+ *    用户要的是"可以设置时间和分类的导出"（参考图），只靠当前筛选条件不够。
+ *    导出逻辑随之搬到 `pages/export/index.vue`，本页不再自己拼 CSV。
+ */
+function goExport() {
   actionVisible.value = false;
-  const rows: string[][] = [['分组', '收入', '支出', '结余', '笔数']];
-  for (const g of groups.value) {
-    /*
-     * ⚠️ 不能无条件调 periodLabel —— 分类维度下 g.key 是**分类 id**（如 "287"），
-     *    传进去会被当成日期解析出垃圾。用统一的 groupTitle/groupSub。
-     */
-    const title = groupTitle(g);
-    const sub = groupSub(g);
-    rows.push([`${sub}${title}`, g.income, g.expense, g.balance, String(g.count)]);
-  }
-  const csv = '\uFEFF' + rows.map((r) => r.map(csvCell).join(',')).join('\n');
-  // #ifdef H5
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `流水_${unitLabel.value}_${Date.now()}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-  uni.showToast({ title: '已导出', icon: 'none' });
-  // #endif
-  // #ifndef H5
-  uni.showToast({ title: '当前端暂不支持导出', icon: 'none' });
-  // #endif
-}
-function csvCell(v: string): string {
-  return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  uni.navigateTo({ url: '/pages/export/index' });
 }
 
 /* ── 导航 ── */
@@ -2072,23 +1858,10 @@ onMounted(async () => {
  * 最终方案：**JS 按视口高度直接算**，不依赖任何 flex 推导。
  * 这是项目里已有的经验：「内部用 scroll-view 滚动的页面要写 height，不能只写 min-height」。
  */
-.sheet-body {
-  flex: none;
-}
-
-.sheet-footer {
-  flex: none;
-}
 
 /* header 也不参与拉伸，高度恒定 */
 .sheet-header {
   flex: none;
-}
-
-.sheet-tall {
-  height: 80vh;
-  display: flex;
-  flex-direction: column;
 }
 
 .sheet-head {
@@ -2168,132 +1941,12 @@ onMounted(async () => {
   color: $text-primary;
 }
 
-.sheet-header-action {
-  font-size: $font-body-sm;
-  line-height: $lh-body-sm;
-  color: $brand-700;
-}
-
-.cat-list {
-  flex: 1;
-  min-height: 0;
-}
-
-.cat-row {
-  display: flex;
-  align-items: center;
-  min-height: 52px;
-  padding: 0 $space-4;
-  border-bottom: 1px solid $line;
-}
-
-.cat-child {
-  padding-left: $space-8;
-}
-
-.cat-check {
-  width: 20px;
-  height: 20px;
-  border-radius: $radius-sm;
-  border: 1.5px solid $border-input;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: $space-3;
-  flex-shrink: 0;
-  color: $text-inverse;
-}
-
-.cat-check.checked {
-  background: $brand-600;
-  border-color: $brand-600;
-}
-
-.cat-icon {
-  margin-right: $space-3;
-  flex-shrink: 0;
-}
-
-.cat-name {
-  font-size: $font-body;
-  line-height: $lh-body;
-  color: $text-primary;
-  @include text-safe;
-}
-
 /* ── 自定义区间（参考图形态）──
  *
  * 上方两个可点的「开始/结束」，下方三列滚轮（年/月/日）。
  * 用橙色下划线指示当前正在编辑哪一端 —— 只靠颜色区分两端对色盲用户不够（WCAG 1.4.1），
  * 所以「开始/结束」文字标签本身也始终显示。
  */
-.range-panel {
-  border-top: 1px solid $line;
-  padding: $space-3 0 0;
-}
-
-.range-tabs {
-  display: flex;
-  align-items: flex-start;
-  padding: 0 $space-4 $space-2;
-}
-
-.range-tab {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.range-tab-label {
-  font-size: $font-caption;
-  line-height: $lh-caption;
-  color: $text-tertiary;
-}
-
-.range-tab-value {
-  margin-top: $space-1;
-  font-size: $font-body-lg;
-  line-height: $lh-body-lg;
-  color: $text-primary;
-  @include tabular-nums;
-}
-
-.range-tab-value.active {
-  color: $brand-700;
-  font-weight: $weight-medium;
-}
-
-.range-tab-line {
-  margin-top: $space-2;
-  height: 2px;
-  width: 100%;
-  background: $brand-600;
-  border-radius: $radius-pill;
-}
-
-.range-sep {
-  margin: $space-5 $space-2 0;
-  font-size: $font-body-lg;
-  line-height: $lh-body-lg;
-  color: $text-disabled;
-}
-
-.range-wheel {
-  height: 180px;
-}
-
-.wheel-item {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: $font-h1;
-  line-height: $lh-h1;
-  color: $text-primary;
-}
-
-.sheet-footer {
-  padding: $space-4;
-}
 
 .btn {
   min-height: $touch-target-min;

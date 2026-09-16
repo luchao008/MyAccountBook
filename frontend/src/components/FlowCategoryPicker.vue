@@ -3,7 +3,7 @@
     <view class="sheet" @click.stop>
       <view class="header">
         <view class="header-btn" @click="close"><SvgIcon name="icon-close" :size="20" /></view>
-        <text class="header-title">选择分类</text>
+        <text class="header-title">{{ title || '选择分类' }}</text>
         <view class="header-btn header-action" @click="toggleAll">
           <text class="header-action-text">{{ allSelected ? '取消全选' : '全选' }}</text>
         </view>
@@ -89,6 +89,15 @@ const props = defineProps<{
   visible: boolean;
   /** 已选分类 id；**空数组 = 不过滤（全选）** */
   model: string[];
+  /**
+   * 只列某一收支类型的分类（可选）。
+   *
+   * 用于「数据导出」页 —— 那里把「支出分类」「收入分类」拆成两行分别选，
+   * 点哪行就只列哪一类。不传时（流水页筛选面板）仍列全部。
+   */
+  type?: 'income' | 'expense';
+  /** 弹层标题。不传时默认「选择分类」 */
+  title?: string;
 }>();
 
 const emit = defineEmits<{
@@ -98,6 +107,9 @@ const emit = defineEmits<{
 
 const categoryStore = useCategoryStore();
 const draft = ref<string[]>([]);
+
+/** 弹层标题（不传时「选择分类」） */
+const title = computed(() => props.title);
 
 /** 视口高度（uni-app 下 scroll-view 需要确定高度，不能靠 flex 推导） */
 const windowHeight = ref(812);
@@ -126,11 +138,19 @@ const bodyHeight = computed(() => {
 /** 折叠状态：记"被折叠的"，未记录 = 展开（默认全展开，新分类也自动展开） */
 const collapsed = ref<Set<string>>(new Set());
 
-/** 收入一级在前、支出一级在后（用户确认的顺序，段内各按 sort，store 已排好） */
-const roots = computed<CategoryItem[]>(() => [
-  ...categoryStore.incomeRoots,
-  ...categoryStore.expenseRoots,
-]);
+/**
+ * 一级分类列表。
+ *
+ * · 不传 `type`（流水页筛选面板）→ **收入在前、支出在后**（用户确认的顺序）
+ * · 传了 `type`（数据导出页）→ 只列该类型
+ *
+ * 段内各按 sort，store 的 getter 已排好。
+ */
+const roots = computed<CategoryItem[]>(() => {
+  if (props.type === 'income') return categoryStore.incomeRoots;
+  if (props.type === 'expense') return categoryStore.expenseRoots;
+  return [...categoryStore.incomeRoots, ...categoryStore.expenseRoots];
+});
 
 function childrenOf(parentId: string): CategoryItem[] {
   return categoryStore.childrenOf(parentId);

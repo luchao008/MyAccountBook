@@ -48,9 +48,18 @@ await page.waitForTimeout(3000);
 
 console.log('[1] 展开分组');
 {
-  const head = page.locator('.group-head').first();
-  await head.click();
-  await page.waitForTimeout(2500);
+  /*
+   * ⚠️ **不能盲目点一下 `.group-head`**：流水页在 2026-09-14 起
+   *    `loadGroups()` 末尾会自动展开第一个分组（`toggleGroup(groups[0])`），
+   *    再点一次是**收起** —— 于是断言拿到 txn=0，
+   *    且连带 [1.5] 也失效（分组收起后页面高度不足，`window.scrollTo` 滚不动）。
+   *    这里改成**幂等**：只在未展开时才点。
+   */
+  const before = await page.evaluate(() => document.querySelectorAll('.txn').length);
+  if (before === 0) {
+    await page.locator('.group-head').first().click();
+    await page.waitForTimeout(2500);
+  }
   const txnCount = await page.evaluate(() => document.querySelectorAll('.txn').length);
   check('展开后出现明细行', txnCount > 0, 'txn=' + txnCount);
   const dayHeads = await page.evaluate(() => document.querySelectorAll('.day-head').length);
@@ -212,10 +221,10 @@ console.log('[5] 搜索');
 {
   await page.locator('.nav-actions .nav-btn').nth(2).click();
   await page.waitForTimeout(700);
-  const hasBar = await page.evaluate(() => !!document.querySelector('.search-bar'));
+  const hasBar = await page.evaluate(() => !!document.querySelector('.search-page'));
   check('搜索框展开', hasBar);
-  await page.locator('.search-input input').fill('午饭');
-  await page.locator('.search-input input').press('Enter');
+  await page.locator('.search-box-input input').fill('午饭');
+  await page.locator('.search-box-input input').press('Enter');
   await page.waitForTimeout(2500);
   /*
    * ⚠️ 这里不能写成 `groups >= 0` —— 那永远为真，等于没校验（"报告里写了断言但判定通过"

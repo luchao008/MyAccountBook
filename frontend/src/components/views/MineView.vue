@@ -41,6 +41,11 @@
         <text class="menu-text">流水回收站</text>
         <SvgIcon class="menu-arrow" name="icon-chevron-right" :size="16" />
       </view>
+      <view class="menu-item" @click="goExport">
+        <SvgIcon class="menu-icon" name="icon-receipt" :size="28" />
+        <text class="menu-text">数据导出</text>
+        <SvgIcon class="menu-arrow" name="icon-chevron-right" :size="16" />
+      </view>
     </view>
 
     <view class="logout-box">
@@ -87,6 +92,10 @@ function goCategory(type: 'income' | 'expense') {
 
 function goRecycle() {
   uni.navigateTo({ url: '/pages/recycle/index' });
+}
+
+function goExport() {
+  uni.navigateTo({ url: '/pages/export/index' });
 }
 
 function onLogout() {

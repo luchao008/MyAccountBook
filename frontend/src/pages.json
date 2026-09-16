@@ -77,6 +77,13 @@
         "navigationStyle": "custom",
         "navigationBarTitleText": "流水回收站"
       }
+    },
+    {
+      "path": "pages/export/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "数据导出"
+      }
     }
   ],
   "globalStyle": {
