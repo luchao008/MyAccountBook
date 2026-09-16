@@ -42,7 +42,9 @@ export const CHART_SERIES = [
 
 /**
  * 可承载白字的实心色序列（= CHART_SERIES 去掉中性灰）。
- * 白字压其上实测 5.18 / 5.95 / 5.87 / 5.28 / 5.70 / 5.36 : 1，全部 ≥4.5。
+ * 白字压其上实测 **4.95 / 5.70 / 5.28 / 5.87 / 5.95 / 5.18 : 1**，全部 ≥4.5 ✅
+ * （按 v1.1 重排后的顺序列出；数值集合与重排前相同，最低值 5.18 → **4.95**，
+ *   因为青绿 `#0E7C86` 从第 4 位进到了第 1 位。）
  * 用途：首页「时间区间统计」的图标底色（其上压 14px 白字）、实心徽标底。
  */
 export const SOLID_SERIES = CHART_SERIES.slice(0, 6) as readonly string[];
@@ -51,6 +53,32 @@ export const SOLID_SERIES = CHART_SERIES.slice(0, 6) as readonly string[];
 export function solidSeriesAt(index: number): string {
   return SOLID_SERIES[index % SOLID_SERIES.length];
 }
+
+/**
+ * 趋势图三条序列的**语义色**（2026-09-16 v1.1 新增）。
+ *
+ * ⚠️ 为什么必须单独命名，而不是继续在调用处写 `CHART_SERIES[0]`：
+ *    v1.1 把序列**重排**了（青绿提到首位），而 `TrendChart` 原来是按下标取色 ——
+ *    于是三条线的颜色被**静默换掉**：
+ *      · 收入：`#c2410c` 橙红 → `#0E7C86` 青绿
+ *      · 支出：`#0e7490` 青   → `#c2185b` 品红
+ *      · 结余：`#1d63b8` 蓝   → `#7c3aed` 紫
+ *    没有任何报错，也没有脚本能抓到（下标永远合法）。
+ *
+ *    根因是**语义与下标是两回事**：环形图的「第 n 段」可以随序列重排而变，
+ *    但「收入必须是橙红」不会变。所以这里把角色固定下来，重排序列不再影响趋势图。
+ *
+ * 取值理由：
+ *   · 收入 `#c2410c` 橙红 —— 沿用原值，与环形图第 6 段同色，是「暖色 = 进账」的锚点
+ *   · 支出 `#0E7C86` 青绿 —— v1.1 新强调色，与支出语义色 `#0F7B7C` 同一色相家族
+ *   · 结余 `#1d63b8` 蓝   —— 中性、不偏收支任何一方
+ *
+ * ⚠️ 三条线**颜色不得作为唯一区分手段**（WCAG 1.4.1）：图例文字 + 结余是面积形态，
+ *    两者共同承担区分职责（见 TrendChart.vue 的说明）。
+ */
+export const TREND_INCOME_COLOR = '#c2410c';
+export const TREND_EXPENSE_COLOR = '#0E7C86';
+export const TREND_BALANCE_COLOR = '#1d63b8';
 
 /**
  * 环形图底环色。

@@ -196,19 +196,20 @@ onShow(async () => {
 
 /*
  * 「我的」视图容器。
- * MineView 是主容器里的组件，默认按"52px 底栏 + 凸起按钮"留 88px 底部空白；
- * 本页没有凸起按钮、底栏也只有 52px，所以把它的留白变量改小，避免多出 36px 空白。
+ *
+ * ⚠️ 2026-09-16 v1.1：底栏 56 → **76**。本页**不再覆盖** `--view-bottom-gap` ——
+ *    MineView 的默认值 76 恰好就是本页的正确值（本页底栏 2 项、无凸起按钮）。
+ *    此前那个 `52px` 覆盖值是按旧的 56px 底栏算的，已失效并删除。
  */
 .mine-slot {
   flex: 1;
   min-height: 0;
-  --view-bottom-gap: 52px;
 }
 
 .list {
   flex: 1;
-  /* 底栏高度约 50px + 安全区 */
-  padding-bottom: calc(56px + env(safe-area-inset-bottom));
+  /* 底栏高 76 + 安全区（底栏是 fixed，不留白会遮住最后一个账本） */
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
 }
 
 .tip {

@@ -9,8 +9,14 @@
  *
  * 被测的坑：`box-sizing: border-box` + 固定 `height` + `padding-bottom: env(safe-area-inset-bottom)`
  *   → border-box 下 **height 包含 padding**，安全区会**吃掉内容高度**。
- *   实测（safe-area=34px）：`.tab-item` 高度 55 → **21**，凸起项 48px 的圆被压扁。
- *   修法：height 也跟着安全区长（`calc(56px + env(...))`），padding 只负责顶开内容。
+ *   实测（safe-area=34px）：`.tab-item` 高度 75 → **41**，凸起项 50px 的圆被压扁。
+ *   修法：height 也跟着安全区长（`calc(76px + env(...))`），padding 只负责顶开内容。
+ *
+ * ⚠️ 2026-09-16 v1.1：底栏 56 → **76**、圆 48 → **50**、凸起项 padding-bottom 10 → **18**，
+ *    本脚本的期望值随之更新（overhang 22 → **12**，塌陷值 21 → **41**）。
+ *    ⚠️ 凸起项 padding-bottom 为什么必须跟着改：底栏长高 +20，而圆只长大 +2 ——
+ *       若 padding 不动，越出量会从 22 掉到 5，"凸起"这个设计意图直接消失。
+ *       取 18 后越出 12，且凸起项与普通项的文字底距**实测都是 18**（完美对齐）。
  *
  * ⚠️ 模拟时必须**同时**覆盖 height 与 padding —— 两者都用 env()。
  *    只覆盖 padding 会把新写的 height 一起盖掉，测的是旧行为（踩过）。
@@ -93,40 +99,40 @@ const measure = () =>
 console.log('[1] 桌面 / 无安全区（safe-area = 0）');
 const base = await measure();
 console.log('    ', JSON.stringify(base));
-check('底栏高 56', base.barH === 56, 'barH=' + base.barH);
-check('普通项高度 55', base.itemH === 55, 'itemH=' + base.itemH);
-check('凸起圆 48×48', base.btnW === 48 && base.btnH === 48, base.btnW + 'x' + base.btnH);
-check('凸起圆越出顶边（overhang 22）', base.overhang === 22, 'overhang=' + base.overhang);
+check('底栏高 76', base.barH === 76, 'barH=' + base.barH);
+check('普通项高度 75', base.itemH === 75, 'itemH=' + base.itemH);
+check('凸起圆 50×50', base.btnW === 50 && base.btnH === 50, base.btnW + 'x' + base.btnH);
+check('凸起圆越出顶边（overhang 12）', base.overhang === 12, 'overhang=' + base.overhang);
 
 console.log('[2] 模拟 Safari 全屏（safe-area = ' + SAFE + 'px，修复后的公式）');
 await page.addStyleTag({
   content:
-    '.tabbar--safe{height:calc(56px + ' + SAFE + 'px)!important;padding-bottom:' + SAFE + 'px!important}',
+    '.tabbar--safe{height:calc(76px + ' + SAFE + 'px)!important;padding-bottom:' + SAFE + 'px!important}',
 });
 await page.waitForTimeout(400);
 const fixed = await measure();
 console.log('    ', JSON.stringify(fixed));
-check('底栏高 = 56 + 安全区', fixed.barH === 56 + SAFE, 'barH=' + fixed.barH);
+check('底栏高 = 76 + 安全区', fixed.barH === 76 + SAFE, 'barH=' + fixed.barH);
 check(
-  '普通项高度**不变**（55，与桌面一致）—— 这是本 bug 的核心',
-  fixed.itemH === 55,
+  '普通项高度**不变**（75，与桌面一致）—— 这是本 bug 的核心',
+  fixed.itemH === 75,
   'itemH=' + fixed.itemH
 );
-check('凸起圆仍是 48×48', fixed.btnW === 48 && fixed.btnH === 48, fixed.btnW + 'x' + fixed.btnH);
-check('凸起圆仍越出顶边 22', fixed.overhang === 22, 'overhang=' + fixed.overhang);
+check('凸起圆仍是 50×50', fixed.btnW === 50 && fixed.btnH === 50, fixed.btnW + 'x' + fixed.btnH);
+check('凸起圆仍越出顶边 12', fixed.overhang === 12, 'overhang=' + fixed.overhang);
 check('底栏底边贴屏幕底', fixed.barBottom === 812, 'barBottom=' + fixed.barBottom);
 
 console.log('[3] 负向验证：改回"修复前"的公式，断言必须失败');
 // 负向验证是项目铁律：没验过"能报错"的断言等于没有断言
 await page.addStyleTag({
-  content: '.tabbar--safe{height:56px!important;padding-bottom:' + SAFE + 'px!important}',
+  content: '.tabbar--safe{height:76px!important;padding-bottom:' + SAFE + 'px!important}',
 });
 await page.waitForTimeout(400);
 const broken = await measure();
 console.log('    ', JSON.stringify(broken));
 check(
-  '确认"修复前"确实会塌陷（itemH=21）—— 证明上面那条断言是有效的',
-  broken.itemH === 21,
+  '确认"修复前"确实会塌陷（itemH=41 = 76 − 34 − 1border）—— 证明上面那条断言是有效的',
+  broken.itemH === 41,
   'itemH=' + broken.itemH
 );
 

@@ -300,37 +300,64 @@ function onDelete() {
 <style scoped lang="scss">
 .page {
   min-height: $page-min-height;
-  background: $bg-page;
+  background: $v11-bg-page;
   padding: 16px 16px 280px;
 }
 
+/*
+ * 收支切换：**「文字 + 短下划线」**（v1.1 参考图的写法）。
+ *
+ * v1.0 是分段控件（白底块 + 圆角 + 选中填品牌橙）—— 那是「块状」语言；
+ * v1.1 改为 iOS 顶栏式的**文字 + 26x3 短下划线**，切换控件不再需要独立的卡片载体。
+ *
+ * 下划线用 $v11-gold-fill（#E4AD77，纯图形，压白 1.99 不承载文字），
+ * 选中文字用 $v11-gold（#A85F12，压白卡 4.87 达标）。
+ * 两条线只做图形，所以「淡」是安全的；**文字必须用校准值**。
+ */
 .type-switch {
   display: flex;
-  background: $bg-card;
-  border-radius: 12px;
-  padding: 4px;
+  /* 下划线由 .type-btn 的 ::after 定位，容器只负责横向排布 */
   margin-bottom: 16px;
 }
 
 .type-btn {
   flex: 1;
+  position: relative;
   text-align: center;
-  padding: 10px 0;
+  padding: 10px 0 12px;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-secondary;
-  border-radius: 8px;
+  color: $v11-text-secondary;
+}
+
+/* 短下划线：26x3，居中于文字下方 —— 参考图的实测量法 */
+.type-btn::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  width: 26px;
+  height: 3px;
+  border-radius: 2px;
+  background: transparent;
+  transform: translateX(-50%);
+  transition: background 0.25s ease-out;
+  @include reduce-motion;
 }
 
 .type-btn.active {
-  background: $brand-600;
-  color: $text-inverse;
+  color: $v11-gold;
   font-weight: $weight-medium;
 }
 
+/* 选中态：颜色 + 字重 + 下划线三处同时变化（不依赖单一颜色区分，WCAG 1.4.1） */
+.type-btn.active::after {
+  background: $v11-gold-fill;
+}
+
 .amount-box {
-  background: $bg-card;
-  border-radius: 12px;
+  background: $v11-bg-card;
+  border-radius: $v11-radius-card;
   padding: 24px 20px;
   display: flex;
   align-items: baseline;
@@ -340,30 +367,45 @@ function onDelete() {
 .currency {
   font-size: $font-h1;
   line-height: $lh-h1;
-  color: $text-primary;
+  color: $v11-text-primary;
   margin-right: 4px;
 }
 
+/*
+ * 金额大字：**青绿**（v1.1 的核心视觉锚点之一）。
+ *
+ * 用 $v11-teal-large（#2E9496，压白卡 3.63）而**不是**列表金额用的
+ * $v11-teal-amount（#0F7B7C，5.07）。WCAG 对 >=24px 的大字只要求 3:1，
+ * 36px 的金额正落在大字档，用 3.63 那个才拿得到参考图里浅青绿的观感；
+ * 换成 0F7B7C 会明显偏深、失去通透感。
+ * **三档青绿各司其职，不要互换**（图形 2.08 / 大字 3.63 / 小字 5.63）。
+ */
 .amount {
   @include tabular-nums;
   font-size: $font-display-lg;
   line-height: $lh-display-lg;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-teal-large;
 }
 
 .panel {
-  background: $bg-card;
-  border-radius: 12px;
+  background: $v11-bg-card;
+  border-radius: $v11-radius-card;
   padding: 4px 16px;
   margin-top: 16px;
 }
 
+/*
+ * 行分隔线：$v11-line #F1F1F1（压白卡 1.13:1）。
+ * 这是 v1.1 里「最容易漏掉、但用户第一眼就看出来」的一处 ——
+ * 用户原话「线条太深」指的就是这类线（旧 $line 是 1.19:1，数值只差 0.06，
+ * 但配合 1px 物理厚度，观感差别明显）。
+ */
 .row {
   display: flex;
   align-items: center;
   padding: 14px 0;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 .row:last-child {
@@ -371,10 +413,13 @@ function onDelete() {
 }
 
 .row-label {
-  width: 56px;
+  /* 固定宽度一律写 min-width 而不是 width（方案 §3.3）：
+     width 在大字号下会把标签卡住、逼它压到右边的内容上。
+     56px 在 x2 字号下不够，min-width 允许它自己撑开。 */
+  min-width: 56px;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
   flex-shrink: 0;
 }
 
@@ -382,43 +427,49 @@ function onDelete() {
   flex: 1;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
+/*
+ * 占位文字：$v11-text-tertiary #9A9AA0 只有 2.80:1 —— **不达标**。
+ * 但它是「还没填」的提示，不是要读的内容，属 placeholder 语义；
+ * 一旦选中分类这个类就摘掉，文字立刻回到 $v11-text-primary（15.85:1）。
+ * 除占位符外不要用 tertiary 承载任何正文。
+ */
 .placeholder {
-  color: $text-tertiary;
+  color: $v11-text-tertiary;
 }
 
 .row-arrow {
-  color: $text-tertiary;
+  color: $v11-text-tertiary;
   margin-left: 6px;
-}
-
-.picker {
-  font-size: $font-body;
-  line-height: $lh-body;
-  color: $info;
 }
 
 .note-input {
   flex: 1;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .delete-box {
   margin-top: 16px;
-  background: $bg-card;
-  border-radius: 12px;
+  background: $v11-bg-card;
+  border-radius: $v11-radius-card;
   padding: 16px;
   text-align: center;
 }
 
+/*
+ * 删除按钮文字色：$danger（#D92D20，4.83:1 达标）。
+ * 这里用 $danger 而**不是** $expense / $v11-teal-amount：
+ * 「删除」是**危险操作**语义，不是「支出」语义。两者色相接近但语义不同，
+ * 禁止混用（执行计划 §6.1 红线：$success / $danger 不与收支语义互借）。
+ */
 .delete-text {
   font-size: $font-body;
   line-height: $lh-body;
-  color: $expense;
+  color: $danger;
 }
 
 .keyboard-fixed {

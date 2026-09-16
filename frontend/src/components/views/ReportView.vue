@@ -13,9 +13,13 @@
           <view class="nav-back" @click="goBack">
             <SvgIcon name="icon-chevron-left" :size="20" />
           </view>
-          <text class="nav-title">报表</text>
-          <view class="nav-back" />
         </view>
+        <!--
+          v1.1 大标题：iOS 的 Large Title 写法 —— 返回行与标题行分开，标题左对齐。
+          ⚠️ 字号用 $font-display（28/36），**不要**自定义 30/38：
+             字阶是固定 8 档（§2.2），阶梯外的 font-size 会被 check-contrast §13 判成 MISMATCH。
+        -->
+        <text class="nav-large-title">报表</text>
       </view>
 
       <!-- 顶部 Tab：只保留「基础统计」「分类」 -->
@@ -395,7 +399,7 @@ onMounted(loadData);
 <style scoped lang="scss">
 .page {
   min-height: $page-min-height;
-  background: $bg-canvas;
+  background: $v11-bg-page;
 }
 
 /* ── 吸顶区：顶栏 + Tab ── */
@@ -403,12 +407,12 @@ onMounted(loadData);
   position: sticky;
   top: 0;
   z-index: 10;
-  background: $bg-canvas;
+  background: $v11-bg-page;
 }
 
 /* ── 自绘顶栏 ── */
 .nav {
-  background: $bg-canvas;
+  background: $v11-bg-page;
 }
 
 .nav-inner {
@@ -417,29 +421,34 @@ onMounted(loadData);
   align-items: center;
 }
 
+/* 返回箭头用主色金：v1.1 里 $v11-gold 同时承担「可点文字」与「实心按钮底」（4.87 对称） */
 .nav-back {
   width: $touch-target-min;
   height: $touch-target-min;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-primary;
+  color: $v11-gold;
 }
 
-.nav-title {
-  flex: 1;
-  text-align: center;
-  font-size: $font-h2;
-  line-height: $lh-h2;
+/*
+ * v1.1 大标题。左对齐、不居中 —— 这是 iOS Large Title 的标志。
+ * 用 $font-display（28/36），不自定义 30/38：字阶是固定 8 档，阶梯外的字号会被校验判为不一致。
+ */
+.nav-large-title {
+  display: block;
+  padding: 0 $space-4 $space-3;
+  font-size: $font-display;
+  line-height: $lh-display;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 /* ── 顶部 Tab ── */
 .tabs {
   display: flex;
-  background: $bg-canvas;
-  border-bottom: 1px solid $line;
+  background: $v11-bg-page;
+  border-bottom: 1px solid $v11-line;
 }
 
 .tab-item {
@@ -455,30 +464,37 @@ onMounted(loadData);
 .tab-text {
   font-size: $font-body-lg;
   line-height: $lh-body-lg;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
+/* 选中态：文字色 + 字重 + 下划线三处同时变化（不依赖单一颜色传达，WCAG 1.4.1） */
 .tab-item.active .tab-text {
-  color: $text-primary;
+  color: $v11-gold;
   font-weight: $weight-semibold;
 }
 
+/*
+ * 短下划线 26x3 圆角 2 —— v1.1 的「文字 + 短下划线」写法（替换 v1.0 的整块分段控件）。
+ * 线用 $v11-gold-fill（#E4AD77，纯图形，压白 1.99 不承载文字）；
+ * 选中文字用 $v11-gold（#A85F12，压白卡 4.87 达标）。**线可以淡，字必须用校准值。**
+ */
 .tab-underline {
   position: absolute;
   bottom: 0;
-  width: 24px;
+  width: 26px;
   height: 3px;
-  border-radius: $radius-pill;
-  background: $brand-600;
+  border-radius: 2px;
+  background: $v11-gold-fill;
 }
 
 /* ── 时段选择栏 ── */
+/* v1.1：时段栏不再用分隔线（结构改由卡片承担），随页面底浮着 */
 .period-bar {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: $space-2 $space-4;
-  border-bottom: 1px solid $line;
+  background: $v11-bg-page;
 }
 
 .period-arrow {
@@ -487,7 +503,7 @@ onMounted(loadData);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .period-center {
@@ -500,14 +516,14 @@ onMounted(loadData);
 }
 
 .period-icon {
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .period-text {
   font-size: $font-body-lg;
   line-height: $lh-body-lg;
   font-weight: $weight-medium;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 /* ── 状态 ── */
@@ -521,19 +537,25 @@ onMounted(loadData);
 .state-text {
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 /* ── 账本流水统计 ── */
+/*
+ * 账本流水统计：v1.1 升为白卡片（页面底 #F8F8F8 上的一块真实载体）。
+ * 卡片**零描边**，层级由 #F8F8F8 与 #FFFFFF 的 1.06:1 亮度差承担。
+ */
 .hero {
+  margin: $space-4 $space-4 0;
   padding: $space-4;
-  border-bottom: 1px solid $line;
+  background: $v11-bg-card;
+  border-radius: $v11-radius-card;
 }
 
 .hero-label {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .hero-balance-row {
@@ -546,7 +568,7 @@ onMounted(loadData);
 .hero-balance-label {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-secondary;
+  color: $v11-text-secondary;
   flex-shrink: 0;
 }
 
@@ -555,7 +577,7 @@ onMounted(loadData);
   font-size: $font-display;
   line-height: $lh-display;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
   text-align: right;
   @include text-safe;
 }
@@ -570,13 +592,13 @@ onMounted(loadData);
   @include tabular-nums;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-secondary;
+  color: $v11-text-secondary;
   @include text-safe;
 }
 
 .hero-io-sep {
   margin: 0 $space-2;
-  color: $text-disabled;
+  color: $v11-text-disabled;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
 }
@@ -585,12 +607,14 @@ onMounted(loadData);
 .milestone {
   display: flex;
   align-items: center;
+  margin: $space-4 $space-4 0;
   padding: $space-3 $space-4;
-  border-bottom: 1px solid $line;
+  background: $v11-bg-card;
+  border-radius: $v11-radius-card;
 }
 
 .milestone-icon {
-  color: $brand-700;
+  color: $v11-gold;
   margin-right: $space-2;
 }
 
@@ -598,27 +622,29 @@ onMounted(loadData);
   flex: 1;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .milestone-count {
   @include tabular-nums;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 /* ── 面板 ── */
 .panel {
+  margin: $space-4 $space-4 0;
   padding: $space-4;
-  border-bottom: 1px solid $line;
+  background: $v11-bg-card;
+  border-radius: $v11-radius-card;
 }
 
 .panel-title {
   font-size: $font-body-lg;
   line-height: $lh-body-lg;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .panel-head {
@@ -638,7 +664,7 @@ onMounted(loadData);
 .panel-meta {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .panel-meta-val {
@@ -648,8 +674,12 @@ onMounted(loadData);
   font-weight: $weight-semibold;
 }
 
+/*
+ * 支出金额：v1.1 由正绿 #0B8038 改青绿 #0F7B7C（压白卡 5.07 / 压灰底 4.77，双底达标）。
+ * ⚠️ 不要用 $v11-teal-large（#2E9496）—— 它压灰底只有 3.41，那是留给 >=24px 大字的。
+ */
 .panel-meta-val.expense {
-  color: $expense;
+  color: $v11-teal-amount;
 }
 
 .panel-meta-val.income {
@@ -667,18 +697,22 @@ onMounted(loadData);
 .export-wrap {
   display: flex;
   justify-content: center;
-  padding: $space-5 $space-4;
+  padding: $v11-space-group $space-4 $space-6;
 }
 
+/*
+ * 浅金底 + 深金字 = 4.55:1 ✅ —— v1.1 的「次要按钮」样式：
+ * 与主色同族但更轻，替换 v1.0 的「描边按钮」。圆角走 $v11-radius-btn（近药丸）。
+ */
 .export-btn {
   display: flex;
   align-items: center;
   gap: $space-2;
   min-height: $touch-target-min;
   padding: 0 $space-5;
-  border: 1px solid $line-strong;
-  border-radius: $radius-md;
-  color: $text-secondary;
+  border-radius: $v11-radius-btn;
+  background: $v11-gold-soft;
+  color: $v11-gold;
 }
 
 .export-text {
@@ -691,8 +725,8 @@ onMounted(loadData);
   .page {
     max-width: 480px;
     margin: 0 auto;
-    border-left: 1px solid $line;
-    border-right: 1px solid $line;
+    border-left: 1px solid $v11-line;
+    border-right: 1px solid $v11-line;
   }
 }
 </style>

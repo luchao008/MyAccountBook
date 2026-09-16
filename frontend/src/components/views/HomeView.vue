@@ -94,13 +94,7 @@
               </view>
             </view>
             <view class="bar-bg">
-              <view
-                class="bar-fill"
-                :style="{
-                  width: barWidth(item.ratio),
-                  background: iconColors[index % iconColors.length],
-                }"
-              />
+              <view class="bar-fill" :style="{ width: barWidth(item.ratio) }" />
             </view>
           </view>
         </view>
@@ -302,18 +296,25 @@ defineExpose({ activate, onPullDownRefresh });
 <style scoped lang="scss">
 .page {
   min-height: $page-min-height;
-  background: $bg-canvas;
+  background: $v11-bg-page;
   padding: 12px 12px 0;
-  /* 自定义导航栏 52px + 凸起按钮向外溢出的部分 */
-  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+  /*
+   * 底部留白 = 底栏 76 + 凸起圆越出 12 + 10px 呼吸位 = **98**。
+   *
+   * ⚠️ 2026-09-16 v1.1：底栏 56 → 76、凸起圆 48 → 50、越出 22 → 12。
+   *    旧值 88 = 底栏 56 + 越出 22 + 呼吸位 10。直接把 88 当「底栏高度」改会算错 ——
+   *    凸起圆的越出量也算在留白里，漏了它最后一行会被圆压住。
+   *    按同一个 10px 呼吸位推：76 + 12 + 10 = 98。
+   */
+  padding-bottom: calc(98px + env(safe-area-inset-bottom));
 }
 
 /* ===== 顶部 banner ===== */
 .banner {
-  background: $gradient-banner;
-  border-radius: 16px;
+  background: $v11-hero-gradient;
+  border-radius: $v11-radius-card;
   padding: 16px 18px 18px;
-  color: $text-inverse;
+  color: $v11-hero-ink;
   position: relative;
   overflow: hidden;
 }
@@ -327,7 +328,8 @@ defineExpose({ activate, onPullDownRefresh });
 .account-switch {
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.22);
+  /* 浅金底上的账本切换胶囊：白色半透明块（原为深橙底上的 0.22） */
+  background: rgba(255, 255, 255, 0.72);
   border-radius: 14px;
   /* 22px 行盒 + 上下各 8px = 38 —— 账本切换入口，原来只有 30 */
   padding: 8px 12px;
@@ -349,13 +351,14 @@ defineExpose({ activate, onPullDownRefresh });
 }
 
 .account-arrow {
-  /* 不写 color：继承 .banner 的白字 */
+  /* 不写 color：继承 .banner 的深金字 */
   margin-left: 4px;
-  opacity: 0.9;
+  /* ⚠️ 不再用 opacity 降权 —— 它是「这里可以点」的提示，属有意义元素。
+     opacity 会静默吃掉对比度（本项目已踩过：白字 4.52 × 0.85 只剩 3.69）。 */
 }
 
 .banner-deco {
-  /* 纯装饰（不承载信息，WCAG 豁免），故保留 opacity */
+  /* 纯装饰（不承载信息，WCAG 豁免），故保留 opacity；浅金底上做淡化装饰 */
   opacity: 0.85;
 }
 
@@ -391,7 +394,8 @@ defineExpose({ activate, onPullDownRefresh });
   flex-wrap: wrap;
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.28);
+  /* Hero 内的分隔线：白线在浅金底上看不见，改金色发丝线 */
+  border-top: 1px solid rgba(143, 83, 18, 0.18);
 }
 
 .sub-item {
@@ -431,8 +435,8 @@ defineExpose({ activate, onPullDownRefresh });
 
 /* ===== 通用卡片 ===== */
 .card {
-  background: $bg-card;
-  border-radius: 16px;
+  background: $v11-bg-card;
+  border-radius: $v11-radius-card;
   margin-top: 12px;
 }
 
@@ -448,7 +452,7 @@ defineExpose({ activate, onPullDownRefresh });
   flex-wrap: wrap;
   align-items: center;
   padding: 14px 16px;
-  border-bottom: 1px solid $line;
+  border-bottom: 1px solid $v11-line;
 }
 
 .range-row:last-child {
@@ -490,14 +494,14 @@ defineExpose({ activate, onPullDownRefresh });
 .range-label {
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
   font-weight: $weight-medium;
 }
 
 .range-period {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   margin-top: 2px;
 }
 
@@ -519,7 +523,7 @@ defineExpose({ activate, onPullDownRefresh });
 .amount-key {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   margin-right: 6px;
   white-space: nowrap;
   flex-shrink: 0;
@@ -539,8 +543,14 @@ defineExpose({ activate, onPullDownRefresh });
   color: $income;
 }
 
+/*
+ * 支出金额：v1.1 由正绿 `#0B8038` 改青绿 `#0F7B7C`（用户 2026-09-16 拍板）。
+ * 压白卡 5.07 / 压页面底 4.77，两处都达标。
+ * ⚠️ 不能拿 `$v11-teal-large`（#2E9496）当列表金额 —— 它压灰底只有 3.41，会跌破。
+ *    青绿比正绿更怕背景变深，**图形 / 大字 / 小字三档必须各司其职**。
+ */
 .expense {
-  color: $expense;
+  color: $v11-teal-amount;
 }
 
 /* ===== 分类排行 ===== */
@@ -561,7 +571,7 @@ defineExpose({ activate, onPullDownRefresh });
   font-size: $font-body-lg;
   line-height: $lh-body-lg;
   font-weight: $weight-semibold;
-  color: $text-primary;
+  color: $v11-text-primary;
 }
 
 .rank-summary {
@@ -574,7 +584,7 @@ defineExpose({ activate, onPullDownRefresh });
   @include tabular-nums;
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
   margin-right: 14px;
 }
 
@@ -584,7 +594,7 @@ defineExpose({ activate, onPullDownRefresh });
 
 /* 「总支出」的数值：白卡上 5.05:1 ✅，与区间卡片的支出色一致 */
 .summary-val {
-  color: $expense;
+  color: $v11-teal-amount;
   font-weight: $weight-medium;
 }
 
@@ -600,7 +610,7 @@ defineExpose({ activate, onPullDownRefresh });
  *    不可点的项（「未分类」）不加这个类，也就没有任何可点暗示。
  */
 .rank-item-link:active {
-  background: $brand-50;
+  background: $v11-bg-inset;
 }
 
 .rank-no {
@@ -610,7 +620,7 @@ defineExpose({ activate, onPullDownRefresh });
   flex-shrink: 0;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .rank-body {
@@ -630,13 +640,13 @@ defineExpose({ activate, onPullDownRefresh });
   gap: 8px;
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-primary;
+  color: $v11-text-primary;
   min-width: 0;
 }
 
 .rank-name .svg-icon {
-  /* 压白卡 6.00:1；比分类名弱一档，让名称先被看到 */
-  color: $text-secondary;
+  /* 压白卡 5.29:1；比分类名弱一档，让名称先被看到 */
+  color: $v11-text-secondary;
 }
 
 .rank-right {
@@ -651,12 +661,12 @@ defineExpose({ activate, onPullDownRefresh });
   @include tabular-nums;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 .rank-dot {
   font-size: $icon-xs;
-  color: $text-disabled;
+  color: $v11-text-tertiary;
   margin: 0 6px;
 }
 
@@ -666,13 +676,13 @@ defineExpose({ activate, onPullDownRefresh });
   min-width: 72px;
   font-size: $font-body-sm;
   line-height: $lh-body-sm;
-  color: $text-primary;
+  color: $v11-text-primary;
   font-weight: $weight-medium;
 }
 
 .bar-bg {
   height: 6px;
-  background: $bg-subtle;
+  background: $v11-bg-inset;
   border-radius: $radius-pill;
   margin-top: 10px;
   overflow: hidden;
@@ -680,6 +690,8 @@ defineExpose({ activate, onPullDownRefresh });
 
 .bar-fill {
   height: 100%;
+  /* v1.1：进度条统一走青绿（纯图形用途，不承载文字，2.08:1 可用） */
+  background: $v11-teal;
   border-radius: $radius-pill;
   transition: width 0.3s;
 }
@@ -693,7 +705,7 @@ defineExpose({ activate, onPullDownRefresh });
   /* 上下留白凑够 44px 触控目标（WCAG 2.5.8 建议值） */
   padding: 12px 0 4px;
   margin-top: 4px;
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 
 .rank-toggle-text {

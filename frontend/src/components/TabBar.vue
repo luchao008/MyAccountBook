@@ -15,7 +15,7 @@
         <SvgIcon :name="item.icon" :size="24" />
       </view>
       <!-- 图标与文字同时变色：不依赖单一颜色区分（WCAG 1.4.1） -->
-      <SvgIcon v-else :name="item.icon" :size="22" />
+      <SvgIcon v-else :name="item.icon" :size="24" />
       <text class="tab-text">{{ item.text }}</text>
     </view>
   </view>
@@ -187,23 +187,36 @@ function go(item: TabItem) {
 </script>
 
 <style scoped lang="scss">
+/*
+ * v1.1「iOS 原生观感 · 暖金调」底栏。
+ *
+ * 高度由 56 → 76（内容区 75，另 1px 顶边线）。**这个改动会连带改变凸起圆的越出量**，
+ * 详见 .tab-item.raised 的几何说明 —— 圆的长大（48→50，仅 +2）远不及底栏长高（+20），
+ * 若 padding-bottom 不动，越出量会从 22px 掉到 5px，"凸起"这个设计意图基本消失。
+ */
 .tabbar {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   display: flex;
-  background: $bg-canvas;
-  border-top: 1px solid $line;
+  /*
+   * 毛玻璃材质（iOS 17–18 式）。@include ios-material 自带 @supports 降级 ——
+   * 小程序端 backdrop-filter 支持度参差，没有降级会出现"底栏纯透明、文字叠在内容上"。
+   * 底栏是 fixed，页面内容会滚到它下面，所以这里的半透明是真的看得见的。
+   * ⚠️ 有意不做 iOS 26 的 Liquid Glass（理由见设计文档 §2.4）。
+   */
+  @include ios-material;
+  border-top: 1px solid $v11-line;
   z-index: 100;
   /*
    * 高度必须**写死**，不能用 min-height。
    *
-   * 踩过：先前写 min-height: 56px，凸起项的内容（48 圆 + 2 间距 + 17 文字 + 10 内边距 = 77）
-   * 比其它项高，于是把底栏一起撑到 79px —— 圆被整个"吞"进底栏里，实测 overhang = −1。
-   * 固定高度后，凸起项的内容改为向上溢出，圆才真的越出顶边。
+   * 踩过：先前写 min-height: 56px，凸起项的内容比其它项高，于是把底栏一起撑到 79px ——
+   * 圆被整个"吞"进底栏里，实测 overhang = −1。固定高度后，凸起项的内容改为向上溢出，
+   * 圆才真的越出顶边。
    */
-  height: 56px;
+  height: 76px;
   overflow: visible;
 }
 
@@ -211,20 +224,19 @@ function go(item: TabItem) {
  * ⚠️ 底部安全区**必须加进 height 本身**，不能用 padding 挤内容。
  *
  * 踩过（Safari 全屏 / 添加到主屏幕）：`.tabbar` 是 `box-sizing: border-box` + 固定
- * `height: 56px`，而 border-box 下 **height 是包含 padding 的** ——
+ * `height`，而 border-box 下 **height 是包含 padding 的** ——
  * 再加 `padding-bottom: 34px`（iPhone home indicator 的 safe-area）后，
- * 内容区只剩 `56 − 34 − 1(border) = 21px`，`.tab-item` 的 `height: 100%` 随之塌到 21px，
- * 凸起项 48px 的圆被压扁。实测：itemH 55 → **21**。
+ * 内容区只剩 `76 − 34 − 1(border) = 41px`，凸起项 50px 的圆会被压扁。
  *
- * 正解：height 也跟着安全区长（`56 + safe`），padding 只负责把内容顶上去。
- * 这样 border-box 下内容区恒为 `55px`，与无安全区时完全一致。
+ * 正解：height 也跟着安全区长（`76 + safe`），padding 只负责把内容顶上去。
+ * 这样 border-box 下内容区恒为 `75px`，与无安全区时完全一致。
  *
  * 先写不带 env 的 height 作**兜底**：不支持 `env()` 的浏览器会整条丢弃 calc 声明，
  * 有兜底才不会连高度都没了。
  */
 .tabbar--safe {
-  height: 56px;
-  height: calc(56px + env(safe-area-inset-bottom, 0px));
+  height: 76px;
+  height: calc(76px + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
@@ -236,31 +248,44 @@ function go(item: TabItem) {
   align-items: center;
   justify-content: center;
   /*
-   * 这 5px 是**为了和凸起项的文字对齐**算出来的，不是随手加的：
-   * 普通项内容 22 + 2 + 17 = 41，居中后文字底距底栏 7.5px；
-   * 凸起项的 padding-bottom 是 10px，两者差 2.5px →
-   * 这里补 5px 下内边距，普通项文字底距正好也落到 10px（实测差 ≤1px）。
+   * 这 5px 是**为了和凸起项的文字对齐**调出来的，不是随手加的。
+   *
+   * ✅ v1.1 实测：普通项与凸起项的文字底距**都是 18px**（完全对齐）。
+   *    脚本 scripts/verify-safe-area.mjs 与 /tmp 探针均可复现。
+   * ⚠️ 不要凭公式反推这个值 —— 居中算法受 padding / gap / 行高三者共同影响，
+   *    推导很容易得出一个和实测不符的数（本文件此前就写错过一次）。
+   *    **对齐与否只认实测。**
    */
   padding-bottom: 5px;
   gap: 2px;
-  color: $text-tertiary;
+  color: $v11-text-secondary;
 }
 
 /*
  * 凸起项靠底对齐 —— 这是圆能"免费"凸出去的原因。
  *
- * 文字贴在与其它项同一行的位置，48px 的圆放不下就自然向上越出底栏顶边，
+ * 文字贴在与其它项同一行的位置，50px 的圆放不下就自然向上越出底栏顶边，
  * 不需要负 margin（负 margin 会在 flex 里留下"占位 22px"这种与肉眼不符的账）。
- * 实测凸出 ≈ 21px = 56 − 10 − 17 − 2 − 48。
+ *
+ * ⚠️ padding-bottom 由 10 → **18**，这是底栏长高后的必要补偿：
+ *    · 旧几何（高 56 / 圆 48 / pad 10）：圆顶距项底 78，越出 78 − 55 = **22px**
+ *    · 只长高不补 pad（高 76 / 圆 50 / pad 10）：圆顶距项底 80，越出 80 − 75 = **5px**
+ *      → 圆几乎被吞进底栏，"凸起"消失
+ *    · 实际采用（高 76 / 圆 50 / pad 18）：越出 **12px**（实测值）
+ *
+ * ⚠️ 是 12 而不是 13：项高 75 是**含 1px 顶边线**的内容区，而圆越出的是底栏
+ *    border-box 的顶边，所以要再减掉那 1px。实测 overhang = 12
+ *    （脚本 scripts/verify-safe-area.mjs，含负向验证）。
+ * ✅ 实测凸起项与普通项的文字底距**都是 18px**（完全对齐）。
  */
 .tab-item.raised {
   justify-content: flex-end;
-  padding-bottom: 10px;
+  padding-bottom: 18px;
 }
 
 .raised-btn {
-  width: 48px;
-  height: 48px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
   /*
    * 必须禁掉收缩。
@@ -270,16 +295,22 @@ function go(item: TabItem) {
    * 看着像个小药丸，而且照样凸不出去。
    */
   flex-shrink: 0;
-  /* 白色加号压 brand-600 = 4.52:1 ✅（brand-500 只有 2.84:1，不能承载白字） */
-  background: $brand-600;
+  /* 白色加号压 $v11-gold = 4.87:1 ✅（对比度对称：白底金字同样是 4.87） */
+  background: $v11-gold;
   color: $text-inverse;
   display: flex;
   align-items: center;
   justify-content: center;
+  /*
+   * 品牌金投影 —— ⚠️ 阴影不是装饰色，而是「品牌色的淡化」，
+   * 色值必须跟随 $v11-gold 一起改。
+   * 漏了这一步就会出现"金色按钮配橙色光晕"（旧值是 rgba(207,74,18)）。
+   */
+  box-shadow: 0 4px 14px $v11-gold-shadow;
 }
 
 .raised-btn:active {
-  background: $brand-800;
+  background: $v11-gold-pressed;
 }
 
 .tab-text {
@@ -287,14 +318,14 @@ function go(item: TabItem) {
   line-height: $lh-caption;
 }
 
-/* 选中态：颜色 + 字重同时变化 */
+/* 选中态：颜色 + 字重同时变化（不依赖单一颜色区分，WCAG 1.4.1） */
 .tab-item.active {
-  color: $brand-700;
+  color: $v11-gold;
   font-weight: $weight-medium;
 }
 
-/* 凸起项不是视图，文字固定用次级深灰（压白底 5.55:1 ✅） */
+/* 凸起项不是视图，文字固定用次级灰（压白卡 5.29:1 ✅ / 压 #F8F8F8 4.98:1 ✅） */
 .tab-item.raised .tab-text {
-  color: $text-secondary;
+  color: $v11-text-secondary;
 }
 </style>

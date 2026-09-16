@@ -194,9 +194,10 @@ function reportTabbar(geo) {
     return;
   }
   const checks = [
-    ['圆按钮直径 48', geo.btnW === 48 && geo.btnH === 48],
+    // ⚠️ 2026-09-16 v1.1：底栏 56 → 76、圆 48 → 50、越出 22 → 12（实测值）
+    ['圆按钮直径 50', geo.btnW === 50 && geo.btnH === 50],
     ['越出底栏顶边', geo.overhang > 0],
-    [`凸出量 ≈ 23px（实测 ${geo.overhang}）`, Math.abs(geo.overhang - 23) <= 2],
+    [`凸出量 ≈ 12px（实测 ${geo.overhang}）`, Math.abs(geo.overhang - 12) <= 2],
     [
       '凸起项文字与其它项同一行（≤2px）',
       geo.raisedTextTop !== null &&

@@ -172,8 +172,13 @@ onPullDownRefresh(() => {
 </script>
 
 <style scoped lang="scss">
+/*
+ * 容器底色 = 页面底。v1.1 由纯白 #FFFFFF 改 #F8F8F8（分组灰底），
+ * 页内各 section 自己是白卡片 —— 层级靠这 1.06:1 的亮度差承担，不靠描边。
+ * 本页只有这一条样式，改 v1.1 时它是最小的一处；但漏了它整页会白成一片。
+ */
 .main {
   min-height: $page-min-height;
-  background: $bg-canvas;
+  background: $v11-bg-page;
 }
 </style>

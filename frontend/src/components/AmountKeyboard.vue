@@ -68,33 +68,40 @@ function clear() {
 
 <style scoped lang="scss">
 /* ============================================================
-   金额键盘 · FL-1「零阴影」
-   按键之间靠 1px 分隔线（容器底色 $line + grid gap）区分，
-   **不靠阴影**；辅助键用 $bg-subtle 底与数字键（白底）分组。
+   金额键盘 · v1.1「iOS 原生观感 · 暖金调」
+
+   按键之间靠 1px 分隔线（容器底色 + grid gap）区分，**不靠阴影**；
+   辅助键（删除 / 清空 / 小数点）用 $v11-bg-inset 底与数字键（白底）分组。
+
+   ⚠️ v1.1 只把「线」与「底」两处刻度调淡，**键盘几何一行未动**：
+      键高 48、4 列栅格、主操作跨两行 —— 这些是拇指落点的物理尺寸，
+      不随视觉语言变化。改动仅限 $line → $v11-line、$bg-subtle → $v11-bg-inset。
    ============================================================ */
 .keyboard {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  /* gap 露出容器的 $line 底色 = 1px 分隔线 */
+  /* gap 露出容器的 $v11-line 底色 = 1px 分隔线 */
   gap: 1px;
-  background: $line;
+  background: $v11-line;
   padding: 1px;
 }
 
 .key {
   height: 48px;
-  background: $bg-card;
+  background: $v11-bg-card;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: $font-h1;
   line-height: $lh-h1;
-  color: $text-primary;
+  color: $v11-text-primary;
   /* 扁平：无阴影 */
 }
 
 .key:active {
-  background: $bg-subtle;
+  /* 按下态：v1.1 用 $v11-bg-inset（#F5F5F5，对白键 1.04:1）——
+     比旧 $bg-subtle 更轻，与新的分隔线刻度同一档 */
+  background: $v11-bg-inset;
 }
 
 .zero {
@@ -105,15 +112,18 @@ function clear() {
 .fn {
   font-size: $font-body;
   line-height: $lh-body;
-  color: $text-secondary;
-  background: $bg-subtle;
+  color: $v11-text-secondary;
+  background: $v11-bg-inset;
 }
 
-/* 主操作：右下角，纵向跨两行 */
+/*
+ * 主操作：右下角，纵向跨两行。
+ * 白字压 $v11-gold = 4.87:1 ✅（对比度对称：白底金字同样是 4.87）
+ */
 .confirm {
   grid-row: span 2;
   height: auto;
-  background: $brand-600;
+  background: $v11-gold;
   color: $text-inverse;
   font-size: $font-body-lg;
   line-height: $lh-body-lg;
@@ -121,6 +131,6 @@ function clear() {
 }
 
 .confirm:active {
-  background: $brand-800;
+  background: $v11-gold-pressed;
 }
 </style>
