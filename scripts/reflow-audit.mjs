@@ -77,6 +77,7 @@ const PAGES = [
   ['category-income', '#/pages/category/index?type=income'],
   ['account', '#/pages/account/index'],
   ['record', '#/pages/record/index'],
+  ['export', '#/pages/export/index'],
 ];
 
 /** 三档视口：320 窄屏 / 375 常态（回归对照）/ 320 + 字号 ×2 */
