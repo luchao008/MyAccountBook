@@ -57,35 +57,56 @@ echo ""
 echo "[jwt guard]"
 check "no token 401" 401 "$(code $BASE/api/categories)"
 check "bad token 401" 401 "$(code $BASE/api/categories -H 'Authorization: Bearer bad.token')"
-check "valid token 200" 200 "$(code $BASE/api/categories -H "Authorization: Bearer $TOKEN")"
+# ⚠️ 用 /accounts 而非 /categories 做「token 有效性」探针：
+#    分类自 2026-09-16 起为账本级隔离，/categories 必传 accountId，
+#    拿它当探针会得到 422（假失败）。
+check "valid token 200" 200 "$(code $BASE/api/accounts -H "Authorization: Bearer $TOKEN")"
 echo ""
 
 echo "[category]"
-echo '{"name":"RegExpense","type":"expense","sort":1}' > $TMP/ce.json
+# ⚠️ 分类自 2026-09-16 起为**账本级隔离**：所有分类接口必传 accountId。
+#    且默认账本（母本）的分类**禁删**（D16）—— 所以"删不存在的分类应 404"这条
+#    必须在**非默认账本**上验，否则会先撞上默认账本保护返回 400。
+#    这里先建一个空的临时非默认账本，专供分类用例使用。
+echo '{"name":"回归临时分类账本","copyAll":false,"categoryIds":[]}' > $TMP/acc_cat.json
+ACC_CAT=$(curl -s -X POST $BASE/api/accounts -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/acc_cat.json)
+AID=$(echo "$ACC_CAT" | jq_get "data.id")
+echo "  (temp account id=$AID)"
+
+cat > $TMP/ce.json <<EOF
+{"accountId":"$AID","name":"RegExpense","type":"expense","sort":1}
+EOF
 CE=$(curl -s -X POST $BASE/api/categories -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/ce.json)
 CE_ID=$(echo "$CE" | jq_get "data.id")
-echo '{"name":"RegIncome","type":"income","sort":1}' > $TMP/ci.json
+cat > $TMP/ci.json <<EOF
+{"accountId":"$AID","name":"RegIncome","type":"income","sort":1}
+EOF
 CI=$(curl -s -X POST $BASE/api/categories -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/ci.json)
 CI_ID=$(echo "$CI" | jq_get "data.id")
 echo "  (expense id=$CE_ID, income id=$CI_ID)"
-echo '{"name":"RegExpense","type":"expense"}' > $TMP/dup.json
+cat > $TMP/dup.json <<EOF
+{"accountId":"$AID","name":"RegExpense","type":"expense"}
+EOF
 check "dup name 409" 409 "$(code -X POST $BASE/api/categories -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/dup.json)"
-check "list 200" 200 "$(code $BASE/api/categories -H "Authorization: Bearer $TOKEN")"
-check "filter by type 200" 200 "$(code "$BASE/api/categories?type=income" -H "Authorization: Bearer $TOKEN")"
+check "list 200" 200 "$(code "$BASE/api/categories?accountId=$AID" -H "Authorization: Bearer $TOKEN")"
+check "filter by type 200" 200 "$(code "$BASE/api/categories?accountId=$AID&type=income" -H "Authorization: Bearer $TOKEN")"
+check "missing accountId 422" 422 "$(code $BASE/api/categories -H "Authorization: Bearer $TOKEN")"
 echo '{"sort":9}' > $TMP/upd.json
-check "update 200" 200 "$(code -X PUT $BASE/api/categories/$CE_ID -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/upd.json)"
-check "delete missing 404" 404 "$(code -X DELETE $BASE/api/categories/99999 -H "Authorization: Bearer $TOKEN")"
+check "update 200" 200 "$(code -X PUT "$BASE/api/categories/$CE_ID?accountId=$AID" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/upd.json)"
+check "delete missing 404" 404 "$(code -X DELETE "$BASE/api/categories/99999?accountId=$AID" -H "Authorization: Bearer $TOKEN")"
 echo ""
 
 echo "[transaction]"
 cat > $TMP/t1.json <<EOF
-{"type":"expense","amount":"88.88","recordDate":"2026-09-15","categoryId":"$CE_ID","note":"reg test"}
+{"type":"expense","amount":"88.88","recordDate":"2026-09-15","categoryId":"$CE_ID","accountId":"$AID","note":"reg test"}
 EOF
 T1=$(curl -s -X POST $BASE/api/transactions -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/t1.json)
 T1_ID=$(echo "$T1" | jq_get "data.id")
 echo "  (txn id=$T1_ID)"
+# ⚠️ categoryId 属于临时账本 AID，交易必须落到**同一个账本**，
+#    否则会撞上「分类不属于该账本」→ 404。这是账本级分类的核心不变量。
 cat > $TMP/t2.json <<EOF
-{"type":"income","amount":"100","recordDate":"2026-09-15","categoryId":"$CI_ID"}
+{"type":"income","amount":"100","recordDate":"2026-09-15","categoryId":"$CI_ID","accountId":"$AID"}
 EOF
 check "create 200" 200 "$(code -X POST $BASE/api/transactions -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/t2.json)"
 echo '{"type":"expense","amount":"0","recordDate":"2026-09-15"}' > $TMP/t0.json
@@ -93,9 +114,14 @@ check "amount=0 422" 422 "$(code -X POST $BASE/api/transactions -H "Authorizatio
 echo '{"type":"expense","amount":"1.234","recordDate":"2026-09-15"}' > $TMP/t3.json
 check "amount 3dp 422" 422 "$(code -X POST $BASE/api/transactions -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/t3.json)"
 cat > $TMP/t4.json <<EOF
-{"type":"expense","amount":"10","recordDate":"2026-09-15","categoryId":"$CI_ID"}
+{"type":"expense","amount":"10","recordDate":"2026-09-15","categoryId":"$CI_ID","accountId":"$AID"}
 EOF
 check "type mismatch 400" 400 "$(code -X POST $BASE/api/transactions -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/t4.json)"
+# 分类不属于该账本 -> 404（账本级分类的不变量，回归要守住）
+cat > $TMP/t5.json <<EOF
+{"type":"expense","amount":"10","recordDate":"2026-09-15","categoryId":"$CE_ID"}
+EOF
+check "category from other account 404" 404 "$(code -X POST $BASE/api/transactions -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/t5.json)"
 check "list 200" 200 "$(code $BASE/api/transactions -H "Authorization: Bearer $TOKEN")"
 check "date range 200" 200 "$(code "$BASE/api/transactions?start=2026-09-01&end=2026-09-30" -H "Authorization: Bearer $TOKEN")"
 check "type filter 200" 200 "$(code "$BASE/api/transactions?type=expense" -H "Authorization: Bearer $TOKEN")"
@@ -154,7 +180,10 @@ cat > $TMP/u2.json <<EOF
 {"username":"$U2","password":"123456"}
 EOF
 TOKEN2=$(curl -s -X POST $BASE/api/auth/register -H 'Content-Type: application/json' --data-binary @$TMP/u2.json | jq_get "data.token")
-check "cross-user category 404" 404 "$(code $BASE/api/categories/$CE_ID -H "Authorization: Bearer $TOKEN2")"
+# ⚠️ 跨用户断言必须带**自己的** accountId 去查别人的分类 —— 不带会先撞上
+#    「accountId 必传」的 422，验不到数据隔离本身。
+A2_ID=$(curl -s $BASE/api/accounts -H "Authorization: Bearer $TOKEN2" | jq_get "data[0].id")
+check "cross-user category 404" 404 "$(code "$BASE/api/categories/$CE_ID?accountId=$A2_ID" -H "Authorization: Bearer $TOKEN2")"
 check "cross-user txn 404" 404 "$(code $BASE/api/transactions/$T1_ID -H "Authorization: Bearer $TOKEN2")"
 echo ""
 
