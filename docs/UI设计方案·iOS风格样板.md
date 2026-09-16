@@ -595,7 +595,11 @@ node scripts/check-ios-tokens.mjs
 
 ---
 
-## 10. 逐页面改造清单（15 个页面）
+## 10. 逐页面改造清单（16 个页面 + 3 个视图组件）
+
+> ⚠️ **2026-09-16 修正**：本表原写「15 个页面」，实测 `pages.json` 注册了 **16 个页面**，
+> 漏掉的是 `account-new` / `account-category` / `account-import` 三个账本子页。
+> 已补为 16/17/18 行。**执行以 `docs/界面全量翻新执行计划.md` §4 为准。**
 
 **通用改动（每页都做，不重复列出）**：
 页面底 → `#F8F8F8` · 卡片去描边 + 圆角 16 · 分隔线 → `#F1F1F1` · 文字阶换 v1.1 ·
@@ -620,6 +624,13 @@ node scripts/check-ios-tokens.mjs
 | 13 | 登录 | `pages/login/index.vue` | logo 底、输入框、主按钮改金 | 低 |
 | 14 | 主容器 | `pages/main/index.vue` | TabBar 图标 22→24、选中色改金、顶部改毛玻璃 | 中。凸起项居中依赖"排第几"，别动顺序 |
 | 15 | 我的（在账本选择页内） | `components/views/MineView.vue` | 网格卡、列表行 | 低。⚠️ URL 不可寻址，`reflow-audit` 覆盖不到（既有缺口） |
+| 16 | 新建账本 | `pages/account-new/index.vue` | 表单行换淡线；主按钮改金 | 低。⚠️ 原表遗漏，2026-09-16 补入 |
+| 17 | 分类设置 | `pages/account-category/index.vue` | 列表去描边；批量操作态 | 低。⚠️ 原表遗漏，2026-09-16 补入 |
+| 18 | 从母本导入 | `pages/account-import/index.vue` | 列表 + 导入按钮 | 低。⚠️ 原表遗漏，2026-09-16 补入 |
+
+**⚠️ `reflow-audit.mjs` 的覆盖缺口（2026-09-16 实测）**：它覆盖 13 条路由（12 个不同页面）× 3 档
+= **39 屏**（不是记忆里的 30 屏）。仍缺 4 页：`login` / `category-new` / `icon-picker` / `recycle`，
+外加全部弹层交互态。补全属独立任务，见执行计划阶段 5。
 
 **建议顺序**：1 → 2 → 3（判断整体是否成立）→ 4（最重的）→ 5/6/12（有独立结构的）→ 其余 → 14 收口。
 
