@@ -3,17 +3,28 @@ import { IMidwayApplication } from '@midwayjs/core';
 import { TransactionService } from '../src/transaction/transaction.service';
 import { CategoryService } from '../src/category/category.service';
 import { AuthService } from '../src/auth/auth.service';
+import { AccountService } from '../src/account/account.service';
 import { ErrorCode } from '../src/common/error-code';
 import { cleanupUsers, closeTestDataSource, expectBusinessError, randomUsername } from './helper';
+
+/** 取某用户的默认账本 id（测试内动态注册的用户用） */
+async function defaultAccountOf(accountService: AccountService, uid: string): Promise<string> {
+  const list = await accountService.list(uid);
+  return list.find((a) => a.isDefault)!.id;
+}
 
 describe('TransactionService', () => {
   let app: IMidwayApplication;
   let transactionService: TransactionService;
   let categoryService: CategoryService;
   let authService: AuthService;
+  let accountService: AccountService;
 
   let userId: string;
   let otherUserId: string;
+  /** 分类/交易测试都跑在默认账本上（本测试不涉及删分类） */
+  let defaultAccountId: string;
+  let otherDefaultAccountId: string;
   let expenseCategoryId: string;
   let incomeCategoryId: string;
   const createdUserIds: string[] = [];
@@ -24,6 +35,7 @@ describe('TransactionService', () => {
     transactionService = await ctx.getAsync(TransactionService);
     categoryService = await ctx.getAsync(CategoryService);
     authService = await ctx.getAsync(AuthService);
+    accountService = await ctx.getAsync(AccountService);
 
     const me = await authService.register({
       username: randomUsername('txn'),
@@ -36,12 +48,16 @@ describe('TransactionService', () => {
     userId = me.user.id;
     otherUserId = other.user.id;
     createdUserIds.push(userId, otherUserId);
+    defaultAccountId = (await accountService.list(userId)).find((a) => a.isDefault)!.id;
+    otherDefaultAccountId = (await accountService.list(otherUserId)).find((a) => a.isDefault)!.id;
 
     const expense = await categoryService.create(userId, {
+      accountId: defaultAccountId,
       name: '餐饮',
       type: 'expense',
     });
     const income = await categoryService.create(userId, {
+      accountId: defaultAccountId,
       name: '工资',
       type: 'income',
     });
@@ -96,6 +112,7 @@ describe('TransactionService', () => {
 
     it('分类不属于当前用户：抛 40401', async () => {
       const othersCategory = await categoryService.create(otherUserId, {
+        accountId: otherDefaultAccountId,
         name: '他人分类',
         type: 'expense',
       });
@@ -371,15 +388,28 @@ describe('TransactionService', () => {
       qUserId = u.user.id;
       createdUserIds.push(qUserId);
 
-      catFood = (await categoryService.create(qUserId, { name: '餐饮Q', type: 'expense' })).id;
+      catFood = (
+        await categoryService.create(qUserId, {
+          accountId: await defaultAccountOf(accountService, qUserId),
+          name: '餐饮Q',
+          type: 'expense',
+        })
+      ).id;
       catLunch = (
         await categoryService.create(qUserId, {
+          accountId: await defaultAccountOf(accountService, qUserId),
           name: '午餐Q',
           type: 'expense',
           parentId: catFood,
         })
       ).id;
-      catTraffic = (await categoryService.create(qUserId, { name: '交通Q', type: 'expense' })).id;
+      catTraffic = (
+        await categoryService.create(qUserId, {
+          accountId: await defaultAccountOf(accountService, qUserId),
+          name: '交通Q',
+          type: 'expense',
+        })
+      ).id;
 
       await transactionService.create(qUserId, {
         type: 'expense',

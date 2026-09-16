@@ -42,6 +42,12 @@ export enum ErrorCode {
   ACCOUNT_LAST_ONE = 40002,
   /** 不能把账本合并到它自己 */
   ACCOUNT_MERGE_SELF = 40003,
+  /** 分类下已有交易，不能移除（账本级分类，设计 D10） */
+  CATEGORY_HAS_TRANSACTIONS = 40004,
+  /** 分类与交易不属于同一账本（账本级分类） */
+  CATEGORY_ACCOUNT_MISMATCH = 40005,
+  /** 默认账本（分类母本）的分类不允许删除（设计 D16） */
+  CATEGORY_DEFAULT_PROTECTED = 40006,
 
   // 服务端
   INTERNAL = 50000,

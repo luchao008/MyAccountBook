@@ -7,6 +7,7 @@ import {
   UpdateAccountDTO,
   DeleteAccountQueryDTO,
   MergeAccountDTO,
+  ImportCategoriesDTO,
 } from './dto/account.dto';
 import { ErrorResponseVO } from '../common/swagger/response.vo';
 import {
@@ -41,6 +42,17 @@ export class AccountController {
   @Get('/')
   async list() {
     return this.accountService.list(this.userId);
+  }
+
+  @ApiOperation({
+    summary: '分类候选（母本分类）',
+    description:
+      '返回默认账本（分类母本）的全部分类。供「新建账本」与「账本分类设置」两处勾选使用。',
+  })
+  @ApiResponse({ status: 200, description: '查询成功' })
+  @Get('/category-candidates')
+  async categoryCandidates() {
+    return this.accountService.categoryCandidates(this.userId);
   }
 
   @ApiOperation({ summary: '账本详情' })
@@ -102,6 +114,18 @@ export class AccountController {
   @Del('/:id')
   async remove(@Param('id') id: string, @Query() query: DeleteAccountQueryDTO) {
     return this.accountService.remove(this.userId, id, query.confirmName);
+  }
+
+  @ApiOperation({
+    summary: '从母本导入分类',
+    description:
+      '把默认账本（母本）里指定的分类复制到本账本。传一级会连带其下二级；只传二级会自动带上其父。',
+  })
+  @ApiResponse({ status: 200, description: '导入成功' })
+  @ApiResponse({ status: 200, type: ErrorResponseVO, description: '账本不存在时 code=40403' })
+  @Post('/:id/categories')
+  async importCategories(@Param('id') id: string, @Body() dto: ImportCategoriesDTO) {
+    return this.accountService.importCategoriesFromDefault(this.userId, id, dto.categoryIds);
   }
 
   @ApiOperation({

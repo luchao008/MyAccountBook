@@ -2,6 +2,8 @@ import { Provide } from '@midwayjs/core';
 import { InjectDataSource } from '@midwayjs/typeorm';
 import { DataSource, In, IsNull, Repository } from 'typeorm';
 import { Category } from '../entity/category.entity';
+import { Account } from '../entity/account.entity';
+import { Transaction } from '../entity/transaction.entity';
 import { BusinessError } from '../common/business.error';
 import { ErrorCode } from '../common/error-code';
 import { CreateCategoryDTO, UpdateCategoryDTO, QueryCategoryDTO } from './dto/category.dto';
@@ -9,6 +11,17 @@ import { CreateCategoryDTO, UpdateCategoryDTO, QueryCategoryDTO } from './dto/ca
 /** 最多两级：二级分类下不允许再挂子分类 */
 const MAX_DEPTH = 2;
 
+/**
+ * 分类服务。
+ *
+ * ⚠️ **分类自 2026-09-16 起为账本级隔离**：每个账本拥有独立的一套分类。
+ * 所有方法都必须带 `accountId`，并校验账本归属。见 docs/账本级分类设计文档.md。
+ *
+ * 关键约束（设计文档）：
+ *   - D10：分类下已有交易则**禁止移除**（防止历史流水丢分类）
+ *   - D16：**默认账本（母本）的分类不允许删除**（它是新建账本时的复制来源）
+ *   - D15：唯一键是 (account_id, name) —— 账本内唯一，不同账本可有同名
+ */
 @Provide()
 export class CategoryService {
   @InjectDataSource()
@@ -18,9 +31,28 @@ export class CategoryService {
     return this.dataSource.getRepository(Category);
   }
 
+  private get accountRepo(): Repository<Account> {
+    return this.dataSource.getRepository(Account);
+  }
+
+  private get txnRepo(): Repository<Transaction> {
+    return this.dataSource.getRepository(Transaction);
+  }
+
+  /** 校验账本属于当前用户，返回账本实体 */
+  private async assertAccount(userId: string, accountId: string): Promise<Account> {
+    if (!accountId) {
+      throw new BusinessError('缺少 accountId', ErrorCode.PARAM_INVALID);
+    }
+    const account = await this.accountRepo.findOne({ where: { id: accountId, userId } });
+    if (!account) {
+      throw new BusinessError('账本不存在', ErrorCode.ACCOUNT_NOT_FOUND);
+    }
+    return account;
+  }
+
   /**
-   * 分类列表：所有查询强制带 userId，实现数据隔离。
-   * 按 sort 升序、id 升序排列（贴合随手记分类排序）。
+   * 分类列表（限定账本）。
    *
    * parentId 的三种取值：
    *   - 'root'  → 只返回一级分类
@@ -28,7 +60,10 @@ export class CategoryService {
    *   - 不传    → 返回全部（含 parentId 字段，前端可自行组装成树）
    */
   async list(userId: string, query: QueryCategoryDTO) {
-    const where: Record<string, any> = { userId };
+    const accountId = query.accountId;
+    await this.assertAccount(userId, accountId);
+
+    const where: Record<string, any> = { userId, accountId };
     if (query.type) {
       where.type = query.type;
     }
@@ -46,14 +81,12 @@ export class CategoryService {
 
     if (query.visibility !== 'visible') return rows;
 
-    // 可见性规则（实体注释里"放在查询侧做"的那条）：
+    // 可见性规则（同旧实现，只是把 userId 换成 accountId）：
     //   ① 自身未隐藏
     //   ② 若为二级分类，其父也未隐藏
-    // 刻意**不给二级冗余写 is_hidden**：否则取消隐藏父级时还要回滚所有子分类，
-    // 极易漏掉而留下"父可见、子却还隐藏着"的脏数据。
     const hiddenRootIds = (
       await this.repo.find({
-        where: { userId, parentId: IsNull(), isHidden: true },
+        where: { accountId, parentId: IsNull(), isHidden: true },
         select: ['id'],
       })
     ).map((c) => c.id);
@@ -62,90 +95,122 @@ export class CategoryService {
     return rows.filter((c) => !c.isHidden && !(c.parentId && hidden.has(c.parentId)));
   }
 
-  /** 批量取用户拥有的分类；有任何一个 id 不存在/不属于自己就整单报错。 */
-  private async findOwned(userId: string, ids: string[]): Promise<Category[]> {
+  /** 批量取账本内的分类；有任何一个 id 不存在/不属于该账本就整单报错。 */
+  private async findOwned(accountId: string, ids: string[]): Promise<Category[]> {
     const unique = [...new Set(ids)];
-    const found = await this.findByIds(userId, unique);
+    const found = await this.findByIds(accountId, unique);
     if (found.length !== unique.length) {
-      // 不静默少删：少删会让前端提示的数量与用户预期不符，同时把越权尝试掩盖掉
-      throw new BusinessError('部分分类不存在或不属于当前用户', ErrorCode.CATEGORY_NOT_FOUND);
+      throw new BusinessError('部分分类不存在或不属于当前账本', ErrorCode.CATEGORY_NOT_FOUND);
     }
     return found;
   }
 
   /**
-   * 批量删除。
-   *
-   * 关键细节：**父子同时被选中时不能重复计数**。
-   * 删除一级分类会被外键 CASCADE 掉它的二级分类，所以"父已被选中"的二级要从
-   * 直接删除清单里剔除 —— 否则返回的数字会虚高，用户会以为多删了东西。
+   * 检查给定分类（含其子分类）下是否有交易；有则抛错。
+   * 用于删除/移除前的保护（设计 D10）。
    */
-  async batchDelete(userId: string, ids: string[]) {
-    const found = await this.findOwned(userId, ids);
+  private async assertNoTransactions(
+    userId: string,
+    accountId: string,
+    ids: string[],
+  ): Promise<void> {
+    // 把"一级分类"展开成"自身 + 其全部二级"
+    const children = await this.repo.find({
+      where: { accountId, parentId: In(ids) },
+      select: ['id'],
+    });
+    const allIds = [...ids, ...children.map((c) => c.id)];
+    const count = await this.txnRepo.count({
+      where: { userId, categoryId: In(allIds) },
+    });
+    if (count > 0) {
+      throw new BusinessError(
+        `选中的分类下有 ${count} 笔交易，不能移除；请先处理这些交易`,
+        ErrorCode.CATEGORY_HAS_TRANSACTIONS,
+      );
+    }
+  }
+
+  /**
+   * 批量删除（限定账本）。
+   *
+   * 两道保护（设计 D10 / D16）：
+   *   - 默认账本（母本）的分类**不允许删除**
+   *   - 任一选中分类（含其子）下有交易 → **整单拒绝**
+   *
+   * 计数细节同旧实现：父子同时选中时不重复计数。
+   */
+  async batchDelete(userId: string, accountId: string, ids: string[]) {
+    const account = await this.assertAccount(userId, accountId);
+    if (account.isDefault) {
+      throw new BusinessError('默认账本的分类不允许删除', ErrorCode.CATEGORY_DEFAULT_PROTECTED);
+    }
+
+    const found = await this.findOwned(accountId, ids);
+    await this.assertNoTransactions(
+      userId,
+      accountId,
+      found.map((c) => c.id),
+    );
 
     const selected = new Set(found.map((c) => c.id));
-    // 直接删的 = 被选中的一级 + "父没被选中"的被选中二级
     const roots = found.filter((c) => !c.parentId);
     const loneChildren = found.filter((c) => c.parentId && !selected.has(c.parentId));
 
-    // 会被 CASCADE 一并删掉的二级分类数（供前端做提示）
     let cascaded = 0;
     if (roots.length) {
       cascaded = await this.repo.count({
-        where: { userId, parentId: In(roots.map((c) => c.id)) },
+        where: { accountId, parentId: In(roots.map((c) => c.id)) },
       });
     }
 
     await this.repo.delete({
-      userId,
+      accountId,
       id: In([...roots.map((c) => c.id), ...loneChildren.map((c) => c.id)]),
     });
 
     return {
       success: true,
-      // 实际消失的分类总数（含被级联删除的）
       deleted: roots.length + loneChildren.length + cascaded,
-      // 其中因删除一级而连带删掉的二级数量
       deletedChildren: cascaded,
     };
   }
 
-  /**
-   * 批量隐藏 / 恢复显示。
-   *
-   * **不对"父已被选中"的子分类写 is_hidden**：一级隐藏后，其子分类由查询侧的
-   * "父隐藏 ⇒ 子不可选"规则自动失效，无需冗余写。
-   * 反过来，单独隐藏某个二级是允许的（它的 is_hidden 会被真实写入）。
-   */
-  async batchHide(userId: string, ids: string[], hidden: boolean) {
-    const found = await this.findOwned(userId, ids);
+  /** 批量隐藏 / 恢复显示（限定账本）。语义不变。 */
+  async batchHide(userId: string, accountId: string, ids: string[], hidden: boolean) {
+    await this.assertAccount(userId, accountId);
+    const found = await this.findOwned(accountId, ids);
 
     const selected = new Set(found.map((c) => c.id));
     const targets = found.filter((c) => !c.parentId || !selected.has(c.parentId));
 
     if (targets.length) {
-      await this.repo.update({ userId, id: In(targets.map((c) => c.id)) }, { isHidden: hidden });
+      await this.repo.update({ accountId, id: In(targets.map((c) => c.id)) }, { isHidden: hidden });
     }
 
     return { success: true, updated: targets.length, hidden };
   }
 
-  async findById(userId: string, id: string) {
-    const category = await this.repo.findOne({ where: { id, userId } });
+  async findById(userId: string, accountId: string, id: string) {
+    await this.assertAccount(userId, accountId);
+    const category = await this.repo.findOne({ where: { id, accountId } });
     if (!category) {
       throw new BusinessError('分类不存在', ErrorCode.CATEGORY_NOT_FOUND);
     }
     return category;
   }
 
-  /**
-   * 校验父分类可用：必须存在、属于当前用户、且自身是一级分类。
-   * 返回父分类实体；parentId 为空时返回 null。
-   */
-  private async resolveParent(userId: string, parentId?: string | null): Promise<Category | null> {
+  /** 校验父分类可用：必须存在、属于该账本、且自身是一级分类。 */
+  private async resolveParent(
+    accountId: string,
+    parentId?: string | null,
+  ): Promise<Category | null> {
     if (!parentId) return null;
 
-    const parent = await this.findById(userId, parentId);
+    const parent = await this.repo.findOne({ where: { id: parentId, accountId } });
+    if (!parent) {
+      throw new BusinessError('分类不存在', ErrorCode.CATEGORY_NOT_FOUND);
+    }
     if (parent.parentId) {
       throw new BusinessError(
         `分类最多支持 ${MAX_DEPTH} 级，不能挂在二级分类下`,
@@ -156,23 +221,26 @@ export class CategoryService {
   }
 
   async create(userId: string, dto: CreateCategoryDTO) {
-    // 唯一键校验（user_id + name），提前给出友好提示
+    const accountId = dto.accountId;
+    await this.assertAccount(userId, accountId);
+
+    // 唯一键校验（account_id + name），提前给出友好提示
     const exists = await this.repo.findOne({
-      where: { userId, name: dto.name },
+      where: { accountId, name: dto.name },
     });
     if (exists) {
       throw new BusinessError('分类名已存在', ErrorCode.CATEGORY_NAME_EXISTS);
     }
 
-    const parent = await this.resolveParent(userId, dto.parentId);
+    const parent = await this.resolveParent(accountId, dto.parentId);
 
-    // 二级分类的收支类型必须与父一致，否则统计口径会打架
     if (parent && parent.type !== dto.type) {
       throw new BusinessError('二级分类的收支类型必须与父分类一致', ErrorCode.PARAM_INVALID);
     }
 
     const entity = this.repo.create({
       userId,
+      accountId,
       name: dto.name,
       type: dto.type,
       icon: dto.icon ?? '',
@@ -182,29 +250,27 @@ export class CategoryService {
     return this.repo.save(entity);
   }
 
-  async update(userId: string, id: string, dto: UpdateCategoryDTO) {
-    const category = await this.findById(userId, id);
+  async update(userId: string, accountId: string, id: string, dto: UpdateCategoryDTO) {
+    const category = await this.findById(userId, accountId, id);
 
-    // 若改名字，检查是否与同用户下其他分类重名
+    // 若改名字，检查是否与**同账本**下其他分类重名
     if (dto.name && dto.name !== category.name) {
       const exists = await this.repo.findOne({
-        where: { userId, name: dto.name },
+        where: { accountId, name: dto.name },
       });
       if (exists) {
         throw new BusinessError('分类名已存在', ErrorCode.CATEGORY_NAME_EXISTS);
       }
     }
 
-    // 变更父子关系时做层级校验
     if (dto.parentId !== undefined) {
       const nextParentId = dto.parentId || null;
 
       if (nextParentId) {
-        const parent = await this.resolveParent(userId, nextParentId);
+        const parent = await this.resolveParent(accountId, nextParentId);
 
-        // 自身已有子分类 → 不能再挂到别人下面，否则会出现三级
         const childCount = await this.repo.count({
-          where: { userId, parentId: category.id },
+          where: { accountId, parentId: category.id },
         });
         if (childCount > 0) {
           throw new BusinessError(
@@ -230,31 +296,31 @@ export class CategoryService {
   }
 
   /**
-   * 删除分类。
+   * 删除单个分类（限定账本）。
    *
-   * - 删除二级分类：直接删，其下交易变"未分类"（外键 ON DELETE SET NULL）
-   * - 删除一级分类：其下二级分类一并删除（外键 CASCADE），所有相关交易同样变"未分类"
-   * - 所有查询强制带 userId，防止越权删除他人分类
+   * 两道保护同 batchDelete：默认账本禁删（D16）、有交易禁删（D10）。
    */
-  async delete(userId: string, id: string) {
-    await this.findById(userId, id);
+  async delete(userId: string, accountId: string, id: string) {
+    const account = await this.assertAccount(userId, accountId);
+    if (account.isDefault) {
+      throw new BusinessError('默认账本的分类不允许删除', ErrorCode.CATEGORY_DEFAULT_PROTECTED);
+    }
+
+    await this.findById(userId, accountId, id);
+    await this.assertNoTransactions(userId, accountId, [id]);
 
     const childCount = await this.repo.count({
-      where: { userId, parentId: id },
+      where: { accountId, parentId: id },
     });
 
-    await this.repo.delete({ id, userId });
+    await this.repo.delete({ id, accountId });
 
-    return {
-      success: true,
-      // 一并删掉的子分类数量，便于前端提示
-      deletedChildren: childCount,
-    };
+    return { success: true, deletedChildren: childCount };
   }
 
-  /** 批量取分类（供统计聚合等处校验归属） */
-  async findByIds(userId: string, ids: string[]): Promise<Category[]> {
+  /** 批量取分类（限定账本，供其他服务校验归属） */
+  async findByIds(accountId: string, ids: string[]): Promise<Category[]> {
     if (!ids.length) return [];
-    return this.repo.find({ where: { userId, id: In(ids) } });
+    return this.repo.find({ where: { accountId, id: In(ids) } });
   }
 }

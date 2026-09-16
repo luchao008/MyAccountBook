@@ -4,12 +4,8 @@ import { DataSource } from 'typeorm';
 import { User } from '../entity/user.entity';
 import { Category } from '../entity/category.entity';
 import { Account } from '../entity/account.entity';
+import { rebuildAccountCategories } from '../category/category-rebuild';
 import { Transaction } from '../entity/transaction.entity';
-import {
-  EXPENSE_CATEGORY_PRESET,
-  INCOME_CATEGORY_PRESET,
-  FALLBACK_EXPENSE_CATEGORY,
-} from '../category/category-preset';
 
 /**
  * 种子数据脚本
@@ -20,7 +16,7 @@ import {
  * 幂等：重复执行不会产生重复数据
  *   - 用户按 username 判断
  *   - 账本按 (userId, name) 判断
- *   - 分类按 (userId, name) upsert（存在则更新属性，不重复插入）
+ *   - 分类按 (accountId, name) upsert（存在则更新属性，不重复插入）；账本级隔离后挂到默认账本
  *
  * 分类体系：支出两级（13 个一级 + 54 个二级），收入一级（7 个）。
  * 不在新体系名单里的旧分类会被清理，其下交易按收支类型改挂到回退分类。
@@ -36,9 +32,6 @@ const SEED_USER = {
  * 这里不 import 那个常量，是为了避免 seed 脚本连带加载 Midway 的 IoC 相关模块。
  */
 const DEFAULT_ACCOUNT_NAME = '默认账本';
-
-/** 收入侧的回退分类（旧收入分类被清理时，其交易改挂到这里） */
-const FALLBACK_INCOME_CATEGORY = '其他';
 
 /**
  * seed 专用数据源。
@@ -66,147 +59,20 @@ function createDataSource() {
 }
 
 /**
- * 重建某个用户的分类体系（幂等）。
- *
- * 步骤（顺序重要）：
- *   1. 批量 upsert 一级分类（同名复用，避免打断已有交易的归属）
- *   2. 批量 upsert 二级分类（parentId 指向第 1 步的一级）
- *   3. 找出不在新体系名单里的旧分类
- *   4. 把旧分类下的交易按收支类型改挂到回退分类
- *      （支出→「其他支出」，收入→「其他」；类型必须匹配，否则违反类型一致性约束）
- *   5. 删除旧分类（其下二级由外键 CASCADE 一并删除）
- *
- * 性能：一次 find 读出现有分类到内存做匹配，两次批量 save 写入，
- * 避免每个分类都来回查一次库（32 个用户 × 74 个分类会慢得离谱）。
+ * 确保用户有默认账本，返回它（分类要挂到这个账本上）。
+ * 同时返回是否新建，供统计。
  */
-async function rebuildCategories(dataSource: DataSource, userId: string) {
-  const categoryRepo = dataSource.getRepository(Category);
-  const txnRepo = dataSource.getRepository(Transaction);
-
-  const existing = await categoryRepo.find({ where: { userId } });
-  const byName = new Map(existing.map((c) => [c.name, c]));
-
-  // 1. 一级分类（支出 + 收入）
-  const rootPlan = [
-    ...EXPENSE_CATEGORY_PRESET.map((r) => ({ ...r, type: 'expense' as const })),
-    ...INCOME_CATEGORY_PRESET.map((r) => ({ ...r, type: 'income' as const })),
-  ];
-
-  const rootEntities = rootPlan.map((root, index) => {
-    const found = byName.get(root.name);
-    if (found) {
-      found.icon = root.icon;
-      found.type = root.type;
-      found.sort = index + 1;
-      found.parentId = null;
-      return found;
-    }
-    return categoryRepo.create({
-      userId,
-      name: root.name,
-      icon: root.icon,
-      type: root.type,
-      sort: index + 1,
-      parentId: null,
-    });
-  });
-
-  const savedRoots = await categoryRepo.save(rootEntities);
-  const rootByName = new Map(savedRoots.map((r) => [r.name, r]));
-
-  // 2. 二级分类（支出与收入都有二级；type 必须与父一致）
-  const childPlan: Array<{
-    name: string;
-    icon: string;
-    sort: number;
-    parentId: string;
-    type: 'income' | 'expense';
-  }> = [];
-
-  const withType = [
-    ...EXPENSE_CATEGORY_PRESET.map((r) => ({ ...r, type: 'expense' as const })),
-    ...INCOME_CATEGORY_PRESET.map((r) => ({ ...r, type: 'income' as const })),
-  ];
-  for (const root of withType) {
-    const parent = rootByName.get(root.name);
-    root.children.forEach((child, index) => {
-      childPlan.push({
-        name: child.name,
-        icon: child.icon,
-        sort: index + 1,
-        parentId: parent.id,
-        type: root.type,
-      });
-    });
-  }
-
-  const childEntities = childPlan.map((child) => {
-    const found = byName.get(child.name);
-    if (found) {
-      found.icon = child.icon;
-      found.type = child.type;
-      found.sort = child.sort;
-      found.parentId = child.parentId;
-      return found;
-    }
-    return categoryRepo.create({
-      userId,
-      name: child.name,
-      icon: child.icon,
-      type: child.type,
-      sort: child.sort,
-      parentId: child.parentId,
-    });
-  });
-
-  const savedChildren = await categoryRepo.save(childEntities);
-
-  // 3. 清理不在新体系里的旧分类
-  const presetNames = new Set<string>([
-    ...savedRoots.map((r) => r.name),
-    ...savedChildren.map((c) => c.name),
-  ]);
-
-  const afterSave = await categoryRepo.find({ where: { userId } });
-  const legacy = afterSave.filter((c) => !presetNames.has(c.name));
-
-  let reassigned = 0;
-  if (legacy.length) {
-    const fallbackExpense = rootByName.get(FALLBACK_EXPENSE_CATEGORY);
-    const fallbackIncome = rootByName.get(FALLBACK_INCOME_CATEGORY);
-
-    for (const old of legacy) {
-      const target = old.type === 'income' ? fallbackIncome : fallbackExpense;
-      if (!target) continue;
-      const affected = await txnRepo.count({ where: { userId, categoryId: old.id } });
-      if (affected > 0) {
-        await txnRepo.update({ userId, categoryId: old.id }, { categoryId: target.id });
-        reassigned += affected;
-      }
-    }
-
-    // 直接传 id 数组：repo.delete() 不接受 In() 这类 FindOperator
-    await categoryRepo.delete(legacy.map((c) => c.id));
-  }
-
-  return {
-    total: savedRoots.length + savedChildren.length,
-    roots: savedRoots.length,
-    children: savedChildren.length,
-    legacyRemoved: legacy.length,
-    reassigned,
-  };
-}
-
-/** 确保用户有默认账本 */
-async function ensureDefaultAccount(dataSource: DataSource, userId: string): Promise<boolean> {
+async function ensureDefaultAccount(
+  dataSource: DataSource,
+  userId: string,
+): Promise<{ account: Account; created: boolean }> {
   const accountRepo = dataSource.getRepository(Account);
   const existing = await accountRepo.findOne({
     where: { userId, name: DEFAULT_ACCOUNT_NAME },
   });
-  if (existing) return false;
+  if (existing) return { account: existing, created: false };
 
-  await accountRepo.save(
+  const saved = await accountRepo.save(
     accountRepo.create({
       userId,
       name: DEFAULT_ACCOUNT_NAME,
@@ -215,7 +81,7 @@ async function ensureDefaultAccount(dataSource: DataSource, userId: string): Pro
       isDefault: true,
     }),
   );
-  return true;
+  return { account: saved, created: true };
 }
 
 async function seed() {
@@ -249,10 +115,10 @@ async function seed() {
     let totalReassigned = 0;
 
     for (const target of targets) {
-      const created = await ensureDefaultAccount(dataSource, target.id);
+      const { account, created } = await ensureDefaultAccount(dataSource, target.id);
       if (created) accountsCreated++;
 
-      const result = await rebuildCategories(dataSource, target.id);
+      const result = await rebuildAccountCategories(dataSource, target.id, account.id);
       totalCats += result.total;
       totalLegacy += result.legacyRemoved;
       totalReassigned += result.reassigned;

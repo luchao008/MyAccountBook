@@ -1,8 +1,16 @@
 import { Rule, RuleType } from '@midwayjs/validate';
 import { ApiProperty } from '@midwayjs/swagger';
 
+/**
+ * ⚠️ 分类自 2026-09-16 起为**账本级隔离**，所有分类接口都必须带 `accountId`。
+ * 见 docs/账本级分类设计文档.md。
+ */
 export class CreateCategoryDTO {
-  @ApiProperty({ description: '分类名，同一用户名下唯一', example: '餐饮', required: true })
+  @ApiProperty({ description: '所属账本 ID', example: '1', required: true })
+  @Rule(RuleType.string().required())
+  accountId: string;
+
+  @ApiProperty({ description: '分类名，同一账本下唯一', example: '餐饮', required: true })
   @Rule(RuleType.string().trim().required().min(1).max(64))
   name: string;
 
@@ -35,7 +43,7 @@ export class CreateCategoryDTO {
 }
 
 export class UpdateCategoryDTO {
-  @ApiProperty({ description: '分类名，同一用户名下唯一', example: '餐饮', required: false })
+  @ApiProperty({ description: '分类名，同一账本下唯一', example: '餐饮', required: false })
   @Rule(RuleType.string().trim().min(1).max(64).optional())
   name?: string;
 
@@ -68,6 +76,10 @@ export class UpdateCategoryDTO {
 }
 
 export class QueryCategoryDTO {
+  @ApiProperty({ description: '所属账本 ID（必传）', example: '1', required: true })
+  @Rule(RuleType.string().required())
+  accountId: string;
+
   @ApiProperty({
     description: '按收支类型筛选，不传则返回全部',
     example: 'expense',
@@ -101,10 +113,15 @@ export class QueryCategoryDTO {
 }
 
 export class BatchDeleteCategoryDTO {
+  @ApiProperty({ description: '所属账本 ID（必传）', example: '1', required: true })
+  @Rule(RuleType.string().required())
+  accountId: string;
+
   @ApiProperty({
     description:
       '要删除的分类 ID 列表，一级与二级可混合。传一级会连同其下二级一并删除（CASCADE）。' +
-      '列表内的重复 id 会自动去重；不存在的 id 会整单报错（不静默少删）。',
+      '列表内的重复 id 会自动去重；不存在的 id 会整单报错（不静默少删）。' +
+      '⚠️ 默认账本的分类不允许删除；任一分类（含其子）下有交易则整单拒绝。',
     example: ['1', '2'],
     required: true,
   })
@@ -113,6 +130,10 @@ export class BatchDeleteCategoryDTO {
 }
 
 export class BatchHideCategoryDTO {
+  @ApiProperty({ description: '所属账本 ID（必传）', example: '1', required: true })
+  @Rule(RuleType.string().required())
+  accountId: string;
+
   @ApiProperty({ description: '要操作的分类 ID 列表', example: ['1', '2'], required: true })
   @Rule(RuleType.array().items(RuleType.string().required()).required().min(1).max(200))
   ids: string[];

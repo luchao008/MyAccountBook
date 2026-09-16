@@ -17,6 +17,16 @@ export class CreateAccountDTO {
   @ApiProperty({ description: '排序值，升序', example: 0, required: false })
   @Rule(RuleType.number().integer().default(0))
   sort?: number;
+
+  @ApiProperty({
+    description:
+      '要从默认账本（母本）复制过来的分类 id 列表。不传 = 复制全部（默认全选）；' +
+      '传一级会连带其下二级，只传二级会自动带上其父。仅对非默认账本生效。',
+    example: ['1', '2'],
+    required: false,
+  })
+  @Rule(RuleType.array().items(RuleType.string().required()).optional())
+  categoryIds?: string[];
 }
 
 export class UpdateAccountDTO {
@@ -69,4 +79,15 @@ export class MergeAccountDTO {
   })
   @Rule(RuleType.string().required())
   sourceId: string;
+}
+
+export class ImportCategoriesDTO {
+  @ApiProperty({
+    description:
+      '要从默认账本（母本）复制过来的分类 id 列表。传一级会连带其下二级，只传二级会自动带上其父。',
+    example: ['1', '2'],
+    required: true,
+  })
+  @Rule(RuleType.array().items(RuleType.string().required()).required().min(1).max(200))
+  categoryIds: string[];
 }

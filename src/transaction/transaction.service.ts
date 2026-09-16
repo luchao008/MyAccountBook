@@ -70,12 +70,12 @@ export class TransactionService {
 
   /**
    * 校验分类：
-   *   1. 必须属于当前用户（数据隔离）
+   *   1. 必须属于**同一个账本**（分类自 2026-09-16 起为账本级隔离，见设计文档）
    *   2. 分类的收支类型必须与账单类型一致（对齐随手记交互）
    * 返回校验通过的分类，供调用方复用。
    */
   private async assertCategoryValid(
-    userId: string,
+    accountId: string,
     categoryId: string | null | undefined,
     type: 'income' | 'expense',
   ): Promise<Category | null> {
@@ -83,10 +83,10 @@ export class TransactionService {
       return null;
     }
     const category = await this.categoryRepo.findOne({
-      where: { id: categoryId, userId },
+      where: { id: categoryId, accountId },
     });
     if (!category) {
-      throw new BusinessError('分类不存在', ErrorCode.CATEGORY_NOT_FOUND);
+      throw new BusinessError('分类不存在或不属于该账本', ErrorCode.CATEGORY_NOT_FOUND);
     }
     if (category.type !== type) {
       throw new BusinessError('分类的收支类型与账单类型不一致', ErrorCode.PARAM_INVALID);
@@ -95,8 +95,8 @@ export class TransactionService {
   }
 
   async create(userId: string, dto: CreateTransactionDTO) {
-    await this.assertCategoryValid(userId, dto.categoryId, dto.type);
     const account = await this.resolveAccount(userId, dto.accountId);
+    await this.assertCategoryValid(account.id, dto.categoryId, dto.type);
 
     const entity = this.repo.create({
       userId,
@@ -343,7 +343,14 @@ export class TransactionService {
     // 类型和分类可能被单独修改，需用"修改后的最终值"做一致性校验
     const finalType = dto.type ?? entity.type;
     const finalCategoryId = dto.categoryId !== undefined ? dto.categoryId : entity.categoryId;
-    await this.assertCategoryValid(userId, finalCategoryId, finalType);
+
+    // 账本可能被同时修改，先算出"最终的账本"，再据此校验分类同账本
+    let finalAccount: Account | null = null;
+    if (dto.accountId !== undefined) {
+      finalAccount = await this.resolveAccount(userId, dto.accountId || undefined);
+    }
+    const finalAccountId = finalAccount ? finalAccount.id : entity.accountId;
+    await this.assertCategoryValid(finalAccountId, finalCategoryId, finalType);
 
     const patch: Partial<Transaction> = {};
     if (dto.type !== undefined) patch.type = dto.type;
@@ -359,13 +366,12 @@ export class TransactionService {
         entity.category = null;
       }
     }
-    if (dto.accountId !== undefined) {
+    if (dto.accountId !== undefined && finalAccount) {
       // 传空字符串/null 表示改挂到默认账本。
       // 必须同时替换 entity.account 关系对象——findById 已经把旧的 account
       // 加载到实体上了，只改 accountId 会被 TypeORM 用旧关系回填（与清空分类同源）。
-      const nextAccount = await this.resolveAccount(userId, dto.accountId || undefined);
-      patch.accountId = nextAccount.id;
-      entity.account = nextAccount;
+      patch.accountId = finalAccount.id;
+      entity.account = finalAccount;
     }
     if (dto.recordTime !== undefined) {
       // 传空字符串/null 表示清除已记录的时刻

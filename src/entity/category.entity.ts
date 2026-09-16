@@ -8,6 +8,7 @@ import {
   Index,
 } from 'typeorm';
 import { User } from './user.entity';
+import { Account } from './account.entity';
 
 /**
  * 记账分类，支持**两级**结构。
@@ -17,20 +18,28 @@ import { User } from './user.entity';
  *   - parent_id 指向某个一级分类 → 二级分类
  *   - **二级分类下不允许再挂子分类**（最多两级），创建/更新时都会校验
  *
- * 唯一键说明：用的是 (user_id, name) 全局唯一，而不是 (user_id, parent_id, name)。
- * 原因：MySQL 的唯一索引不约束 NULL，若把 parent_id 纳入唯一键，
- * 一级分类（parent_id 为 NULL）的重名反而拦不住。当前分类体系里
- * 各二级分类名互不重复，因此全局唯一既够用又更严格。
+ * ⚠️ **分类自 2026-09-16 起为账本级隔离**（每个账本独立一套），
+ * 见 docs/账本级分类设计文档.md。
+ *
+ * 唯一键说明：用的是 (account_id, name) 账本内唯一，而不是
+ * (account_id, parent_id, name)。原因：MySQL 的唯一索引不约束 NULL，
+ * 若把 parent_id 纳入唯一键，一级分类（parent_id 为 NULL）的重名反而拦不住。
+ * 不同账本之间允许同名分类（各账本独立，本就允许重名）。
  */
 @Entity('categories')
-@Index('uk_user_name', ['userId', 'name'], { unique: true })
-@Index('idx_user_parent', ['userId', 'parentId'])
+@Index('uk_account_name', ['accountId', 'name'], { unique: true })
+@Index('idx_account_sort', ['accountId', 'sort'])
+@Index('idx_account_parent', ['accountId', 'parentId'])
 export class Category {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: string;
 
   @Column({ name: 'user_id', type: 'bigint', unsigned: true })
   userId: string;
+
+  /** 所属账本。分类为账本级隔离，删账本时其下分类一并删除（CASCADE）。 */
+  @Column({ name: 'account_id', type: 'bigint', unsigned: true })
+  accountId: string;
 
   @Column({ length: 64 })
   name: string;
@@ -76,4 +85,9 @@ export class Category {
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: User;
+
+  /** 所属账本。删账本时其下分类一并删除（CASCADE）。 */
+  @ManyToOne(() => Account, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'account_id' })
+  account: Account;
 }

@@ -51,8 +51,8 @@ export class CategoryController {
     description: '分类不存在时 code=40401',
   })
   @Get('/:id')
-  async detail(@Param('id') id: string) {
-    return this.categoryService.findById(this.userId, id);
+  async detail(@Param('id') id: string, @Query('accountId') accountId: string) {
+    return this.categoryService.findById(this.userId, accountId, id);
   }
 
   @ApiOperation({
@@ -73,8 +73,12 @@ export class CategoryController {
   @ApiResponse({ status: 200, type: CategoryDetailResponseVO, description: '更新成功' })
   @ApiResponse({ status: 422, type: ErrorResponseVO, description: '参数校验失败' })
   @Put('/:id')
-  async update(@Param('id') id: string, @Body() dto: UpdateCategoryDTO) {
-    return this.categoryService.update(this.userId, id, dto);
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateCategoryDTO,
+    @Query('accountId') accountId: string,
+  ) {
+    return this.categoryService.update(this.userId, accountId, id, dto);
   }
 
   @ApiOperation({
@@ -88,8 +92,8 @@ export class CategoryController {
     description: '分类不存在时 code=40401',
   })
   @Del('/:id')
-  async remove(@Param('id') id: string) {
-    return this.categoryService.delete(this.userId, id);
+  async remove(@Param('id') id: string, @Query('accountId') accountId: string) {
+    return this.categoryService.delete(this.userId, accountId, id);
   }
 
   @ApiOperation({
@@ -109,7 +113,7 @@ export class CategoryController {
   })
   @Post('/batch-delete')
   async batchDelete(@Body() dto: BatchDeleteCategoryDTO) {
-    return this.categoryService.batchDelete(this.userId, dto.ids);
+    return this.categoryService.batchDelete(this.userId, dto.accountId, dto.ids);
   }
 
   @ApiOperation({
@@ -130,6 +134,6 @@ export class CategoryController {
   })
   @Post('/batch-hide')
   async batchHide(@Body() dto: BatchHideCategoryDTO) {
-    return this.categoryService.batchHide(this.userId, dto.ids, dto.hidden);
+    return this.categoryService.batchHide(this.userId, dto.accountId, dto.ids, dto.hidden);
   }
 }

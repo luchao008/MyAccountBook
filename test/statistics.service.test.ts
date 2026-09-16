@@ -7,6 +7,12 @@ import { AuthService } from '../src/auth/auth.service';
 import { AccountService } from '../src/account/account.service';
 import { cleanupUsers, closeTestDataSource, randomUsername } from './helper';
 
+/** 取某用户的默认账本 id（测试内动态注册的用户用） */
+async function defaultAccountOf(accountService: AccountService, uid: string): Promise<string> {
+  const list = await accountService.list(uid);
+  return list.find((a) => a.isDefault)!.id;
+}
+
 describe('StatisticsService', () => {
   let app: IMidwayApplication;
   let statisticsService: StatisticsService;
@@ -17,6 +23,8 @@ describe('StatisticsService', () => {
 
   let userId: string;
   let otherUserId: string;
+  /** 分类/交易测试都跑在默认账本上（本测试不涉及删分类） */
+  let defaultAccountId: string;
   let foodCategoryId: string;
   let transportCategoryId: string;
   let salaryCategoryId: string;
@@ -45,16 +53,20 @@ describe('StatisticsService', () => {
     userId = me.user.id;
     otherUserId = other.user.id;
     createdUserIds.push(userId, otherUserId);
+    defaultAccountId = (await accountService.list(userId)).find((a) => a.isDefault)!.id;
 
     const food = await categoryService.create(userId, {
+      accountId: defaultAccountId,
       name: '餐饮',
       type: 'expense',
     });
     const transport = await categoryService.create(userId, {
+      accountId: defaultAccountId,
       name: '交通',
       type: 'expense',
     });
     const salary = await categoryService.create(userId, {
+      accountId: defaultAccountId,
       name: '工资',
       type: 'income',
     });
@@ -209,10 +221,12 @@ describe('StatisticsService', () => {
 
     it('二级分类的交易聚合到它的一级分类下', async () => {
       const parent = await categoryService.create(userId, {
+        accountId: defaultAccountId,
         name: '聚合用一级',
         type: 'expense',
       });
       const child = await categoryService.create(userId, {
+        accountId: defaultAccountId,
         name: '聚合用二级',
         type: 'expense',
         parentId: parent.id,
@@ -238,6 +252,7 @@ describe('StatisticsService', () => {
 
     it('直接挂在一级分类上的交易也归到该一级', async () => {
       const root = await categoryService.create(userId, {
+        accountId: defaultAccountId,
         name: '直接挂一级',
         type: 'expense',
       });
@@ -425,13 +440,19 @@ describe('StatisticsService', () => {
       const l2UserId = u.user.id;
       createdUserIds.push(l2UserId);
 
-      const food = await categoryService.create(l2UserId, { name: '餐饮L2T', type: 'expense' });
+      const food = await categoryService.create(l2UserId, {
+        accountId: await defaultAccountOf(accountService, l2UserId),
+        name: '餐饮L2T',
+        type: 'expense',
+      });
       const lunch = await categoryService.create(l2UserId, {
+        accountId: await defaultAccountOf(accountService, l2UserId),
         name: '午餐L2T',
         type: 'expense',
         parentId: food.id,
       });
       const transport = await categoryService.create(l2UserId, {
+        accountId: await defaultAccountOf(accountService, l2UserId),
         name: '交通L2T',
         type: 'expense',
       });
