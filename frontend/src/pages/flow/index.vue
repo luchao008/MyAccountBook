@@ -1425,7 +1425,7 @@ onMounted(async () => {
 
 /* 搜索结果的明细行与主列表同款，只是不需要分组缩进 */
 .search-txn {
-  background: $v11-bg-page;
+  background: $v11-bg-card;
 }
 
 /* ── 结余区（与 nav 同处一块渐变，故自身背景透明）── */
@@ -1689,7 +1689,10 @@ onMounted(async () => {
 
 /* ── 明细 ── */
 .group-body {
-  background: $v11-bg-page;
+  /* 分组正文是**白色载体**（浮在 #F8F8F8 页面底上），不是页面底本身。
+     ⚠️ FL-1 里页面底与卡片同白，同一个 token 两用；改名后这类"白载体"
+        会被误当成页面底而变灰 —— 判断标准是「它是页面本身，还是浮在页面上的一块」。 */
+  background: $v11-bg-card;
 }
 
 .detail-loading {
@@ -1772,7 +1775,11 @@ onMounted(async () => {
   bottom: 0;
   z-index: 100;
   display: flex;
-  background: $v11-bg-page;
+  /*
+   * 底部筛选栏：与 TabBar **同一套毛玻璃材质**（含 @supports 降级）。
+   * 内容从它下方穿过时观感一致；用页面灰（#F8F8F8）会显得像一条没画完的横条。
+   */
+  @include ios-material;
   border-top: 1px solid $v11-line;
   height: 48px;
   height: calc(48px + env(safe-area-inset-bottom, 0px));

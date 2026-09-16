@@ -99,8 +99,13 @@ function clear() {
 }
 
 .key:active {
-  /* 按下态：v1.1 用 $v11-bg-inset（#F5F5F5，对白键 1.04:1）——
-     比旧 $v11-bg-inset 更轻，与新的分隔线刻度同一档 */
+  /*
+   * 按下态：v1.1 用 $v11-bg-inset —— 浅灰，压白键仅 1.04:1，
+   * 比 FL-1 的 $bg-subtle 更轻，与新的分隔线同属一档刻度。
+   *
+   * ⚠️ 这里刻意**不写色值字面量**：check-contrast 的「旧色值残留扫描」
+   *    会扫 .vue 里的 #rrggbb，写在注释里也算残留。
+   */
   background: $v11-bg-inset;
 }
 

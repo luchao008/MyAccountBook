@@ -206,9 +206,18 @@ onShow(async () => {
   min-height: 0;
 }
 
+/*
+ * v1.1：列表升为**白色块**（行本身是白载体，浮在 #F8F8F8 页面底上）。
+ *
+ * ⚠️ **不要在 scroll-view 上加左右 margin** —— 实测会让整页横向溢出 16px
+ *    （uni-app 的 scroll-view 不吃 flex 推导，自身宽度按视口算，margin 直接顶破）。
+ *    所以这里用「白色通栏列表」而不是「内嵌圆角卡片」—— 与流水页的分组列表同一形态，
+ *    全站列表观感因此统一。
+ * ⚠️ 底部留白（底栏 76 + 安全区）必须留在卡内：底栏是 fixed + 毛玻璃。
+ */
 .list {
   flex: 1;
-  /* 底栏高 76 + 安全区（底栏是 fixed，不留白会遮住最后一个账本） */
+  background: $v11-bg-card;
   padding-bottom: calc(76px + env(safe-area-inset-bottom));
 }
 
@@ -255,7 +264,8 @@ onShow(async () => {
   align-items: center;
   min-height: 64px;
   padding: $space-3 $space-4;
-  background: $v11-bg-page;
+  /* 行本身是**白色载体**（不是页面底）—— 它浮在 #F8F8F8 上 */
+  background: $v11-bg-card;
   border-bottom: 1px solid $v11-line;
 }
 

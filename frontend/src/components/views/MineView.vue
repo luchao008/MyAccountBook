@@ -141,7 +141,8 @@ function onLogout() {
 
 /* ── 身份区：白底（原渐变）+ 品牌色头像块 ── */
 .user-card {
-  background: $v11-bg-page;
+  /* 白载体（原 FL-1 里页面底与卡片同白，改名后会被误当成页面底而变灰） */
+  background: $v11-bg-card;
   padding: $space-5 $space-4;
   display: flex;
   align-items: center;
@@ -207,7 +208,7 @@ function onLogout() {
 
 /* ── 设置行：通栏 + 发丝线，行高 56 ── */
 .menu {
-  background: $v11-bg-page;
+  background: $v11-bg-card;
   border-top: 1px solid $v11-line;
 }
 
@@ -262,7 +263,7 @@ function onLogout() {
 }
 
 .logout {
-  background: $v11-bg-page;
+  background: $v11-bg-card;
   color: $danger;
   font-size: $font-body-lg;
   line-height: $lh-body-lg;
