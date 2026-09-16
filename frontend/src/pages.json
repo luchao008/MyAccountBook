@@ -107,7 +107,7 @@
   "globalStyle": {
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "记账本",
-    "navigationBarBackgroundColor": "#FFFFFF",
+    "navigationBarBackgroundColor": "#F8F8F8",
     "backgroundColor": "#F5F6F8"
   },
   "tabBar": {
