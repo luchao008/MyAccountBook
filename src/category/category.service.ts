@@ -120,8 +120,10 @@ export class CategoryService {
       select: ['id'],
     });
     const allIds = [...ids, ...children.map((c) => c.id)];
+    // ⚠️ 只算**未删除**的交易（deletedAt: IsNull()）：
+    //    软删除的流水已在回收站里，不该挡住分类删除。
     const count = await this.txnRepo.count({
-      where: { userId, categoryId: In(allIds) },
+      where: { userId, categoryId: In(allIds), deletedAt: IsNull() },
     });
     if (count > 0) {
       throw new BusinessError(

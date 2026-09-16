@@ -25,7 +25,25 @@ export class CreateAccountDTO {
     example: ['1', '2'],
     required: false,
   })
-  @Rule(RuleType.array().items(RuleType.string().required()).optional())
+  @ApiProperty({
+    description:
+      '是否复制母本**全部**分类（默认 true）。false 时按 categoryIds 复制（可为空数组 = 一个都不要）。',
+    example: true,
+    required: false,
+    default: true,
+  })
+  @Rule(RuleType.boolean().optional().default(true))
+  copyAll?: boolean;
+
+  @ApiProperty({
+    description:
+      '要从母本复制的分类 id。**仅在 copyAll=false 时生效**（空数组 = 一个都不要）。' +
+      '传一级会连带其下二级，只传二级会自动带上其父。',
+    example: ['1', '2'],
+    required: false,
+  })
+  // ⚠️ 元素不加 .required()：否则空数组会被 Joi 拦下（"does not contain 1 required value"）
+  @Rule(RuleType.array().items(RuleType.string()).optional())
   categoryIds?: string[];
 }
 

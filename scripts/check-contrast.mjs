@@ -715,8 +715,11 @@ section('13. 字号阶梯自洽（文档 §3.2 ↔ tokens.scss ↔ 各 .vue）')
   //    → 文字 185 → 195，总数 187 → 197。
   //    2026-09-15 更新十九：时间选择器抽成 TimeRangePicker.vue（+7）+
   //    新增「数据导出」页（+6）− flow 页随之删掉的死样式（−6）→ 文字 195 → 202，总数 197 → 204。
-  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 204, 0);
-  expect('  其中文字字号 $font-*', nText, 202, 0);
+  //    2026-09-16 更新二十：账本级分类改造 —— 新增 3 个前端页
+  //    （account-new / account-category / account-import）与 1 个共享组件
+  //    （CategoryCheckTree）→ 文字 202 → 217，总数 204 → 219。
+  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 219, 0);
+  expect('  其中文字字号 $font-*', nText, 217, 0);
   expect('  其中图标尺寸 $icon-*', nIcon, 2, 0);
   expect('  其中字面量（必须为 0）', nLiteral, 0, 0);
 }

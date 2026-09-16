@@ -84,6 +84,24 @@
         "navigationStyle": "custom",
         "navigationBarTitleText": "数据导出"
       }
+    },
+    {
+      "path": "pages/account-new/index",
+      "style": {
+        "navigationBarTitleText": "新建账本"
+      }
+    },
+    {
+      "path": "pages/account-category/index",
+      "style": {
+        "navigationBarTitleText": "分类设置"
+      }
+    },
+    {
+      "path": "pages/account-import/index",
+      "style": {
+        "navigationBarTitleText": "从母本导入"
+      }
     }
   ],
   "globalStyle": {

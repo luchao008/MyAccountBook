@@ -138,7 +138,8 @@ function today(): string {
 
 onLoad(async (options?: { id?: string; copyFrom?: string }) => {
   await accountStore.load();
-  await categoryStore.load();
+  // 设计 D18：空账本（迁移后的老非默认账本）静默从母本导入全部分类
+  await categoryStore.ensureFromMother();
 
   // 带 id 进入 = 编辑已有账单
   if (options?.id) {

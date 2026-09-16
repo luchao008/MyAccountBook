@@ -132,7 +132,10 @@ export class AccountService {
     // 第一个账本（默认账本）本身是母本，不需要从别处复制；
     // 后续账本从母本复制选中的分类。
     if (count > 0) {
-      await this.copyCategoriesFromDefault(userId, saved.id, dto.categoryIds);
+      // copyAll !== false → 复制全部；copyAll=false → 严格按 categoryIds
+      // （不传或空数组都表示「一个都不要」）
+      const ids = dto.copyAll === false ? (dto.categoryIds ?? []) : undefined;
+      await this.copyCategoriesFromDefault(userId, saved.id, ids);
     }
 
     return saved;
@@ -141,7 +144,8 @@ export class AccountService {
   /**
    * 从默认账本（母本）复制分类到目标账本。
    *
-   * @param categoryIds 要复制的分类 id（母本内的 id）。不传 = 全部。
+   * @param categoryIds 要复制的分类 id（母本内的 id）。**undefined = 全部**；
+   *                    传数组（含空数组 = 一个都不要）则按传入的展开。
    *                    传一级会连带其下二级（设计 D9）；只传二级会带上其父（D17）。
    */
   private async copyCategoriesFromDefault(
@@ -158,9 +162,10 @@ export class AccountService {
     });
     if (!all.length) return;
 
-    // 计算要复制的集合：不传 = 全部；传了则展开（一级连带二级、二级带父）
+    // 计算要复制的集合：**不传 = 全部**；传了（含空数组）则按传入的展开
+    // ⚠️ 空数组 ≠ 全选：前端用户取消全部勾选时传 []，本意是"一个都不要"（见 D3 的边界）
     let selected: Set<string>;
-    if (!categoryIds || !categoryIds.length) {
+    if (categoryIds === undefined || categoryIds === null) {
       selected = new Set(all.map((c) => c.id));
     } else {
       selected = new Set(categoryIds);

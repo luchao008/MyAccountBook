@@ -3,6 +3,8 @@ import http from '@/utils/request';
 export interface CategoryItem {
   id: string;
   userId: string;
+  /** 所属账本（分类自 2026-09-16 起为账本级隔离） */
+  accountId: string;
   name: string;
   type: 'income' | 'expense';
   icon: string;
@@ -36,14 +38,16 @@ export interface CategoryItem {
  * 用显式枚举而不是布尔参数：query 值都是字符串，`"false"` 是 truthy，很容易埋坑。
  */
 export function getCategories(
+  accountId: string,
   type?: 'income' | 'expense',
   parentId?: string,
   visibility?: 'all' | 'visible'
 ): Promise<CategoryItem[]> {
-  return http.get('/categories', { params: { type, parentId, visibility } }) as any;
+  return http.get('/categories', { params: { accountId, type, parentId, visibility } }) as any;
 }
 
 export function createCategory(data: {
+  accountId: string;
   name: string;
   type: 'income' | 'expense';
   icon?: string;
@@ -55,6 +59,7 @@ export function createCategory(data: {
 }
 
 export function updateCategory(
+  accountId: string,
   id: string,
   data: Partial<{
     name: string;
@@ -65,13 +70,14 @@ export function updateCategory(
     parentId: string;
   }>
 ): Promise<CategoryItem> {
-  return http.put(`/categories/${id}`, data) as any;
+  return http.put(`/categories/${id}?accountId=${accountId}`, data) as any;
 }
 
 export function deleteCategory(
+  accountId: string,
   id: string
 ): Promise<{ success: boolean; deletedChildren: number }> {
-  return http.delete(`/categories/${id}`) as any;
+  return http.delete(`/categories/${id}?accountId=${accountId}`) as any;
 }
 
 /**
@@ -81,12 +87,15 @@ export function deleteCategory(
  * `deletedChildren` 单列其中因删除一级而连带删掉的数量 —— 提示文案要用到后者。
  * 传入的 ids 若含不存在/不属于自己的，后端**整单失败**（不静默少删）。
  */
-export function batchDeleteCategories(ids: string[]): Promise<{
+export function batchDeleteCategories(
+  accountId: string,
+  ids: string[]
+): Promise<{
   success: boolean;
   deleted: number;
   deletedChildren: number;
 }> {
-  return http.post('/categories/batch-delete', { ids }) as any;
+  return http.post('/categories/batch-delete', { accountId, ids }) as any;
 }
 
 /**
@@ -96,8 +105,9 @@ export function batchDeleteCategories(ids: string[]): Promise<{
  * （由「父隐藏 ⇒ 子不可选」的规则覆盖，取消隐藏时子级自动回来）。
  */
 export function batchHideCategories(
+  accountId: string,
   ids: string[],
   hidden: boolean
 ): Promise<{ success: boolean; updated: number; hidden: boolean }> {
-  return http.post('/categories/batch-hide', { ids, hidden }) as any;
+  return http.post('/categories/batch-hide', { accountId, ids, hidden }) as any;
 }

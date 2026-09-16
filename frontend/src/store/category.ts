@@ -8,18 +8,31 @@ import {
   batchHideCategories,
   type CategoryItem,
 } from '@/api/category';
+import { useAccountStore } from '@/store/account';
+import { getCategoryCandidates, importCategories } from '@/api/account';
 
+/**
+ * 分类 store。
+ *
+ * ⚠️ **分类自 2026-09-16 起为账本级隔离**：每个账本有独立的一套分类。
+ * 本 store 现在**绑定当前账本**（从 accountStore 取 currentId）：
+ *   - 加载 / 增删改 都作用于当前账本
+ *   - 切换账本时必须 reset + 重新 load（见 accountStore.switchTo 的联动）
+ *
+ * 对外 getter（expenseRoots / selectableRoots / byId …）保持原样，
+ * 内部 list 已经是"当前账本的分类"，组件无需感知账本。
+ */
 export const useCategoryStore = defineStore('category', {
   state: () => ({
     /**
-     * **全量**分类（等价于接口的 `visibility=all`）。
+     * **当前账本**的全量分类（等价于接口的 `visibility=all`）。
      *
      * 刻意缓存全量而不是"可选分类"：分类管理页必须能看到被隐藏的分类，
      * 否则用户没有任何入口把它恢复显示（功能死锁）。
-     * 「记账时能选哪些」是全量的一个**子集**，由下面的 selectable* getter 现算 ——
-     * 存两份列表反而会带来"两份数据不同步"的新问题。
      */
     list: [] as CategoryItem[],
+    /** 当前 list 对应的账本 id；与 accountStore.currentId 不一致时需要重载 */
+    loadedAccountId: '' as string,
     loaded: false,
   }),
 
@@ -39,23 +52,11 @@ export const useCategoryStore = defineStore('category', {
     byId: (state) => (id: string | null) =>
       state.list.find((c) => c.id === id) || null,
 
-    /**
-     * 可用于记账的一级分类（自身未隐藏）。
-     *
-     * ⚠️ 这条规则在后端也有一份（`GET /categories?visibility=visible`）。
-     *   两处必须一致 —— `scripts/verify-category-batch.mjs` 断言后端那侧，
-     *   页面级用例断言本侧，任何一处改了另一处没改都会被测试抓到。
-     */
+    /** 可用于记账的一级分类（自身未隐藏）。 */
     selectableRoots: (state) => (type: 'income' | 'expense'): CategoryItem[] =>
       state.list.filter((c) => c.type === type && !c.parentId && !c.isHidden),
 
-    /**
-     * 某个一级分类下可用于记账的二级分类。
-     *
-     * **「父隐藏 ⇒ 子不可选」这条规则的落点就在这里** —— 父隐藏时整组返回空数组。
-     * 之所以不在写 is_hidden 时冗余标记子分类：取消隐藏父级时就不需要回滚任何东西，
-     * 不存在"漏回滚导致父可见、子却还隐藏着"的脏数据。
-     */
+    /** 某个一级分类下可用于记账的二级分类（父隐藏 ⇒ 返回空）。 */
     selectableChildrenOf: (state) => (parentId: string | null): CategoryItem[] => {
       if (!parentId) return [];
       const parent = state.list.find((c) => c.id === parentId);
@@ -75,11 +76,51 @@ export const useCategoryStore = defineStore('category', {
   },
 
   actions: {
+    /** 当前账本 id（从 accountStore 取） */
+    currentAccountId(): string {
+      return useAccountStore().currentId;
+    },
+
+    /**
+     * 加载当前账本的分类。
+     * 若已加载的账本与当前账本不一致，会强制重新加载（切账本后无需手动 reset）。
+     */
     async load(force = false) {
-      if (this.loaded && !force) return;
-      // 一次性拿全量（含 parentId），由 getters 组装层级
-      this.list = await getCategories();
+      const accountId = this.currentAccountId();
+      if (!accountId) {
+        this.list = [];
+        this.loaded = false;
+        this.loadedAccountId = '';
+        return;
+      }
+      if (this.loaded && !force && this.loadedAccountId === accountId) return;
+      this.list = await getCategories(accountId);
       this.loaded = true;
+      this.loadedAccountId = accountId;
+    },
+
+    /**
+     * 确保当前账本有分类：**空账本**时静默从母本（默认账本）导入全部（设计 D18）。
+     *
+     * 场景：迁移后 57 个老的非默认账本分类为空；用户切进去记账时会看到空选择器。
+     * 这里自动补齐，用户无感。母本自身不触发（它不会空）。
+     */
+    async ensureFromMother() {
+      const accountId = this.currentAccountId();
+      if (!accountId) return;
+      await this.load();
+      if (this.list.length > 0) return;
+
+      const acc = useAccountStore().list.find((a) => a.id === accountId);
+      if (!acc || acc.isDefault) return;
+
+      const candidates = await getCategoryCandidates();
+      if (!candidates.length) return;
+      await importCategories(
+        accountId,
+        candidates.map((c) => c.id)
+      );
+      await this.load(true);
     },
 
     async add(data: {
@@ -89,7 +130,7 @@ export const useCategoryStore = defineStore('category', {
       sort?: number;
       parentId?: string;
     }) {
-      await createCategory(data);
+      await createCategory({ accountId: this.currentAccountId(), ...data });
       await this.load(true);
     },
 
@@ -97,30 +138,24 @@ export const useCategoryStore = defineStore('category', {
       id: string,
       data: Partial<{ name: string; type: 'income' | 'expense'; icon: string; sort: number }>
     ) {
-      await updateCategory(id, data);
+      await updateCategory(this.currentAccountId(), id, data);
       await this.load(true);
     },
 
     async remove(id: string) {
-      await deleteCategory(id);
+      await deleteCategory(this.currentAccountId(), id);
       await this.load(true);
     },
 
-    /**
-     * 批量删除。
-     *
-     * 不做前端预去重、也不过滤"父已被选中"的子分类 —— 那套判断在后端，
-     * 前端照原样把用户选中的 id 传过去即可（后端返回实际删除数供提示）。
-     */
     async batchRemove(ids: string[]) {
-      const res = await batchDeleteCategories(ids);
+      const res = await batchDeleteCategories(this.currentAccountId(), ids);
       await this.load(true);
       return res;
     },
 
     /** 批量隐藏（hidden=true）或恢复显示（hidden=false） */
     async batchHide(ids: string[], hidden: boolean) {
-      const res = await batchHideCategories(ids, hidden);
+      const res = await batchHideCategories(this.currentAccountId(), ids, hidden);
       await this.load(true);
       return res;
     },
@@ -128,6 +163,7 @@ export const useCategoryStore = defineStore('category', {
     reset() {
       this.list = [];
       this.loaded = false;
+      this.loadedAccountId = '';
     },
   },
 });

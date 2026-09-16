@@ -735,6 +735,25 @@ describe('CategoryService', () => {
       expect(res.success).toBe(true);
     });
 
+    it('D10 边界：**软删除**的交易不挡分类删除（回归 2026-09-16 修的 bug）', async () => {
+      const cat = await categoryService.create(userId, {
+        accountId: mainAccountId,
+        name: '软删交易分类',
+        type: 'expense',
+      });
+      const txn = await transactionService.create(userId, {
+        accountId: mainAccountId,
+        type: 'expense',
+        amount: '9.99',
+        recordDate: '2026-09-16',
+        categoryId: cat.id,
+      });
+      // 软删除该交易（进回收站）→ 不应再挡住分类删除
+      await transactionService.delete(userId, txn.id);
+      const res = await categoryService.delete(userId, mainAccountId, cat.id);
+      expect(res.success).toBe(true);
+    });
+
     it('D15：不同账本可以有同名分类', async () => {
       const name = '跨账本同名';
       const a = await categoryService.create(userId, {

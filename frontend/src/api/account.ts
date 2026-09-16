@@ -30,8 +30,35 @@ export function createAccount(data: {
   name: string;
   icon?: string;
   sort?: number;
+  /** 是否复制母本全部分类（默认 true）。false 时按 categoryIds 复制 */
+  copyAll?: boolean;
+  /** 要从母本复制过来的分类 id；**仅 copyAll=false 时生效**（空数组 = 一个都不要） */
+  categoryIds?: string[];
 }): Promise<AccountItem> {
   return http.post('/accounts', data) as any;
+}
+
+/** 分类候选：默认账本（母本）的全部分类 */
+export function getCategoryCandidates(): Promise<
+  Array<{
+    id: string;
+    name: string;
+    type: 'income' | 'expense';
+    icon: string;
+    sort: number;
+    parentId: string | null;
+    isHidden: boolean;
+  }>
+> {
+  return http.get('/accounts/category-candidates') as any;
+}
+
+/** 从母本批量导入分类到指定账本 */
+export function importCategories(
+  accountId: string,
+  categoryIds: string[]
+): Promise<{ imported: number }> {
+  return http.post(`/accounts/${accountId}/categories`, { categoryIds }) as any;
 }
 
 export function updateAccount(

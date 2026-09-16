@@ -4,7 +4,7 @@
  *   node scripts/verify-category-page.mjs
  *
  * 覆盖这条链路，每一步都断言**用户实际看到的东西**：
- *   ① 布局与数据：标题带收支类型、13 组 / 54 个二级、底部栏贴底可见
+ *   ① 布局与数据：标题带收支类型、13 组 / 55 个二级、底部栏贴底可见
  *   ② 进入批量：顶栏变「取消 / 选择支出分类 / 全选」，每行出现选择框
  *   ③ 三个操作**按选中项状态自动禁用**（不是点了没反应）
  *   ④ 隐藏 → 列表打「已隐藏」标记 → **记账选择器里看不到它** → 恢复显示 → 又能看到
@@ -13,6 +13,12 @@
  *   ⑦ 编辑与新建入口分别跳对页面、带对参数
  *
  * ⚠️ 会真跑一次「隐藏 → 恢复显示」与「自建分类 → 批量删除」，结束前全部还原/清理。
+ *
+ * ⚠️ 2026-09-16 账本级分类改造：
+ *    · 分类接口全部需要 accountId
+ *    · **默认账本（母本）的分类不允许删除**（设计 D16）
+ *  因此本脚本改为**临时非默认账本**上跑（创建时自动从母本复制 89 个分类），
+ *  并把前端 localStorage 的 currentAccountId 指过去；结束删除该临时账本。
  */
 import fs from 'node:fs';
 
@@ -64,8 +70,18 @@ const check = (name, actual, expected) => {
 };
 
 // ── 准备：用接口建立已知基线（所有分类 is_hidden = false）
+let ACCOUNT = '';
 const api = async (method, path, body) => {
-  const res = await fetch(`${API}${path}`, {
+  let p = path;
+  // 分类接口自动补 accountId（GET 走 query、写操作走 body）
+  if (p.startsWith('/categories')) {
+    if (method === 'GET') {
+      p += (p.includes('?') ? '&' : '?') + 'accountId=' + ACCOUNT;
+    } else if (body && typeof body === 'object' && body.accountId === undefined) {
+      body = { accountId: ACCOUNT, ...body };
+    }
+  }
+  const res = await fetch(`${API}${p}`, {
     method,
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -73,9 +89,21 @@ const api = async (method, path, body) => {
   return res.json();
 };
 let token = '';
+let tempAccName;
 {
   const l = await api('POST', '/auth/login', { username: USER, password: PASS });
   token = l.data.token;
+
+  // 建临时非默认账本（默认账本禁删分类，D16）
+  tempAccName = '__pg_acc_' + Date.now();
+  const acc = await api('POST', '/accounts', { name: tempAccName, icon: 'wallet' });
+  if (acc.code !== 0) {
+    console.error('创建临时账本失败：', acc.message);
+    process.exit(1);
+  }
+  ACCOUNT = acc.data.id;
+  console.log(`（临时账本 ${ACCOUNT}「${tempAccName}」已创建）`);
+
   const all = (await api('GET', '/categories')).data;
   const hidden = all.filter((c) => c.isHidden).map((c) => c.id);
   if (hidden.length) await api('POST', '/categories/batch-hide', { ids: hidden, hidden: false });
@@ -103,6 +131,11 @@ await inputs.nth(0).fill(USER);
 await inputs.nth(1).fill(PASS);
 await page.locator('.submit').first().click();
 await page.waitForTimeout(2500);
+
+// 把前端的「当前账本」指向临时账本（分类 store 绑定当前账本）
+await page.evaluate((id) => {
+  localStorage.setItem('currentAccountId', id);
+}, ACCOUNT);
 
 /**
  * 打开分类管理页。
@@ -135,7 +168,8 @@ await openCategoryPage('expense');
 {
   check('顶栏标题带收支类型', (await page.locator('.nav-title').textContent()).trim(), '支出分类管理');
   check('一级分组数 = 13', await page.locator('.root-row').count(), 13);
-  check('展开的二级分类数 = 54', await page.locator('.child-row').count(), 54);
+  // 支出二级 55 个（2026-09-15 补了「衣服饰品 / 🧦」）
+  check('展开的二级分类数 = 55', await page.locator('.child-row').count(), 55);
 
   const geom = await page.evaluate(() => {
     const bar = document.querySelector('.bottom-bar').getBoundingClientRect();
@@ -161,7 +195,7 @@ console.log('\n══ ② 进入批量模式 ══');
   check('标题变为「选择支出分类」', (await page.locator('.nav-title').textContent()).trim(), '选择支出分类');
   check('左侧是「取消」', (await page.locator('.nav-action').first().textContent()).trim(), '取消');
   check('右侧是「全选」', (await page.locator('.nav-action').last().textContent()).trim(), '全选');
-  check('每行出现选择框（13 + 54）', await page.locator('.check').count(), 67);
+  check('每行出现选择框（13 + 55）', await page.locator('.check').count(), 68);
   check('底栏变成三个操作', await page.locator('.batch-act').count(), 3);
 
   const labels = await page.locator('.batch-act-label').allTextContents();
@@ -237,7 +271,7 @@ console.log('\n══ ⑦ 全选 / 取消全选 ══');
   await page.waitForTimeout(300);
   await page.locator('.nav-action').last().click(); // 全选
   await page.waitForTimeout(400);
-  check('全选后 67 个选择框全部勾选', await page.locator('.check.on').count(), 67);
+  check('全选后 68 个选择框全部勾选', await page.locator('.check.on').count(), 68);
   check('右侧文字变为「取消全选」', (await page.locator('.nav-action').last().textContent()).trim(), '取消全选');
 
   await page.locator('.nav-action').last().click();
@@ -362,6 +396,12 @@ console.log('\n══ ⑫ 批量删除（自建分类，结束即清理）══
 }
 
 console.log('\n页面错误：', pageErrors.length ? pageErrors.slice(0, 5) : '无');
+
+// 清理：删除临时账本（其分类由外键 CASCADE 一并删除）
+{
+  const del = await api('DELETE', `/accounts/${ACCOUNT}?confirmName=${encodeURIComponent(tempAccName)}`);
+  console.log(del.code === 0 ? `（临时账本 ${ACCOUNT} 已删除）` : `⚠️ 临时账本删除失败：${del.message}`);
+}
 
 await ctx.close();
 await browser.close();

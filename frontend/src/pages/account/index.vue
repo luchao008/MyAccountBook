@@ -20,6 +20,7 @@
             设为默认
           </text>
           <text class="action" @click="onRename(item)">改名</text>
+          <text class="action" @click="goCategorySettings(item)">分类设置</text>
           <text
             v-if="list.length > 1"
             class="action"
@@ -40,14 +41,11 @@
       <EmptyState v-if="!list.length" icon="icon-wallet" text="还没有账本" />
     </view>
 
-    <!-- 新建 -->
+    <!-- 新建：跳转到独立页（可选择分类，见设计 D4） -->
     <view class="add-box">
-      <view class="add-row">
-        <input v-model="newName" class="input" placeholder="新账本名称" maxlength="64" />
-        <view class="add-btn" @click="onAdd">新建账本</view>
-      </view>
+      <view class="add-btn-block" @click="goNewAccount">+ 新建账本</view>
       <text class="hint">
-        账本名不可重复。新建的账本不会自动成为默认账本，可在列表里手动设置。
+        账本名不可重复。新建时可选择该账本需要的分类；新建的账本不会自动成为默认账本。
       </text>
     </view>
 
@@ -66,12 +64,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { computed } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import EmptyState from '@/components/EmptyState.vue';
 import { useAccountStore } from '@/store/account';
 import {
-  createAccount,
   updateAccount,
   deleteAccount,
   getDeletePreview,
@@ -81,7 +78,6 @@ import {
 } from '@/api/account';
 
 const accountStore = useAccountStore();
-const newName = ref('');
 
 const list = computed(() => accountStore.list);
 
@@ -95,20 +91,14 @@ onLoad(async () => {
   await accountStore.refresh();
 });
 
-async function onAdd() {
-  const name = newName.value.trim();
-  if (!name) {
-    uni.showToast({ title: '请输入账本名称', icon: 'none' });
-    return;
-  }
-  try {
-    await createAccount({ name, icon: 'wallet' });
-    newName.value = '';
-    await accountStore.refresh();
-    uni.showToast({ title: '已创建', icon: 'success' });
-  } catch (err) {
-    console.error('[account] 创建失败', err);
-  }
+/** 新建账本：跳独立页（可选分类） */
+function goNewAccount() {
+  uni.navigateTo({ url: '/pages/account-new/index' });
+}
+
+/** 账本分类设置：跳独立页 */
+function goCategorySettings(item: AccountItem) {
+  uni.navigateTo({ url: '/pages/account-category/index?accountId=' + item.id });
 }
 
 function onRename(item: AccountItem) {
@@ -342,30 +332,17 @@ async function execMerge(source: AccountItem, target: AccountItem) {
   padding: 16px;
 }
 
-.add-row {
+.add-btn-block {
+  height: 46px;
+  background: $brand-600;
+  border-radius: $radius-md;
   display: flex;
   align-items: center;
-}
-
-.input {
-  flex: 1;
-  height: 40px;
-  background: $bg-subtle;
-  border-radius: 8px;
-  padding: 0 12px;
-  font-size: $font-body;
-  line-height: $lh-body;
-}
-
-.add-btn {
-  margin-left: 12px;
-  padding: 0 16px;
-  height: 40px;
-  line-height: 40px;
-  background: $brand-600;
+  justify-content: center;
   color: $text-inverse;
-  border-radius: 8px;
-  font-size: $font-body-sm;
+  font-size: $font-body-lg;
+  line-height: $lh-body-lg;
+  font-weight: $weight-medium;
 }
 
 .hint {
