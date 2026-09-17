@@ -13,13 +13,15 @@
           <view class="nav-back" @click="goBack">
             <SvgIcon name="icon-chevron-left" :size="20" />
           </view>
+          <!--
+            内联标题（2026-09-17 由 Large Title 收进顶栏，luchao 要求）。
+            与流水/日历/回收站/数据导出一致：标题住在那 44px 的返回行里，
+            所以吸顶区从 92px 缩到 44px（+ Tab 45px）。
+            ⚠️ 字号用 $font-h2（17/24），**不要**沿用原大标题的 $font-display（28/36）：
+               字阶是固定 8 档（§2.2），且 iOS 的内联标题本来就是 17pt。
+          -->
+          <text class="nav-title">报表</text>
         </view>
-        <!--
-          v1.1 大标题：iOS 的 Large Title 写法 —— 返回行与标题行分开，标题左对齐。
-          ⚠️ 字号用 $font-display（28/36），**不要**自定义 30/38：
-             字阶是固定 8 档（§2.2），阶梯外的 font-size 会被 check-contrast §13 判成 MISMATCH。
-        -->
-        <text class="nav-large-title">报表</text>
       </view>
 
       <!-- 顶部 Tab：只保留「基础统计」「分类」 -->
@@ -442,6 +444,10 @@ onMounted(loadData);
   display: flex;
   align-items: center;
   padding: 0 $space-2;
+  /* 标题用绝对定位居中（见 .nav-title），这里提供定位上下文。
+     ⚠️ 不要新开一个 .nav-inner { position: relative } 的规则块：
+        check-ios-tokens §13 是逐个 `.nav-inner {...}` 块断言「声明了 padding: 0 $space-2」的。 */
+  position: relative;
 }
 
 /* 返回箭头用主色金：v1.1 里 $v11-gold 同时承担「可点文字」与「实心按钮底」（4.87 对称） */
@@ -458,14 +464,27 @@ onMounted(loadData);
 }
 
 /*
- * v1.1 大标题。左对齐、不居中 —— 这是 iOS Large Title 的标志。
- * 用 $font-display（28/36），不自定义 30/38：字阶是固定 8 档，阶梯外的字号会被校验判为不一致。
+ * 内联标题。与流水/日历/回收站/数据导出同款：$font-h2（17/24）+ semibold。
+ *
+ * ⚠️ 为什么用绝对定位，而不是 `.nav-title { flex: 1; text-align: center }`
+ *    （流水页与分类页的写法）：后者是「在**剩余空间**里居中」而不是「在屏幕里居中」。
+ *    左有 44px 返回键、右侧为空 → 文字中心会比屏幕中心右偏 (44+8)/2 = 26px。
+ *    「报表」只有两个字，这点偏移肉眼一眼能看出（宽标题才不明显）。
+ *    绝对定位 + 左右拉满才是 iOS 的做法，且以后右侧加动作键也不会把标题挤歪。
+ *
+ * ⚠️ pointer-events: none 是必须的，不是可选优化：
+ *    绝对定位的标题横跨整行、且晚于返回键绘制，会盖住返回键的 44×44 触摸区。
+ *    去掉这一行，返回键就点不动了（而且肉眼看不出来）。
  */
-.nav-large-title {
+.nav-title {
+  position: absolute;
+  left: 0;
+  right: 0;
   display: block;
-  padding: 0 $space-4 $space-3;
-  font-size: $font-display;
-  line-height: $lh-display;
+  text-align: center;
+  pointer-events: none;
+  font-size: $font-h2;
+  line-height: $lh-h2;
   font-weight: $weight-semibold;
   color: $v11-text-primary;
 }

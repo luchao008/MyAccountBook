@@ -6,7 +6,7 @@
     （从记账页过来、看完原路返回），而单页容器里的视图切换是"就地换内容"，没有返回路径。
 
     本页在 pages.json 里配置了 navigationStyle: custom —— 报表用自绘顶栏
-    （v1.1 起为 iOS Large Title 形态：返回行 + 左对齐大标题，见 ReportView.vue 的 .nav-large-title），
+    （2026-09-17 起标题收进返回行：44px 内联标题「报表」，见 ReportView.vue 的 .nav-title），
     与分类管理页同一套做法。
 
     内容全部由 ReportView 承载：它是新报表实现（双 Tab + 年/月粒度 + 聚合接口），

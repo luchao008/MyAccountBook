@@ -19,6 +19,43 @@ import process from 'node:process';
 import { readFileSync, readdirSync } from 'node:fs';
 
 // ==========================================================================
+// 0. 公共：遍历前端所有 .vue 的 <style>（已剥注释）
+// ==========================================================================
+//
+// §13 / §14 这两组「结构性守卫」都要按文件扫样式，共用这一份遍历。
+//
+// ⚠️ 剥注释不是洁癖：正则型守卫最典型的失效方式是**假绿** ——
+//    注释里出现的「说明性引用」（例如 `.nav-inner { padding: 0 $space-2 }`
+//    这种把约定写进注释的做法）会被当成真代码命中，于是守卫判过。
+//    一个会假绿的守卫比没有守卫更糟：它给出了"已检查"的错觉。
+const SRC = new URL('../frontend/src/', import.meta.url);
+
+const vueFiles = (dir) =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const child = new URL(e.name + (e.isDirectory() ? '/' : ''), dir);
+    if (e.isDirectory()) return e.name === 'uni_modules' ? [] : vueFiles(child);
+    return e.name.endsWith('.vue') ? [child] : [];
+  });
+
+const vueStyles = () =>
+  vueFiles(SRC)
+    .map((file) => {
+      const styles = readFileSync(file, 'utf8').match(/<style[\s\S]*?<\/style>/g);
+      if (!styles) return null;
+      return {
+        name: file.pathname.split('/src/')[1],
+        css: styles
+          .join('\n')
+          .replace(/\/\*[\s\S]*?\*\//g, '') // 剥块注释
+          .replace(/^\s*\/\/.*$/gm, ''), // 剥行注释
+      };
+    })
+    .filter(Boolean);
+
+/** 把一段 CSS 规则压成单行、去空格，便于 `includes` / 正则判据 */
+const flatCss = (s) => s.replace(/\s+/g, ' ').replace(/\s*:\s*/g, ':').replace(/;$/, '');
+
+// ==========================================================================
 // 1. 核心算法（WCAG 2.x relative luminance / contrast ratio）
 // ==========================================================================
 
@@ -418,39 +455,18 @@ expectBelow('重排确实付出了代价（记录在案，非无限余量）', a
 //
 // ⚠️ 只断言「声明了 padding 且用的是 $space-2」，**不断言具体像素** ——
 //    像素由 token 决定、token 已由间距阶梯锁着，两层都断言会互相打架。
-// ⚠️ 匹配前必须剥掉 CSS 注释：注释里出现 `.nav-inner { padding: 0 $space-2 }`
-//    这种"说明性引用"会让守卫误判为通过（假绿）。
 {
-  const SRC = new URL('../frontend/src/', import.meta.url);
-  const vueFiles = (dir) =>
-    readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-      const child = new URL(e.name + (e.isDirectory() ? '/' : ''), dir);
-      if (e.isDirectory()) return e.name === 'uni_modules' ? [] : vueFiles(child);
-      return e.name.endsWith('.vue') ? [child] : [];
-    });
-
   const REQUIRED = 'padding:0 $space-2';
   const pages = [];
   const offenders = [];
 
-  for (const file of vueFiles(SRC)) {
-    const src = readFileSync(file, 'utf8');
-    const styles = src.match(/<style[\s\S]*?<\/style>/g);
-    if (!styles) continue;
-    const css = styles
-      .join('\n')
-      .replace(/\/\*[\s\S]*?\*\//g, '') // 剥块注释（含说明性引用）
-      .replace(/^\s*\/\/.*$/gm, ''); // 剥行注释
+  for (const { name, css } of vueStyles()) {
     const blocks = css.match(/\.nav-inner\s*\{[^}]*\}/g);
     if (!blocks) continue;
-    pages.push(file.pathname.split('/src/')[1]);
+    pages.push(name);
     for (const b of blocks) {
-      const norm = b
-        .replace(/\s+/g, ' ')
-        .replace(/\s*:\s*/g, ':')
-        .replace(/;$/, '');
-      if (!norm.includes(REQUIRED)) {
-        offenders.push(`${file.pathname.split('/src/')[1]} → ${norm.slice(0, 96)}`);
+      if (!flatCss(b).includes(REQUIRED)) {
+        offenders.push(`${name} → ${flatCss(b).slice(0, 96)}`);
       }
     }
   }
@@ -461,7 +477,53 @@ expectBelow('重排确实付出了代价（记录在案，非无限余量）', a
 }
 
 // ==========================================================================
-// 14. 汇总
+// 14. 内联顶栏标题的可点性 / 定位上下文（结构性守卫）
+// ==========================================================================
+//
+// 为什么需要它：2026-09-17 把报表页的标题收进那 44px 返回行时，
+// 为了让「报表」两个字真正居中（而不是在"剩余空间"里居中而右偏 26px），
+// 用的是**绝对定位**。由此引入两个**肉眼完全看不出来**的失能：
+//
+//   ① 漏 `pointer-events: none` → 绝对定位的标题横跨整行、且晚于返回键绘制，
+//      会把返回键的 44×44 触摸区整块吃掉。页面照常渲染、标题照常显示，
+//      只有点下去没反应 —— 而且透明区域也吃点击。
+//   ② 漏父级 `position: relative` → 标题相对更外层（甚至视口）定位，
+//      在 375 的模拟器里恰好看起来是对的，换宽度就飘。
+//
+// 这两条都**静态可查**，所以不必等用户报「返回键点不动了」。
+//
+// 判据：任何声明了 `position: absolute` 的 `.nav-title`
+//      ① 自身必须有 `pointer-events: none`；
+//      ② 同文件的 `.nav-inner` 必须有 `position: relative`。
+{
+  const offenders = [];
+  let absoluteTitles = 0;
+
+  for (const { name, css } of vueStyles()) {
+    const titleBlocks = css.match(/\.nav-title\s*\{[^}]*\}/g);
+    if (!titleBlocks) continue;
+    const innerBlocks = (css.match(/\.nav-inner\s*\{[^}]*\}/g) || []).map(flatCss);
+
+    for (const b of titleBlocks) {
+      if (!/position:absolute/.test(flatCss(b))) continue;
+      absoluteTitles++;
+      if (!/pointer-events:none/.test(flatCss(b))) {
+        offenders.push(`${name} → 绝对定位的 .nav-title 缺 pointer-events: none（会吃掉返回键触摸区）`);
+      }
+      if (!innerBlocks.some((ib) => /position:relative/.test(ib))) {
+        offenders.push(`${name} → .nav-inner 缺 position: relative（标题会相对更外层定位）`);
+      }
+    }
+  }
+
+  // 守住「不是空跑」：判据一条都没命中时，上面两个断言会一片绿而其实什么都没查
+  expectMin('绝对定位的内联标题（报表页 .nav-title）', absoluteTitles, 1);
+  expectEq('绝对定位的 .nav-title 可点穿透、且父级提供了定位上下文', offenders.length, 0);
+  for (const o of offenders) console.log('      ↳ ' + o);
+}
+
+// ==========================================================================
+// 15. 汇总
 // ==========================================================================
 
 console.log('\n' + '─'.repeat(78));
