@@ -198,7 +198,7 @@ function shortMoney(v: number): string {
  *    而支出反而"白得"了中性色。
  *
  *    这也说明：凡是**依赖具体色相**的规则，在色值对调时都要重新审视 ——
- *    纯 `color: $income` 这类会自动跟随，条件分支不会。
+ *    纯 `color: $v11-income-amount` 这类会自动跟随，条件分支不会。
  */
 .day.empty .day-amount,
 .day .day-amount.income {

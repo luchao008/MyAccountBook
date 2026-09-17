@@ -66,16 +66,17 @@ if (await page.locator('.submit').count()) {
   await page.waitForTimeout(2500);
 }
 
-await page.goto(BASE + '#/pages/category/index', { waitUntil: 'domcontentloaded' });
-await page.waitForTimeout(2200);
-
-// 展开全部分组，让目标分类进入 DOM
-const groups = await page.locator('.group-header').count();
-for (let i = 0; i < groups; i++) {
-  await page.locator('.group-header').nth(i).click();
-  await page.waitForTimeout(120);
-}
-await page.waitForTimeout(600);
+/*
+ * ⚠️ 2026-09-16 改：原来这里去**分类管理页**找彩色图标，依赖"当前数据里恰好有分类
+ *    用了彩色 key"。实测 demo 账号的 89 个分类**全是 emoji**，于是脚本永远报
+ *    `found: false` —— 看起来像组件坏了，实际是数据里没有彩色 key。
+ *    改到**图标选择页**：它无条件铺开全部彩色图标（多彩 329 + 生活 141），
+ *    与数据无关，判据才稳定。顺带也把"分组头类名过期"那个坑一起绕掉了。
+ */
+await page.goto(BASE + '#/pages/icon-picker/index', { waitUntil: 'domcontentloaded' });
+// ⚠️ 需要多等一会儿：图标正文是**动态 import 分包**（约 610 KB），
+//    数据到达前 `.cell` 已经在（骨架），但里面的 svg 还没内容。
+await page.waitForTimeout(3000);
 
 const info = await page.evaluate(() => {
   const el = document.querySelector('svg.color-icon');
@@ -120,8 +121,8 @@ if (!info.found) {
   for (const [name, ok] of checks) console.log(`${ok ? '✓' : '✗'} ${name}`);
 }
 
-// 把含彩色图标的那一行滚进视口再截图，否则截到的是列表顶部，看不出效果
-const holder = page.locator('.group-header:has(svg.color-icon), .child-row:has(svg.color-icon)').first();
+// 把含彩色图标的那个格子单独截图，否则截到的是整页网格，看不出单个图标的效果
+const holder = page.locator('.cell:has(svg.color-icon)').first();
 if (await holder.count()) {
   await holder.scrollIntoViewIfNeeded();
   await page.waitForTimeout(500);

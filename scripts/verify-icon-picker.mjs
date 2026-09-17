@@ -87,7 +87,10 @@ await page.waitForTimeout(2200);
 await shot('01-category-list');
 
 // 展开第一个分组，才会出现「新建二级分类」入口
-await page.locator('.group-header').first().click();
+// ⚠️ 分组头的类名是 `.row.root-row`（分类管理页重构后改过），
+//    旧脚本里写的 `.group-header` 早已不存在 —— 用旧名会**超时 30s 后失败**，
+//    于是这个守卫事实上处于"永远跑不过、也就没人跑"的状态。
+await page.locator('.row.root-row').first().click();
 await page.waitForTimeout(700);
 const addChild = page.locator('.add-child').first();
 console.log('找到「新建二级分类」入口:', (await addChild.count()) > 0);
@@ -180,20 +183,63 @@ await shot('08-category-list-after');
 step('清理测试数据');
 let cleaned = '(未清理，请手动删除)';
 if (token) {
-  const res = await fetch(`${API}/api/categories?type=expense`, {
+  /*
+   * ⚠️ 两处都会让清理**静默失败并留下残留**，2026-09-16 实测都踩到了：
+   *
+   * ① 分类接口在「账本级分类」改造后**必须传 accountId** ——
+   *    不传返回 `{"code":40000,"message":"\"accountId\" is required"}`，
+   *    `json.data` 是 null → `.find` 落空 → 脚本报"没找到刚创建的分类"。
+   *    这条信息**误导性极强**：看起来像"保存没成功"，实际是查询本身没查成。
+   *    实测后果：库里真的留下了 `图标测试21979`（分类数 89 → 90）。
+   *
+   * ② 建出来的分类落在**默认账本（母本）**上，而母本的分类**按设计禁删**（40006）。
+   *    所以即使查询修好了，删除仍然会失败。
+   *    → 正解是像 `verify-category-batch` / `verify-category-page` 那样
+   *      **改用临时非默认账本**跑；本脚本尚未改造，故这里退而求其次：
+   *      把真实失败原因**大声打出来**，不再给一句含糊的"没找到"。
+   */
+  const accRes = await fetch(`${API}/api/accounts`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const accJson = await accRes.json();
+  const accounts = accJson.data || [];
+  const accountId = (accounts.find((a) => a.isDefault) ?? accounts[0])?.id;
+
+  const res = await fetch(`${API}/api/categories?type=expense&accountId=${accountId}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   const json = await res.json();
-  const target = (json.data || []).find((c) => c.name === NEW_NAME);
+  // 递归展开：本脚本建的是二级分类，只翻顶层等于永远找不到
+  const flat = [];
+  const walk = (xs) => {
+    for (const c of xs || []) {
+      flat.push(c);
+      walk(c.children);
+    }
+  };
+  walk(json.data);
+  const target = flat.find((c) => c.name === NEW_NAME);
   console.log('后端实际保存的 icon =', target?.icon ?? '(未找到该分类)');
   if (target) {
-    const del = await fetch(`${API}/api/categories/${target.id}`, {
+    const del = await fetch(`${API}/api/categories/${target.id}?accountId=${accountId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
-    cleaned = del.ok ? `已删除 id=${target.id}` : `删除失败 HTTP ${del.status}`;
+    if (del.ok) {
+      cleaned = `已删除 id=${target.id}`;
+    } else {
+      const body = await del.json().catch(() => ({}));
+      cleaned =
+        `❌ 删除失败 HTTP ${del.status} ${body.message ?? ''}\n` +
+        `   ⚠️ 库中会留下测试分类「${NEW_NAME}」。根治办法是改用**临时非默认账本**\n` +
+        `      （默认账本的分类按设计禁删，见 docs/账本级分类设计文档.md）；\n` +
+        `      临时清理可在 DB 里直删：DELETE FROM categories WHERE name LIKE '图标测试%';\n` +
+        `      （连接方式见项目记忆「本地启动」一节的 docker exec 用法）`;
+    }
   } else {
-    cleaned = '没找到刚创建的分类（可能保存未成功）';
+    cleaned =
+      `没找到刚创建的分类。⚠️ 若保存确实成功，请检查分类数是否比基线多 1 —— ` +
+      `查询失败（如漏传 accountId）也会走到这一支。`;
   }
 }
 console.log(cleaned);

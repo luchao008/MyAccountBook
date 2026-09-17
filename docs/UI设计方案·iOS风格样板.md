@@ -56,7 +56,7 @@
 | 分类图标 | 15 个 `cat-*` + 彩色体系 329 + 141（生成物） |
 | 设计 token | `frontend/src/styles/tokens.scss`（已接入阶段 1–4） |
 | 设计语言 | FL-1「数字优先 · 通栏扁平」 |
-| 校验脚本 | `check-contrast.mjs`（155 项）、`reflow-audit.mjs`（30 屏）等 25 个 |
+| 校验脚本 | `check-contrast.mjs`（156 项）、`check-ios-tokens.mjs`（108 项）、`reflow-audit.mjs`（72 屏）等 25+ 个 |
 
 ### 1.2 现有视觉语言的三条结构性特征
 
@@ -628,9 +628,11 @@ node scripts/check-ios-tokens.mjs
 | 17 | 分类设置 | `pages/account-category/index.vue` | 列表去描边；批量操作态 | 低。⚠️ 原表遗漏，2026-09-16 补入 |
 | 18 | 从母本导入 | `pages/account-import/index.vue` | 列表 + 导入按钮 | 低。⚠️ 原表遗漏，2026-09-16 补入 |
 
-**⚠️ `reflow-audit.mjs` 的覆盖缺口（2026-09-16 实测）**：它覆盖 13 条路由（12 个不同页面）× 3 档
-= **39 屏**（不是记忆里的 30 屏）。仍缺 4 页：`login` / `category-new` / `icon-picker` / `recycle`，
-外加全部弹层交互态。补全属独立任务，见执行计划阶段 5。
+**⚠️ `reflow-audit.mjs` 的覆盖情况（2026-09-16 阶段 5.2 收口后）**：早期覆盖 13 条路由（12 个不同页面）× 3 档
+= 39 屏（不是记忆里的 30 屏）；补全后为 **24 条 × 3 档 = 72 屏**，新增 `login` / `category-new` /
+`icon-picker` / `recycle` 四页、「我的」页内视图与流水 6 个弹层。
+⚠️ 弹层靠 `steps` + `guard` 点开（**守卫失败直接抛错**，避免静默量到别的屏）；滚轮滚动后 /
+日历展开 / 输入提交态 / 键盘 Tab / safe-area 仍属脚本末尾的**人工验收清单**。
 
 **建议顺序**：1 → 2 → 3（判断整体是否成立）→ 4（最重的）→ 5/6/12（有独立结构的）→ 其余 → 14 收口。
 

@@ -28,7 +28,7 @@
  *    不含任何用户输入，因此没有 XSS 面。
  */
 import { computed } from 'vue';
-import { getColorIcon } from '@/utils/colorIcon';
+import { colorIconsReady, getColorIcon } from '@/utils/colorIcon';
 
 const props = withDefaults(
   defineProps<{
@@ -40,7 +40,18 @@ const props = withDefaults(
   { name: '', size: 24 }
 );
 
-const icon = computed(() => getColorIcon(props.name));
+/**
+ * ⚠️ 必须显式依赖 `colorIconsReady`。
+ *
+ * 索引是普通 `Map`（非响应式），而图标正文是**动态 import 分包**拉取的。
+ * 只写 `getColorIcon(props.name)` 的话：首帧拿到 null → 缓存住空字符串 →
+ * 分包下载完成后**不会重算** → 图标永远空白（且不报错）。
+ * 先读一次 `colorIconsReady.value` 就把这条依赖建上了。
+ */
+const icon = computed(() => {
+  if (!colorIconsReady.value) return null;
+  return getColorIcon(props.name);
+});
 
 const body = computed(() => icon.value?.body ?? '');
 

@@ -25,11 +25,23 @@
         <SvgIcon class="arrow" name="icon-chevron-right" :size="16" />
       </view>
 
-      <!-- 层级说明：编辑态不显示（层级不可改，见下方注释） -->
-      <view v-if="!isEdit" class="field">
-        <text class="label">层级</text>
-        <text class="level">{{ levelText }}</text>
-      </view>
+        <!-- 层级说明：编辑态不显示（层级不可改，见下方注释） -->
+        <view v-if="!isEdit" class="field">
+          <text class="label">层级</text>
+          <!--
+            ⚠️ 拆成「值 + 说明」两个元素，不要合成一句长文案。
+            原来写的是 `一级分类（顶层分组）` / `二级分类（挂在某个一级分类下）` 一整句，
+            在 **320px + 字号 200%** 下会溢出一行 —— 而且**换不了行**：
+            中文禁则不允许在「（」前断行，整句成了不可断的整体，浏览器在"溢出不足一个字"
+            时会选择不换行、直接吃掉右边距（实测 300px 内容挤进 288px 盒子）。
+            拆开后每段都短，再给容器 `flex-wrap: wrap` 兜底：放不下就整体折到第二行。
+            （`flex-wrap: wrap` 在"本来放得下"时是 no-op，是安全的兜底 —— 见项目记忆。）
+          -->
+          <view class="level-row">
+            <text class="level">{{ levelName }}</text>
+            <text class="level-hint">{{ levelHint }}</text>
+          </view>
+        </view>
     </view>
 
     <view class="submit-box">
@@ -85,9 +97,15 @@ let type: 'income' | 'expense' = 'expense';
 
 const isEdit = computed(() => !!editId);
 
-const levelText = computed(() =>
-  parentId ? '二级分类（挂在某个一级分类下）' : '一级分类（顶层分组）'
-);
+/**
+ * 层级：值 + 说明分开写。
+ *
+ * ⚠️ 不要合回一句长文案（如「一级分类（顶层分组）」）—— 200% 字号下那会自动溢出一行，
+ *    且因中文禁则**无法换行**（不能在「（」前断行）。分开写每段都短，才不会吃掉右边距。
+ *    详见模板里 `.level-row` 上方的注释。
+ */
+const levelName = computed(() => (parentId ? '二级分类' : '一级分类'));
+const levelHint = computed(() => (parentId ? '挂在一级分类下' : '顶层分组'));
 
 function onIconPicked(key: string) {
   icon.value = key;
@@ -208,12 +226,33 @@ async function save() {
   color: $v11-text-primary;
 }
 
-.level {
-  display: block;
+/*
+ * 层级行：值 + 说明。
+ *
+ * ⚠️ `flex-wrap: wrap` 是**兜底**（本来放得下时是 no-op，加它安全）：
+ *    200% 字号下「一级分类」+「顶层分组」加起来会超过容器宽，
+ *    此时说明整体折到第二行，而不是硬挤出去吃掉右边距。
+ *    这条是 `reflow-audit` 新增本页覆盖后抓到的（此前本页不在巡检清单里）。
+ */
+.level-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: $space-2;
   margin-top: $space-2;
+}
+
+.level {
   font-size: $font-body;
   line-height: $lh-body;
   color: $v11-text-primary;
+}
+
+.level-hint {
+  font-size: $font-caption;
+  line-height: $lh-body;
+  color: $v11-text-secondary;
+  @include text-safe;
 }
 
 .input-row {

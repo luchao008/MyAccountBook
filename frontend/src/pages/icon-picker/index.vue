@@ -44,26 +44,43 @@
  *   发一个全局事件给上一页，然后 `navigateBack`。
  *   延后 120ms 是为了让选中态闪一下 —— 立刻返回的话用户看不到自己点了哪个。
  */
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import CategoryIcon from '@/components/CategoryIcon.vue';
 import { CATEGORY_ICONS } from '@/constants/icons';
-import { colorIconKeysOf } from '@/utils/colorIcon';
+import { COLOR_ICON_SET_META } from '@/constants/color-icon-meta';
+import { colorIconKeysOf, colorIconsReady, loadColorIcons } from '@/utils/colorIcon';
 import { EVENT_ICON_PICKED } from '@/constants/events';
 
+/**
+ * 底部 Tab。
+ *
+ * ⚠️ 彩色图标集的 Tab **从元数据派生**，不再手写 —— 手写一份就等于埋了
+ *    一个"加了新图标集但忘了加 Tab"的坑，而且它不会报错，只会安静地少一个入口。
+ *    「标准」是项目自有的单色分类图标（不在彩色图标元数据里），单独补一个。
+ */
 const TABS = [
-  { key: 'colorful', label: '多彩' },
-  { key: 'life', label: '生活' },
+  ...COLOR_ICON_SET_META.map((s) => ({ key: s.key, label: s.label })),
   { key: 'standard', label: '标准' },
-] as const;
+];
 
-type TabKey = (typeof TABS)[number]['key'];
+type TabKey = string;
 
 const activeSet = ref<TabKey>('colorful');
 
-/** 当前 Tab 下可选的图标 key */
+onMounted(() => {
+  // 本页要的是"某个集合下的**全部** key"，不能等子组件来触发加载
+  void loadColorIcons();
+});
+
+/**
+ * 当前 Tab 下可选的图标 key。
+ * ⚠️ 必须依赖 `colorIconsReady` —— 图标正文是动态 import 分包，
+ *    数据到达后要重新铺一遍网格，否则这一页永远是空的。
+ */
 const visibleKeys = computed(() => {
   if (activeSet.value === 'standard') return Object.keys(CATEGORY_ICONS);
+  if (!colorIconsReady.value) return [];
   return colorIconKeysOf(activeSet.value);
 });
 

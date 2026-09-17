@@ -683,7 +683,7 @@ onMounted(loadData);
 }
 
 .panel-meta-val.income {
-  color: $income;
+  color: $v11-income-amount;
 }
 
 .ring-area {

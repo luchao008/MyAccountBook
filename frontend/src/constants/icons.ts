@@ -280,21 +280,6 @@ export const ICON_FRAME = {
 } as const;
 
 /**
- * 分类图标外框的配色 token（供样式层使用，不要在这里写死 hex）。
- *
- * ⚠️ 2026-09-16 v1.1：**本常量当前无人引用，属死代码** ——
- *    全项目搜索 `ICON_FRAME_THEME` 只有本处声明，且它引用的 `$ink-1` / `$ink-4`
- *    在 tokens.scss 里早已不存在（改名前就已失效）。这里仅把仍存在的 token 名
- *    更新到 v1.1，避免全项目残留 v1.0 token 名造成误判。
- *    **阶段 5 收口时删除**（连同 `$divider` / `$border-card` 等废弃 token）。
- */
-export const ICON_FRAME_THEME = {
-  default: { bg: '$v11-bg-inset', fg: '$v11-text-primary' }, // 14.53:1 ✅
-  selected: { bg: '$v11-gold', fg: '$text-inverse' }, // 4.87:1 ✅
-  disabled: { bg: '$v11-bg-inset', fg: '$v11-text-disabled' }, // 装饰/禁用，豁免
-} as const;
-
-/**
  * 功能 emoji → 功能图标名。
  *
  * 迁移期兜底用：模板里写死的 emoji（📁 账本 / 🏷️ 分类 / 📊 统计 / 🔍 搜索 / 📭 空状态 /

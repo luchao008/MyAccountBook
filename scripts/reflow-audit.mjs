@@ -54,22 +54,38 @@ const PASS = process.env.SEED_PASS || '123456';
 const OUT = process.env.SHOT_DIR || '/tmp/reflow-audit';
 
 /**
- * 页面清单。
+ * 页面 / 交互态清单。
  *
  * ⚠️ 本清单**必须随结构变化同步**，否则会重现"巡检到了错页却全绿"那类假结果 ——
  *    失效的 `?tab=xxx` 不会报错，它会静默加载首页，于是量的是首页却记为那个视图。
  *
- * 结构沿革：
+ * 🔑 **每一条都可以带 `steps`（先点开）与 `guard`（确认真的到了）**，
+ *    这是本脚本 2026-09-16 补的两件东西：
+ *      · `steps`：把"需要点开才有"的界面纳入巡检（弹层、页内视图切换）。
+ *      · `guard`：一个存在性断言。**没有它，点空 / 路由失效都会静默量到别的屏**，
+ *        然后给你一个绿色的谎话 —— 这正是本项目反复栽的那个坑。
+ *        有它就会直接抛错（`throw`），宁可红也不要假绿。
+ *    `steps` 在**字号放大之前**执行：字号放大是给"当前已存在的元素"写内联 font-size，
+ *    先开弹层再放大，弹层里的元素才会被一起放大（否则量的是没放大的弹层）。
+ *
+ * 覆盖沿革：
  *   · 2026-09-13「明细」下线 → 摘掉 `?tab=detail`；
  *     「统计」改为独立页「报表」→ 按**独立地址**巡检，`?tab=statistics` 失效；
  *   · 2026-09-14「我的」从主容器移除 → 摘掉 `?tab=mine`（容器的 VALID_KEYS 只剩 home，
- *     该 URL 现在会静默落到首页）。**「我的」视图仍存在于账本选择页**（页内视图切换，
- *     不是 URL 可寻址的），所以本脚本不再覆盖它 —— 这是已知的覆盖缺口，
- *     要补需在巡检里先点一次底栏「我的」（属独立任务）。
+ *     该 URL 现在会静默落到首页）。**「我的」视图仍存在于账本选择页**（页内视图切换），
+ *     本轮补回来了：用 `steps` 点底栏第 2 项。
+ *   · **2026-09-16 阶段 5 收口**：补齐此前一直缺的 4 个页面
+ *     （`login` / `category-new` / `icon-picker` / `recycle`）+「我的」+ 流水页 4 个弹层。
+ *     13 页 → 20 条，39 屏 → 60 屏。
+ *
+ * ⚠️ **仍然扫不到的（人工验收项，见文末清单）**：
+ *     ① 三列时间滚轮**滚动到底部**后的状态；
+ *     ② 需要"输入 + 提交"才会出现的状态（表单错误态、保存成功）；
+ *     ③ 日历「展开」全屏虚拟列表（需要点日期，展开层 class 不稳定，未纳入）。
  */
 const PAGES = [
-  ['home', '#/pages/main/index'],
-  ['flow', '#/pages/flow/index'],
+  ['home', '#/pages/main/index', { guard: '.rank-card' }],
+  ['flow', '#/pages/flow/index', { guard: '.filter-bar' }],
   ['calendar', '#/pages/calendar/index'],
   ['report', '#/pages/statistics/index'],
   ['account-select', '#/pages/account-select/index'],
@@ -81,7 +97,45 @@ const PAGES = [
   ['account-new', '#/pages/account-new/index'],
   ['account-category', '#/pages/account-category/index'],
   ['account-import', '#/pages/account-import/index'],
+  // —— 2026-09-16 新增：此前一直是覆盖缺口 ——
+  ['login', '#/pages/login/index', { guard: '.submit' }],
+  ['category-new', '#/pages/category-new/index', { guard: '.form' }],
+  ['icon-picker', '#/pages/icon-picker/index', { guard: '.grid-inner' }],
+  ['recycle', '#/pages/recycle/index', { guard: '.nav-inner' }],
+  // 「我的」：账本选择页的页内视图，URL 不可寻址 → 点底栏第 2 项切过去
+  ['mine', '#/pages/account-select/index', {
+    steps: [{ sel: '.tab-item', nth: 1 }],
+    guard: '.mine-slot',
+  }],
 ];
+
+/**
+ * 流水页的弹层交互态。
+ *
+ * ⚠️ 弹层必须点开才能测 —— 数字键盘、时间滚轮、各类 sheet 都不在"页面加载完"的 DOM 里。
+ *    这些恰好是视觉改动最密集的地方（本项目已记录：「点不开就扫不到」是验证脚本的通用盲区）。
+ *
+ * ⚠️ 触发器用 **`.nav-btn:not(.nav-back)` 的序号**定位。
+ *    必须排掉返回键：顶栏里它是**第一个** `.nav-btn`，不排掉的话 nth(0) 会点到"返回"，
+ *    直接跳回首页 —— 首轮实测就是这样：URL 变成了 `#/pages/main/index`，守卫立刻报错。
+ *    `guard` 让这种错误**会响**，而不是静默量出一屏首页数据还报绿。
+ *    序号对应：0 更多 / 1 日历 / 2 搜索 / 3 记一笔。
+ */
+const NAV = '.nav-btn:not(.nav-back)';
+const FLOW_OVERLAYS = [
+  ['flow-more-sheet', [{ sel: NAV, nth: 0 }], '.sheet', '批量操作'],
+  ['flow-unit-sheet', [{ sel: '.filter-item', nth: 0 }], '.sheet', '月'],
+  ['flow-level-sheet', [{ sel: '.filter-item', nth: 1 }], '.sheet', '分类'],
+  ['flow-search-page', [{ sel: NAV, nth: 2 }], '.search-page', ''],
+  ['flow-filter-panel', [{ sel: NAV, nth: 0 }, { sel: '.sheet-item', text: '筛选' }], '.sheet', '筛选'],
+  // ⚠️ 排序弹层里**没有**「排序」二字，只有三个排序选项（按时间 / 按金额…）。
+  //    守卫文本必须取自实际会渲染出来的文案 —— 用标题去守卫会一直失败。
+  ['flow-sort-sheet', [{ sel: NAV, nth: 0 }, { sel: '.sheet-item', text: '排序' }], '.sheet', '按金额'],
+].map(([name, steps, guard, guardText]) => [
+  name,
+  '#/pages/flow/index',
+  { steps, guard, guardText },
+]);
 
 /** 三档视口：320 窄屏 / 375 常态（回归对照）/ 320 + 字号 ×2 */
 const VIEWPORTS = [
@@ -215,7 +269,7 @@ const measure = () =>
 
 const rows = [];
 
-async function visit(name, hash, vp) {
+async function visit(name, hash, vp, opts = {}) {
   await page.setViewportSize({ width: vp.w, height: vp.h });
   await page.goto(`${BASE}/${hash}`, { waitUntil: 'load' });
   /**
@@ -237,6 +291,51 @@ async function visit(name, hash, vp) {
    */
   await page.reload({ waitUntil: 'load' });
   await page.waitForTimeout(700);
+
+  /**
+   * ① 交互态：先点开，再量。
+   *
+   * ⚠️ 必须放在字号放大**之前** —— 放大是"给此刻已存在的元素写内联 font-size"，
+   *    后开的弹层会逃过放大，于是 ×2 档量到的是**没放大的弹层**（一种新的假绿）。
+   *
+   * ⚠️ 点空必须抛错，不能沉默：`.first().click()` 在命中 0 个时会等超时后失败，
+   *    但如果原地还有别的元素可点（例如整页可点区），就会点出意料之外的结果。
+   *    所以先显式断言"命中数 > 0"。
+   */
+  for (const s of opts.steps || []) {
+    let loc = page.locator(s.sel);
+    if (s.text) loc = loc.filter({ hasText: s.text });
+    if (s.nth !== undefined) loc = loc.nth(s.nth);
+    const hit = await loc.count();
+    if (!hit) {
+      throw new Error(
+        `[${name}] 交互步骤点空：${JSON.stringify(s)} 命中 0 个元素（URL = ${page.url()}）`,
+      );
+    }
+    await loc.first().click();
+    await page.waitForTimeout(450);
+  }
+
+  /**
+   * ② 守卫：确认这一屏**真的**加载 / 点开了。
+   *
+   * 这是本轮补的关键机制。此前清单里失效的地址不会报错，只会静默落到首页 ——
+   * 于是"量的是首页、记的是那个视图"，跑出一片绿。守卫把它变成硬失败。
+   * 宁可红一次，也不要一个没人敢信的绿。
+   */
+  if (opts.guard) {
+    let g = page.locator(opts.guard);
+    if (opts.guardText) g = g.filter({ hasText: opts.guardText });
+    const hit = await g.count();
+    if (!hit) {
+      throw new Error(
+        `[${name}] 守卫失败：期望 ${opts.guard}` +
+          `${opts.guardText ? `（且含「${opts.guardText}」）` : ''} 至少 1 个，实际 0 个。` +
+          `\n  URL = ${page.url()}` +
+          `\n  即：这一屏没加载 / 没打开，此刻量到的数据属于别的屏 —— 不报错就是假绿。`,
+      );
+    }
+  }
 
   if (vp.scale > 1) {
     // ⚠️ 必须**先全部读原文、再统一写回**：getComputedStyle 反映"此刻"样式，
@@ -301,9 +400,11 @@ if (!(await page.locator('.banner, .rank-card, .account-switch').count())) {
 }
 console.log('登录成功\n');
 
+const SCREENS = [...PAGES, ...FLOW_OVERLAYS];
+
 for (const vp of VIEWPORTS) {
   console.log(`===== ${vp.w}×${vp.h}，字号${vp.scale === 1 ? '正常' : ` ×${vp.scale}`} =====`);
-  for (const [name, hash] of PAGES) await visit(name, hash, vp);
+  for (const [name, hash, opts] of SCREENS) await visit(name, hash, vp, opts);
   console.log('');
 }
 
@@ -312,7 +413,10 @@ await browser.close();
 
 const bad = rows.filter((r) => r.bad);
 console.log('─'.repeat(72));
-console.log(`共巡检 ${rows.length} 屏（${PAGES.length} 页 × ${VIEWPORTS.length} 档）；不合规 ${bad.length} 屏`);
+console.log(
+  `共巡检 ${rows.length} 屏（${SCREENS.length} 条 × ${VIEWPORTS.length} 档；` +
+    `其中 ${PAGES.length} 个页面 + ${FLOW_OVERLAYS.length} 个流水页交互态）`
+);
 for (const b of bad) {
   const why = [];
   if (b.m.scrollW > b.m.clientW + 1 || b.m.bodyScrollW > b.m.clientW + 1) why.push('横向溢出');
@@ -321,5 +425,21 @@ for (const b of bad) {
   console.log(`  ❌ ${b.name} (${b.tag}) —— ${why.join('、')}`);
 }
 if (!bad.length) console.log('  ✅ 全部通过（三桶判据均为 0）');
-console.log(`\n截图：${OUT}`);
+
+/**
+ * 人工验收清单 —— 机器扫不到的部分，写在这里，别假装已覆盖。
+ *
+ * 「点不开就扫不到」是验证脚本的通用盲区：本脚本按 URL 扫 DOM，页面里已有的元素
+ * 都会被自动扫到，但**必须先点开 / 输入的界面不在 DOM 里**。
+ * 本轮已把能点开的那批补进来了（`steps`），剩下的这几类只能人工：
+ */
+console.log(`
+──── 人工验收清单（脚本覆盖不到，每次大改后手工过一遍）────
+  1. 三列时间滚轮的**滚动到底部**后状态（弹层能点开，但内部滚动条要手势驱动）
+  2. 日历页「展开」后的全屏虚拟列表（前缀和 + 二分，需点某个日期才出现）
+  3. 所有「输入 + 提交」类状态：表单校验错误、保存成功 toast、删除二次确认
+  4. 键盘 Tab 遍历（uni-app 的 <view> 默认不可聚焦，本身是未决项）
+  5. 真机 safe-area（脚本不模拟刘海/手势条，那类 bug 靠 verify-safe-area.mjs）
+`);
+console.log(`截图：${OUT}`);
 process.exitCode = bad.length ? 1 : 0;

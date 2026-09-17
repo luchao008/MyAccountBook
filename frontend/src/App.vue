@@ -42,7 +42,7 @@ input::-webkit-input-placeholder {
 /* 键盘焦点环（WCAG 2.4.7）。
    用 :focus-visible 而不是 :focus —— 后者会在鼠标/触摸点击后也亮一圈，观感很吵；
    :focus-visible 只在「键盘导航」时出现，正是无障碍要照顾的那种场景。
-   环宽 2px + 外扩 2px，压白底 4.95:1（方案 §2.4）。
+   环宽 2px + 外扩 2px，v1.1 主色金压白底 4.87:1（旧 FL-1 橙为 4.95:1）。
 
    ⚠️ 已知边界（诚实记录，不假装已解决）：
    uni-app H5 把 <view>/<text> 渲染成自定义元素 <uni-view>/<uni-text>，它们**默认不可聚焦**，
@@ -52,7 +52,7 @@ input::-webkit-input-placeholder {
    详见 docs/移动端配色与字体方案.md §7.3。 */
 :focus-visible {
   outline: $v11-focus-ring;
-  outline-offset: $focus-ring-offset;
+  outline-offset: $v11-focus-ring-offset;
 }
 
 /* #ifdef H5 */

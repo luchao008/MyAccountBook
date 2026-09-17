@@ -1755,7 +1755,7 @@ onMounted(async () => {
 }
 
 .income {
-  color: $income;
+  color: $v11-income-amount;
 }
 
 .expense {

@@ -1,9 +1,19 @@
 #!/usr/bin/env node
 /**
- * 配色校验器：复现 docs/移动端配色与字体方案.md 中的全部实测数值。
+ * 配色校验器：复现配色规范里的全部实测数值。
+ *
+ * ⚠️ 2026-09-16 阶段 5 基线切换：本脚本原本整篇对照 `docs/移动端配色与字体方案.md`
+ *    （FL-1「数字优先·通栏扁平」）。v1.1「iOS 原生观感·暖金调」落地后，
+ *    **当前有效基线是 `docs/UI设计方案·iOS风格样板.md`**（由 `check-ios-tokens.mjs` 锁值），
+ *    本脚本负责另外三件它不管的事：
+ *      ① v1.1 token 在 tokens.scss 里的「值 / 注释 / 实测」三重自洽（§9）
+ *      ② 图表序列的 SCSS ↔ TS 双写一致 + 白字承载契约（§10）
+ *      ③ 字号阶梯、焦点可见性、旧色值残留等**结构性**约束（§11 / §13 / §14）
+ *    §1–§8、§12、§15 是 **FL-1 的历史取证**（它们只用字面量计算，不读 tokens.scss），
+ *    保留的理由是「为什么当初那样选」比结论更难重建 —— 但**不要把它们的数值当现行规范**。
  *
  * 为什么要有这个文件：
- *   该文档声明「所有对比度、色盲可区分度均为脚本实测值」，并承诺「后续任何颜色改动
+ *   规范文档声明「所有对比度、色盲可区分度均为脚本实测值」，并承诺「后续任何颜色改动
  *   都应重跑校验，而不是目测」。如果校验脚本不存在，这句承诺就是空的。
  *
  * 用法：
@@ -99,7 +109,7 @@ function section(title) {
   console.log(`\n\x1b[1m${title}\x1b[0m`);
 }
 
-// 文档中的关键色值（与 docs/移动端配色与字体方案.md 保持一致）
+// FL-1 时期的关键色值（§1–§8 的历史取证用；现行 v1.1 值见 §9 与 check-ios-tokens.mjs）
 const WHITE = '#FFFFFF';
 const PAGE = '#F5F6F8';
 const BRAND = {
@@ -111,7 +121,7 @@ const BRAND = {
   900: '#8F2E08',
 };
 
-console.log('\x1b[1m配色校验 —— 对照 docs/移动端配色与字体方案.md\x1b[0m');
+console.log('\x1b[1m配色校验 —— v1.1 现行基线（§9/§10/§13/§14）+ FL-1 历史取证（§1–§8）\x1b[0m');
 
 // ---------------------------------------------------------------- 1. 现状体检
 section('1. 现状体检（文档 §1.2 的 11 处不达标，必须复现出来）');
@@ -170,9 +180,9 @@ expect('text-tertiary #6E7787 on 页面底', contrast('#6E7787', PAGE), 4.17);
 expect('text-disabled #A8B0BD on 卡片（豁免）', contrast('#A8B0BD', WHITE), 2.19);
 expect('text-disabled #A8B0BD on 页面底（豁免）', contrast('#A8B0BD', PAGE), 2.02);
 
-// ---------------------------------------------------------------- 6. 图表序列
+// ---------------------------------------------------------------- 6. 图表序列（FL-1 基线）
 const SERIES = ['#C2410C', '#1D63B8', '#C2185B', '#0E7C42', '#7C3AED', '#0E7490', '#8A94A6'];
-section('6. 图表 7 色序列（文档 §2.7）');
+section('6. 图表 7 色序列（FL-1 基线取证；v1.1 现行序列见 §10）');
 {
   const white = SERIES.map((c) => contrast(c, WHITE));
   const lo = Math.min(...white);
@@ -303,7 +313,7 @@ section('8. 旧图表调色板体检（文档 §2.7 要求替换的真实理由�
 }
 
 // ---------------------------------------------------------------- 9. token 文件自洽
-section('9. token 文件自洽性（frontend/src/styles/tokens.scss）');
+section('9. token 文件自洽性（v1.1 现行 · frontend/src/styles/tokens.scss）');
 {
   const tokensPath = new URL('../frontend/src/styles/tokens.scss', import.meta.url);
   const tokenLines = readFileSync(tokensPath, 'utf8').split('\n');
@@ -312,43 +322,52 @@ section('9. token 文件自洽性（frontend/src/styles/tokens.scss）');
    * 逐条校验三类事实，缺一不可：
    *   ① 变量声明的色值 == 预期；② 行尾注释里写的对比度 == 预期；③ 重算结果 == 预期
    * 只查①会漏掉「数字陈旧」，只查③会漏掉「注释是假的」——本项目两种都踩过。
+   *
+   * ⚠️ 2026-09-16 阶段 5：本表已从 FL-1 切到 **v1.1**。
+   *    格式 [变量名, 色值, 注释里写的比值, 该比值所对的底色]。
+   *    实现上取的是「本行注释里第一个 `x.xx:1`」——所以写注释时别把别的比值排在前面。
+   *    「配对型」断言（金字压浅金底、Hero 两端、青绿压徽标底）不在这里，
+   *    它们由 `check-ios-tokens.mjs` 负责 —— 那两个脚本的职责边界见文件头注释。
    */
+  const DK_CARD = '#2c2c2e';
+  const DK_PAGE = '#1c1c1e';
   const TOKEN_CHECKS = [
-    ['$brand-400', '#ff8552', 2.41, WHITE],
-    ['$brand-500', '#ff6b35', 2.84, WHITE],
-    ['$brand-600', '#cf4a12', 4.52, WHITE],
-    ['$brand-700', '#c7430f', 4.95, WHITE],
-    ['$brand-800', '#b33a0c', 5.95, WHITE],
-    ['$brand-900', '#8f2e08', 8.2, WHITE],
-    ['$brand-ink', '#3d1200', 5.76, '#ff6b35'],
+    // —— 表面与分隔线（压白卡 1.13 / 1.26，比 FL-1 的 1.71 / 2.16 轻得多）——
+    ['$v11-line', '#f1f1f1', 1.13, WHITE],
+    ['$v11-line-strong', '#e5e5ea', 1.26, WHITE],
+    // —— 文字阶（压白卡；「页面底」那一档见 §15.2 的双底矩阵）——
+    ['$v11-text-primary', '#222226', 15.85, WHITE],
+    ['$v11-text-secondary', '#6b6b72', 5.29, WHITE],
+    ['$v11-text-tertiary', '#9a9aa0', 2.8, WHITE],
+    ['$v11-text-disabled', '#aeaeb2', 2.21, WHITE],
+    // —— 品牌金：图形用原值（1.99 不可作文字）、文字/按钮用校准值（4.87）——
+    ['$v11-gold-fill', '#e4ad77', 1.99, WHITE],
+    ['$v11-gold', '#a85f12', 4.87, WHITE],
+    ['$v11-gold-pressed', '#8f5312', 6.15, WHITE],
+    // —— 青绿四档：图形 / 大字 / 小字 / 支出金额，职责不可互换 ——
+    ['$v11-teal', '#56c4c5', 2.08, WHITE],
+    ['$v11-teal-large', '#2e9496', 3.63, WHITE],
+    ['$v11-teal-text', '#0e7375', 5.63, WHITE],
+    ['$v11-teal-amount', '#0f7b7c', 5.07, WHITE],
+    // —— 语义色：色值自 2026-09-14 起未动，v1.1 改的只是「载体约束」——
+    ['$v11-income-amount', '#d92d20', 4.83, WHITE],
+    // —— 辅助色与控件边界（FL-1 遗留但**仍现行**，故继续钉住）——
     ['$info', '#1d63b8', 5.95, WHITE],
     ['$success', '#0b8038', 5.05, WHITE],
     ['$warning', '#b45309', 5.02, WHITE],
     ['$danger', '#d92d20', 4.83, WHITE],
-    // 2026-09-14 收支对调：徽标跟着换（配对没动，对比度不变）
-    ['$badge-income-text', '#b42318', 5.75, '#fdecea'],
-    ['$badge-expense-text', '#0b6b33', 5.94, '#e7f6ed'],
+    ['$border-input', '#8a94a6', 3.06, WHITE],
     ['$badge-brand-text', '#b33a0c', 5.4, '#fff1eb'],
     ['$badge-neutral-text', '#4a5563', 6.69, '#eef1f5'],
-    ['$border-input', '#8a94a6', 3.06, WHITE],
-    ['$text-primary', '#1f2329', 15.78, WHITE],
-    ['$text-secondary', '#5a6472', 6.0, WHITE],
-    ['$text-tertiary', '#6e7787', 4.51, WHITE],
-    ['$text-disabled', '#a8b0bd', 2.19, WHITE],
-    // 2026-09-14 收支对调：收入红、支出绿
-    ['$income', '#d92d20', 4.83, WHITE],
-    ['$expense', '#0b8038', 5.05, WHITE],
-    ['$dark-bg-card', '#24272e', 1.21, '#14161a'],
-    ['$dark-divider', '#31363e', 1.23, '#24272e'],
-    ['$dark-border-input', '#6b7484', 3.17, '#24272e'],
-    ['$dark-text-primary', '#e8eaed', 12.4, '#24272e'],
-    ['$dark-text-secondary', '#b4bcc8', 7.81, '#24272e'],
-    ['$dark-text-tertiary', '#98a1af', 5.73, '#24272e'],
-    ['$dark-text-disabled', '#5a6270', 2.43, '#24272e'],
-    ['$dark-brand', '#ff8a5b', 6.43, '#24272e'],
-    // 2026-09-14 深色模式同样对调
-    ['$dark-income', '#ff6b6b', 5.39, '#24272e'],
-    ['$dark-expense', '#3dd68c', 7.97, '#24272e'],
+    // —— 深色模式：token 已就位、尚未接入页面；**现在就把值钉死**，
+    //    免得接入时有人"顺手调一下"而不重算（深色最怕复用亮色值）——
+    ['$v11-dark-bg-card', '#2c2c2e', 1.22, DK_PAGE],
+    ['$v11-dark-label', '#ffffff', 13.94, DK_CARD],
+    ['$v11-dark-label-2', '#98989f', 4.86, DK_CARD],
+    ['$v11-dark-gold', '#e4ad77', 7, DK_CARD],
+    ['$v11-dark-expense', '#3dd6c8', 7.73, DK_CARD],
+    ['$v11-dark-income', '#ff6b6b', 5.02, DK_CARD],
+    ['$v11-dark-blue', '#0a84ff', 4.66, DK_PAGE],
   ];
 
   for (const [varName, hex, claimed, bg] of TOKEN_CHECKS) {
@@ -430,10 +449,14 @@ section('10. 图表配色跨文件一致性（SCSS 变量 ↔ TS 常量）');
   console.log(`  ${same ? '\x1b[32m✅\x1b[0m' : '\x1b[31m❌ MISMATCH\x1b[0m'}  两处色序完全一致`);
 
   // 序列的「可承载白字」契约：前 6 色成立、第 7 色（中性灰）不成立
+  //
+  // ⚠️ 2026-09-16 v1.1 重排后最低值从 **5.18 → 4.95**（青绿 #0E7C86 进前 6 位）。
+  //    这是重排的**代价**而非退化：契约本身（≥4.5 才可承载白字）没被破坏，
+  //    余量还有 0.45。若将来继续下调，先确认首页区间图标那 6 处白字是否还成立。
   const solid = tsSeries.slice(0, 6).map((c) => contrast(c, WHITE));
   const muted = contrast(tsSeries[6] ?? '#8a94a6', WHITE);
   const solidMin = Math.min(...solid);
-  expect('可承载白字的实心序列最低值（首页区间图标依赖）', solidMin, 5.18, 0.01);
+  expect('可承载白字的实心序列最低值（首页区间图标依赖）', solidMin, 4.95, 0.01);
   expect('中性灰（仅供图表填充，禁放白字）', muted, 3.06, 0.01);
   console.log(
     `  \x1b[2m   实心序列：${solid.map((v) => v.toFixed(2)).join(' / ')}\x1b[0m`,
@@ -718,6 +741,14 @@ section('13. 字号阶梯自洽（文档 §3.2 ↔ tokens.scss ↔ 各 .vue）')
   //    2026-09-16 更新二十：账本级分类改造 —— 新增 3 个前端页
   //    （account-new / account-category / account-import）与 1 个共享组件
   //    （CategoryCheckTree）→ 文字 202 → 217，总数 204 → 219。
+  //    2026-09-16 更新二十一：v1.1 全量换色时删掉 `pages/record/index.vue` 的
+  //    `.picker` 死样式（该选择器在 template 里已无对应元素）→ 文字 217 → 216，总数 219 → 218。
+  //    ⚠️ 计数**下降**时不要直接改数字就完事：先确认"少掉的那条规则是不是死样式"。
+  //       本例已核对（grep 确认 template 与 style 两处都没有 `picker`），是死样式而非漏改。
+  //    2026-09-16 更新二十二：`reflow-audit` 补覆盖后在 category-new 页抓到重排缺陷 ——
+  //    「一级分类（顶层分组）」在 320px + 200% 字号下溢出一行（中文禁则导致整句不可断），
+  //    修法是把「值」与「说明」拆成两个元素（`@include text-safe` 对它无效，见 MEMORY 第 10 条）
+  //    → 拆出的新元素各带一条字号声明，文字 216 → 217，总数 218 → 219。
   expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 219, 0);
   expect('  其中文字字号 $font-*', nText, 217, 0);
   expect('  其中图标尺寸 $icon-*', nIcon, 2, 0);
@@ -769,31 +800,56 @@ section('14. 焦点可见性（WCAG 2.4.7）');
     console.log(`  \x1b[31m❌ MISMATCH\x1b[0m  ${killed.join(' | ')}`);
   }
 
-  // 焦点环必须用达标色（$brand-700 = 4.95:1，已在 §2 断言过色值，这里断言「用的是它」）
+  // 焦点环必须用达标色（v1.1 主色金 $v11-gold = 4.87:1）。
+  // 这里断言「用的是它」——色值本身已在 §9 断言过。
+  // ⚠️ 阶段 5 收口时踩过一次：App.vue 是**迁移到一半**的状态（outline 用了 v1.1、
+  //    outline-offset 还是旧 FL-1 变量），编译直接报 Undefined variable。
+  //    所以这里连「App.vue 用的确实是 v1.1 那一对」一起断言，避免半迁移再发生。
   const tokensSrc = readFileSync(
     new URL('../frontend/src/styles/tokens.scss', import.meta.url),
     'utf8',
   );
-  const ringOk = /\$focus-ring:\s*[^;]*\$brand-700/.test(tokensSrc);
+  // ⚠️ 末尾的 `(?![\w-])` 不能省：`$v11-gold-fill` / `$v11-gold-pressed` 都以
+  //    `$v11-gold` 为前缀，不加边界会把它们误判成"用了主色金"而放过（负向验证抓到的）。
+  //    本项目对这类「解析范围写宽了」的错误已栽过不止一次，凡正则匹配变量名都要带边界。
+  const ringOk = /\$v11-focus-ring:\s*[^;]*\$v11-gold(?![\w-])/.test(tokensSrc);
   if (ringOk) passed += 1;
   else
     failures.push({
-      label: '$focus-ring 未使用 $brand-700（4.95:1）',
-      actual: (tokensSrc.match(/\$focus-ring:[^;]*;/) || ['未找到'])[0],
-      expected: '$focus-ring 基于 $brand-700',
+      label: '$v11-focus-ring 未使用 $v11-gold（4.87:1）',
+      actual: (tokensSrc.match(/\$v11-focus-ring:[^;]*;/) || ['未找到'])[0],
+      expected: '$v11-focus-ring 基于 $v11-gold',
       tol: 0,
     });
   console.log(
-    `  ${ringOk ? '\x1b[32m✅\x1b[0m' : '\x1b[31m❌ MISMATCH\x1b[0m'}  $focus-ring 基于 $brand-700（4.95:1）`,
+    `  ${ringOk ? '\x1b[32m✅\x1b[0m' : '\x1b[31m❌ MISMATCH\x1b[0m'}  $v11-focus-ring 基于 $v11-gold（4.87:1）`,
+  );
+
+  const appUsesV11Ring =
+    /outline:\s*\$v11-focus-ring;/.test(appSrc) && /outline-offset:\s*\$v11-focus-ring-offset;/.test(appSrc);
+  if (appUsesV11Ring) passed += 1;
+  else
+    failures.push({
+      label: 'App.vue 的 :focus-visible 未完整使用 v1.1 焦点环（半迁移）',
+      actual: 'outline / outline-offset 两者未同时指向 $v11-focus-ring*',
+      expected: 'outline: $v11-focus-ring; outline-offset: $v11-focus-ring-offset;',
+      tol: 0,
+    });
+  console.log(
+    `  ${appUsesV11Ring ? '\x1b[32m✅\x1b[0m' : '\x1b[31m❌ MISMATCH\x1b[0m'}  App.vue 的焦点环两个属性都是 v1.1（无半迁移）`,
   );
 }
 
-// ---------------------------------------------------------------- 15. FL-1「数字优先·通栏扁平」新增断言
-// 依据 docs/UI设计方案·扁平化.md。这一节专门盯两件事：
+// ---------------------------------------------------------------- 15. FL-1 历史取证
+// 依据 docs/UI设计方案·扁平化.md（§3/§4.2 已被 v1.1 取代，§5 图标 / §6.2 字号仍有效）。
+// ⚠️ 2026-09-16：本节全部是 **FL-1 的历史取证**，只用字面量计算，不读 tokens.scss。
+//    保留它是因为「当初为什么那样选」比结论更难重建（例如"页面底改白是被实测逼出来的"）。
+//    **不要把这里的数值当现行规范** —— 现行值见 §9/§10 与 docs/UI设计方案·iOS风格样板.md。
+// 这一节专门盯两件事：
 //   ① 页面底改白是**被实测逼出来的**，不是审美偏好 —— 把"浅灰底会同时拉垮三处"钉死
 //   ② 环形图是闭环，(n-1, 0) 这一对也必须比对 —— 旧校验漏掉的口子
 {
-  section('15. FL-1 表面三层与分隔线（方案 §4.2）');
+  section('15. FL-1 表面三层与分隔线（历史取证 · 方案 §4.2）');
 
   const dL = (a, b) => Math.abs(luminance(a) - luminance(b));
 
@@ -811,7 +867,7 @@ section('14. 焦点可见性（WCAG 2.4.7）');
   expect('废弃 divider #EDEFF3 压 canvas ΔL', dL(OLD_DIVIDER, CANVAS), 0.138, 0.005);
   expect('废弃 divider 压 sunken ΔL（≈0）', dL(OLD_DIVIDER, SUNKEN), 0.015, 0.005);
 
-  section('15.2 文字/语义色 × 表面矩阵（方案 §4.3 · 这是前置约束）');
+  section('15.2 文字/语义色 × 表面矩阵（FL-1 历史 · 方案 §4.3）');
   const INK1 = '#1F2329';
   const INK2 = '#5A6472';
   const INK3 = '#6E7787';
@@ -840,7 +896,7 @@ section('14. 焦点可见性（WCAG 2.4.7）');
   expect('输入框边界 压 subtle（2.83 不达标）', contrast('#8A94A6', SUBTLE), 2.83);
   expect('输入框边界 压 sunken（2.70 不达标）', contrast('#8A94A6', SUNKEN), 2.7);
 
-  section('15.3 图表序列「闭环相邻」可区分度（方案 §4.5）');
+  section('15.3 图表序列「闭环相邻」可区分度（FL-1 历史 · 方案 §4.5）');
   // 环形图首尾在 12 点方向也相邻：必须把 (n-1, 0) 一并纳入比对
   const minAdjacent = (series) => {
     let min = Infinity;
@@ -851,9 +907,9 @@ section('14. 焦点可见性（WCAG 2.4.7）');
     return min;
   };
 
-  // 现行（FL-1 落地后）顺序：橙红→蓝→品红→青→紫→翠绿→中性灰
+  // FL-1 落地后的顺序：橙红→蓝→品红→青→紫→翠绿→中性灰
   const NEW_ORDER = ['#C2410C', '#1D63B8', '#C2185B', '#0E7490', '#7C3AED', '#0E7C42', '#8A94A6'];
-  // 旧顺序：橙红→蓝→品红→翠绿→紫→青→中性灰
+  // 更早的顺序：橙红→蓝→品红→翠绿→紫→青→中性灰
   const OLD_ORDER = ['#C2410C', '#1D63B8', '#C2185B', '#0E7C42', '#7C3AED', '#0E7490', '#8A94A6'];
 
   expect('新序列最小相邻可区分度（含闭环对）', minAdjacent(NEW_ORDER), 90.15, 0.5);
@@ -868,13 +924,23 @@ section('14. 焦点可见性（WCAG 2.4.7）');
   const hasToken = (name, value) =>
     new RegExp(`\\$${name}:\\s*${value.replace('#', '#?')}\\s*;`, 'i').test(tokensSrc2);
 
+  section('15.4 token 存在性（v1.1 现行 + FL-1 保留项）');
+  // ⚠️ 2026-09-16 阶段 5 收口后，FL-1 的 `bg-canvas` / `line` / `line-strong` / `radius-lg`
+  //    已按计划删除（零引用），这里换成 v1.1 的对应项 + 仍在用的 FL-1 保留项。
+  //    删掉的 token 若还有人引用，编译期就会报 Undefined variable —— 不必在这里兜。
   const required = [
-    ['bg-canvas', '#ffffff'],
-    ['line', '#e6e9ef'],
-    ['line-strong', '#d6dae3'],
+    // —— v1.1 现行 ——
+    ['v11-bg-page', '#F8F8F8'],
+    ['v11-bg-card', '#FFFFFF'],
+    ['v11-line', '#F1F1F1'],
+    ['v11-line-strong', '#E5E5EA'],
+    ['v11-radius-card', '16px'],
+    ['v11-radius-btn', '25px'],
+    ['v11-radius-sheet-top', '20px'],
+    ['v11-space-group', '32px'],
+    // —— FL-1 保留项（v1.1 仍在用，故继续钉住）——
     ['radius-sm', '6px'],
     ['radius-md', '10px'],
-    ['radius-lg', '14px'],
     ['radius-pill', '999px'],
     ['space-1', '4px'],
     ['space-2', '8px'],
