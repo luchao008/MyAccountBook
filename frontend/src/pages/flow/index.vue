@@ -678,7 +678,7 @@ const total = computed(() => {
 /**
  * 组装查询参数。
  *
- * ⚠️ **按分类分组时不带时间限制**（用户确认）：看的是整个账本结构，
+ * ⚠️ **按分类分组时不带时间限制**（luchao 确认）：看的是整个账本结构，
  *    带上时间范围就没法看全。时间维度则相反，必须有 start/end 才会按粒度分组。
  *    分类筛选（categoryIds）已经去掉 —— 底栏的「分类」现在是**分组维度**而不是筛选条件。
  */
@@ -697,7 +697,7 @@ function filterOnlyParams() {
   /*
    * 流水类型：**只在恰好选中 1 种时**才传 `type`。
    * 全选（= 不筛）与全不选（= 用户清空了，同样按"不筛"处理）都传 undefined ——
-   * 后者若真返回空集会让人误以为"账本没有数据"，与"取消筛选"的直觉不符（用户确认）。
+   * 后者若真返回空集会让人误以为"账本没有数据"，与"取消筛选"的直觉不符（luchao 确认）。
    */
   const sel = filterModel.types || [];
   const onlyType = sel.length === 1 ? (sel[0] as 'income' | 'expense') : undefined;
@@ -758,7 +758,7 @@ async function loadGroups() {
     await accountStore.load();
     groups.value = await getTransactionSummary(baseParams());
     /*
-     * 默认展开第一个分组（用户要求）—— 进页面就能直接看到最近的明细，
+     * 默认展开第一个分组（luchao 要求）—— 进页面就能直接看到最近的明细，
      * 不必再点一次。用 `toggleGroup` 而不是直接塞进 expanded：
      * 它会顺带把该组的明细拉回来，避免"展开了但内容是空的"。
      */
@@ -1001,7 +1001,7 @@ const filterSummary = computed(() => {
 
   /*
    * 类型：**只有恰好选中 1 种时才出现在摘要里**。
-   * 全选（= 支出、收入都在）不算筛选，写进去会让人以为筛过了（用户确认）。
+   * 全选（= 支出、收入都在）不算筛选，写进去会让人以为筛过了（luchao 确认）。
    */
   const types = filterModel.types || [];
   const typeText = types.length === 1 ? TYPE_LABELS[types[0]] || types[0] : '';
@@ -1157,7 +1157,7 @@ onLoad((options?: Record<string, string>) => {
   if (options?.start && options?.end) {
     filterModel.start = options.start;
     filterModel.end = options.end;
-    // 时间行显示「自定义」+ 区间（用户确认选 B：不新增「今天/本周」预设）
+    // 时间行显示「自定义」+ 区间（luchao 确认选 B：不新增「今天/本周」预设）
     filterModel.timeLabel = '自定义';
     /*
      * 标题格式对齐参考图：`2026.9.14-9.14`（起点带年、终点只带月日；月份不补零）。
@@ -1831,7 +1831,7 @@ onMounted(async () => {
 
 /*
  * ⚠️ 弹层底部要留出**底栏高度**（48px）：`.filter-bar` 是 fixed 的，
- *    不给留白的话弹层最下沿会被它压住（用户明确要求"弹出的窗不要压住底栏"）。
+ *    不给留白的话弹层最下沿会被它压住（luchao 明确要求"弹出的窗不要压住底栏"）。
  *    `.filter-bar` 的 z-index 是 100，`.mask` 是 1000，所以弹层盖在底栏之上，
  *    留白只是为了让内容不被遮。
  */

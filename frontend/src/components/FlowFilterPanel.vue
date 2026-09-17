@@ -121,7 +121,7 @@ export interface FlowFilter {
   /** 时间预设的展示文案（'全部时间' / '本月' / '自定义' 等） */
   timeLabel: string;
   /**
-   * 流水类型多选。**全选与全不选都视为「不过滤」**（用户确认）——
+   * 流水类型多选。**全选与全不选都视为「不过滤」**（luchao 确认）——
    * 全不选若真返回空集，用户会以为"账本没数据"，而实际是筛掉了自己。
    */
   types: string[];
@@ -276,7 +276,7 @@ function reset() {
   draft.minAmount = '';
   draft.maxAmount = '';
   draft.keyword = '';
-  // 「重置」= 回到什么都没筛，类型一并复位为全选、分类复位为"不过滤"（用户确认）
+  // 「重置」= 回到什么都没筛，类型一并复位为全选、分类复位为"不过滤"（luchao 确认）
   draft.types = [...TYPE_VALUES];
   draft.categoryIds = [];
 }

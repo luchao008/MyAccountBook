@@ -132,7 +132,7 @@ export const EXPENSE_CATEGORY_PRESET: PresetRoot[] = [
       { name: '鞋帽包包', icon: '👜' },
       { name: '化妆饰品', icon: '💄' },
       /*
-       * ⚠️ 这个名字就是 emoji 本身（用户要求"按原样添加"）—— 它是随手记导出文件里
+       * ⚠️ 这个名字就是 emoji 本身（luchao 要求"按原样添加"）—— 它是随手记导出文件里
        *    的原始写法：用户当时把二级分类直接命名成了 🧦（袜子）。
        *    项目允许这样（name 与 icon 都是同一串），只是分类列表里会显示成"🧦"。
        */

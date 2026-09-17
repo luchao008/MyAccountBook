@@ -141,7 +141,7 @@ const collapsed = ref<Set<string>>(new Set());
 /**
  * 一级分类列表。
  *
- * · 不传 `type`（流水页筛选面板）→ **收入在前、支出在后**（用户确认的顺序）
+ * · 不传 `type`（流水页筛选面板）→ **收入在前、支出在后**（luchao 确认的顺序）
  * · 传了 `type`（数据导出页）→ 只列该类型
  *
  * 段内各按 sort，store 的 getter 已排好。
