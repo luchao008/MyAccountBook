@@ -415,10 +415,33 @@ onMounted(loadData);
   background: $v11-bg-page;
 }
 
+/*
+ * 顶栏横向几何：下面这两处是**成对**的，改一个必须改另一个（算术见注释）。
+ *
+ * ① 触摸区左边缘 = $space-2（8px）—— 与流水 / 日历 / 回收站 / 数据导出四个
+ *    自绘顶栏页一致（它们都是 `.nav-inner { padding: 0 $space-2 }`）。
+ *    报表页原先漏了这层 padding，返回键触摸区一路顶到视口左边缘 x=0：
+ *    在圆角/刘海机型上那一片本来就不好点，而且与其它页不一致。
+ *
+ * ② 箭头**墨迹**左边缘要留在 16px 附近 —— 28px 大标题的文字左边缘是
+ *    `$space-4`（16px），两者需同轴。依据不是手感：参考图 IMG_4201
+ *    （iPhone 16 Pro @3x）实测箭头墨迹 17.0pt、大标题 17.0pt，本来就同轴。
+ *
+ * ⚠️ 但 svg 包围盒 ≠ 可见墨迹：`icon-chevron-left` 在 24 视口里只占中段，
+ *    缩到 20px 后墨迹还要再内缩 **5.94px**。即
+ *        墨迹位置 = 触摸区起点 + 图标在按钮内的偏移 + 5.94
+ *    所以「在行上加 padding」而不在按钮内部补回等量位移，会把墨迹一起推右 ——
+ *    那它就同时偏离大标题（16px）与参考图（17pt）了。
+ *
+ * 下面这组写法让两个约束同时成立：
+ *    8（行 padding）+ 4（按钮 padding-left）= 12 = 原本的 0 + (44-20)/2 = 12
+ * 即**墨迹位置完全不变**，只是触摸区从 x=0 退到了 x=8。
+ */
 .nav-inner {
   height: 44px;
   display: flex;
   align-items: center;
+  padding: 0 $space-2;
 }
 
 /* 返回箭头用主色金：v1.1 里 $v11-gold 同时承担「可点文字」与「实心按钮底」（4.87 对称） */
@@ -427,7 +450,10 @@ onMounted(loadData);
   height: $touch-target-min;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  /* 见上方 ① ②：flex-start + 4px 是把行 padding 原样补回按钮内部，墨迹保持不动。
+     ⚠️ 若改动图标的 :size，这里要跟着重算（墨迹相对包围盒的内缩 ≈ size × 0.297）。 */
+  padding-left: $space-1;
   color: $v11-gold;
 }
 

@@ -16,6 +16,7 @@
 //    （没验过"能报错"的校验器等于没有校验器。）
 
 import process from 'node:process';
+import { readFileSync, readdirSync } from 'node:fs';
 
 // ==========================================================================
 // 1. 核心算法（WCAG 2.x relative luminance / contrast ratio）
@@ -407,7 +408,60 @@ expectEq('旧序列的闭环最小（对照）', adjOld.min, 90.15);
 expectBelow('重排确实付出了代价（记录在案，非无限余量）', adj.min, adjOld.min);
 
 // ==========================================================================
-// 13. 汇总
+// 13. 自绘顶栏几何（结构性守卫）
+// ==========================================================================
+//
+// 为什么需要它：2026-09-17 发现报表页的 `.nav-inner` 漏了横向 padding ——
+// 返回键触摸区一路顶到视口左边缘（x=0），而另外 4 个自绘顶栏页都是 8px。
+// 这类「某页漏了一条已经成文的约定」的 bug **静态可查**，没必要等肉眼发现。
+// （判据与推导见 docs/工程约定与踩坑.md §1.7）
+//
+// ⚠️ 只断言「声明了 padding 且用的是 $space-2」，**不断言具体像素** ——
+//    像素由 token 决定、token 已由间距阶梯锁着，两层都断言会互相打架。
+// ⚠️ 匹配前必须剥掉 CSS 注释：注释里出现 `.nav-inner { padding: 0 $space-2 }`
+//    这种"说明性引用"会让守卫误判为通过（假绿）。
+{
+  const SRC = new URL('../frontend/src/', import.meta.url);
+  const vueFiles = (dir) =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const child = new URL(e.name + (e.isDirectory() ? '/' : ''), dir);
+      if (e.isDirectory()) return e.name === 'uni_modules' ? [] : vueFiles(child);
+      return e.name.endsWith('.vue') ? [child] : [];
+    });
+
+  const REQUIRED = 'padding:0 $space-2';
+  const pages = [];
+  const offenders = [];
+
+  for (const file of vueFiles(SRC)) {
+    const src = readFileSync(file, 'utf8');
+    const styles = src.match(/<style[\s\S]*?<\/style>/g);
+    if (!styles) continue;
+    const css = styles
+      .join('\n')
+      .replace(/\/\*[\s\S]*?\*\//g, '') // 剥块注释（含说明性引用）
+      .replace(/^\s*\/\/.*$/gm, ''); // 剥行注释
+    const blocks = css.match(/\.nav-inner\s*\{[^}]*\}/g);
+    if (!blocks) continue;
+    pages.push(file.pathname.split('/src/')[1]);
+    for (const b of blocks) {
+      const norm = b
+        .replace(/\s+/g, ' ')
+        .replace(/\s*:\s*/g, ':')
+        .replace(/;$/, '');
+      if (!norm.includes(REQUIRED)) {
+        offenders.push(`${file.pathname.split('/src/')[1]} → ${norm.slice(0, 96)}`);
+      }
+    }
+  }
+
+  expectMin('自绘顶栏页数量（流水/日历/回收站/数据导出/报表）', pages.length, 5);
+  expectEq('所有 .nav-inner 都声明了 padding: 0 $space-2', offenders.length, 0);
+  for (const o of offenders) console.log('      ↳ ' + o);
+}
+
+// ==========================================================================
+// 14. 汇总
 // ==========================================================================
 
 console.log('\n' + '─'.repeat(78));
