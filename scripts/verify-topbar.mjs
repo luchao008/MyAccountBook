@@ -9,8 +9,8 @@
  *
  * 断言的 6 件事（前 4 条在每页都跑，后 2 条只在报表页）：
  *   ① 返回键触摸区左边缘 = 8（5 个自绘顶栏页统一）
- *   ② 箭头**墨迹**左边缘 ≈ 17.94 —— 用 `getBBox()` 量墨迹，不是 `getBoundingClientRect()` 量包围盒
- *      （后者给出 12 这个假信号，据此去改会把本来对齐的东西推歪）
+ *   ② 箭头**墨迹**左边缘 = 25.94（5 页统一）—— 用 `getBBox()` 量墨迹，不是
+ *      `getBoundingClientRect()` 量包围盒（后者给出 12 这个假信号，据此去改会把对齐的推歪）
  *   ③ 三点命中测试：触摸区左上 / 中心 / 右下都落在返回键内 —— **量"能不能点到"，不是量"在哪"**
  *   ④ 文档宽度 ≤ 视口宽（横向不溢出）
  *   ⑤ 报表页吸顶区 = 89（44 顶栏 + 45 Tab）；标题墨迹中心 = 视口中心（≤ 1px）
@@ -57,20 +57,20 @@ const PASS = process.env.SEED_PASS || '123456';
 /**
  * 5 个自绘顶栏页。`title: true` = 返回行里有标题（用于居中判定）。
  *
- * ⚠️ `ink` = 箭头**墨迹**左边缘的当前实测值。**两档不统一是已知的、且理由已失效**：
- *    · 报表页 **17.94** —— 按钮内部补了 4px（`flex-start` + `padding-left: 4px`），
- *      目的是对齐参考图 `IMG_4201`（iPhone 16 Pro @3x）实测的 **17.0pt**；
- *    · 其余 4 页 **25.94** —— 按钮内居中（`justify-content: center`）。
- *    这 8px 差异原本由「与报表页那 28px 左对齐大标题同轴（16px）」解释；
- *    **大标题已于 2026-09-17 收进顶栏 → 该理由消失**。是否统一见 `memo/2026-09-17.md` §十。
- *    在此之前**按现状断言**：谁改了就让这里报错，逼他把这件事显式决定一次。
+ * `ink` = 箭头**墨迹**左边缘的期望值：5 页统一 **25.94** = 8（行内边距）
+ * + 12（图标在 44px 按钮内居中）+ 5.94（`icon-chevron-left` 在 24 视口里的可见墨迹内缩）。
+ *
+ * ⚠️ 这里**曾经**是两档（报表 17.94 / 其余 25.94）：报表页在按钮内补了 4px，为的是与它当时
+ * 那个 28px 左对齐大标题同轴、并贴合参考图 IMG_4201 的 17.0pt。2026-09-17 大标题收进顶栏后
+ * 那条前提消失，luchao 决定统一 —— **全站只留一个值**。真要改回去，请连 `memo/2026-09-17.md` §十
+ * 一起改，别让这个数变成没人知道来历的口头约定。
  */
 const PAGES = [
   ['流水', '#/pages/flow/index', { title: true, ink: 25.94 }],
   ['日历', '#/pages/calendar/index', { title: true, ink: 25.94 }],
   ['回收站', '#/pages/recycle/index', { ink: 25.94 }],
   ['数据导出', '#/pages/export/index', { ink: 25.94 }],
-  ['报表', '#/pages/statistics/index', { title: true, stickyHead: true, ink: 17.94 }],
+  ['报表', '#/pages/statistics/index', { title: true, stickyHead: true, ink: 25.94 }],
 ];
 
 const failures = [];
@@ -253,16 +253,22 @@ for (const r of rows) {
       `   标题中心=${r.title !== undefined ? r.title : '(无标题)'}`,
   );
 }
+const touches = rows.map((r) => r.touch);
 const inks = rows.map((r) => r.ink);
 check(
-  '五个页面触摸区左边缘一致（= 8）',
-  new Set(rows.map((r) => r.touch)).size === 1 && rows[0].touch === 8,
-  `实测 ${JSON.stringify(inks)} 对应的触摸区 ${JSON.stringify(rows.map((r) => r.touch))}`,
+  '五个页面的触摸区左边缘一致（= 8）',
+  new Set(touches).size === 1 && touches[0] === 8,
+  `实测 ${JSON.stringify(touches)}`,
 );
-console.log(
-  `  ⚠️ 墨迹未统一：报表 ${rows.find((r) => r.name === '报表')?.ink}，其余 ${inks[0]} —— ` +
-    `差 ${Math.abs((rows.find((r) => r.name === '报表')?.ink ?? 0) - inks[0]).toFixed(2)}px，` +
-    `理由（与大标题同轴）已于 2026-09-17 失效，待决定。`,
+/*
+ * 墨迹也必须一致 —— 这条是 2026-09-17 luchao 的决定：全站只留一个值。
+ * 在此之前报表页是 17.94（为与大标题同轴而补了 4px），大标题收进顶栏后该前提消失。
+ * **别再让这个数变成没人知道来历的口头约定**：改动前先看 memo/2026-09-17.md §十。
+ */
+check(
+  '五个页面的箭头墨迹左边缘一致（= 25.94）',
+  new Set(inks.map((v) => v.toFixed(2))).size === 1 && Math.abs(inks[0] - 25.94) <= 0.5,
+  `实测 ${JSON.stringify(inks)}`,
 );
 
 await browser.close();
