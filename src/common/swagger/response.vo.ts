@@ -390,11 +390,168 @@ export class CategoryStatResponseVO {
   message: string;
 }
 
+/** 流水导入 · 单行报告 */
+export class ImportRowReportVO {
+  @ApiProperty({ description: '原文件行号（1 基，含表头）', example: 2 })
+  rowNo: number;
+
+  @ApiProperty({ description: '来源工作表名', example: '支出' })
+  sheet: string;
+
+  @ApiProperty({ description: '收支类型', example: 'expense', enum: ['income', 'expense'] })
+  type: string;
+
+  @ApiProperty({ description: '金额（字符串，两位小数）', example: '52.70' })
+  amount: string;
+
+  @ApiProperty({ description: '记账日期 YYYY-MM-DD', example: '2026-09-14' })
+  recordDate: string;
+
+  @ApiProperty({ description: '记账时刻 HH:mm（秒已丢弃）', example: '18:03', nullable: true })
+  recordTime: string;
+
+  @ApiProperty({ description: '备注', example: '' })
+  note: string;
+
+  @ApiProperty({ description: '附件里的分类原文', example: '食品酒水 / 早午晚餐' })
+  categoryRaw: string;
+
+  @ApiProperty({ description: '匹配到的分类 ID；未匹配为 null', example: '12', nullable: true })
+  categoryId: string;
+
+  @ApiProperty({
+    description: '匹配到的分类名；未匹配为 null',
+    example: '早午晚餐',
+    nullable: true,
+  })
+  categoryName: string;
+
+  @ApiProperty({
+    description:
+      '处理结论：ok 精确命中 / duplicate 疑似重复 / unmatched 分类降级 / invalid 字段不合法',
+    example: 'ok',
+    enum: ['ok', 'duplicate', 'unmatched', 'invalid'],
+  })
+  status: string;
+
+  @ApiProperty({ description: '按当前开关，这一行最终是否会被写入', example: true })
+  willImport: boolean;
+
+  @ApiProperty({ description: '降级 / 跳过 / 失败原因', example: ['二级分类「X」不存在'] })
+  messages: string[];
+}
+
+/** 流水导入 · 汇总 */
+export class ImportSummaryVO {
+  @ApiProperty({ description: '文件数据行总数（不含表头）', example: 664 })
+  total: number;
+
+  @ApiProperty({ description: '字段有效的行数（含重复与降级）', example: 664 })
+  valid: number;
+
+  @ApiProperty({ description: '本次会被写入的行数', example: 660 })
+  importable: number;
+
+  @ApiProperty({ description: '因重复被跳过的行数', example: 4 })
+  skipped: number;
+
+  @ApiProperty({ description: '疑似重复的行数（与库内或文件内指纹相同）', example: 4 })
+  duplicate: number;
+
+  @ApiProperty({ description: '分类未精确命中的行数（已降级）', example: 1 })
+  unmatched: number;
+
+  @ApiProperty({ description: '字段不合法、无法导入的行数', example: 0 })
+  invalid: number;
+}
+
+export class ImportPreviewResultVO {
+  @ApiProperty({ description: '原始文件名', example: '随手记默认账本.xlsx' })
+  filename: string;
+
+  @ApiProperty({ description: '目标账本 ID', example: '1' })
+  accountId: string;
+
+  @ApiProperty({ description: '目标账本名', example: '默认账本' })
+  accountName: string;
+
+  @ApiProperty({ type: ImportSummaryVO })
+  summary: ImportSummaryVO;
+
+  @ApiProperty({ description: '按工作表拆分的小计' })
+  sheets: { name: string; total: number; valid: number; invalid: number }[];
+
+  @ApiProperty({ description: '读不了的工作表及原因（不影响其他工作表）' })
+  sheetErrors: string[];
+
+  @ApiProperty({
+    type: [ImportRowReportVO],
+    description:
+      '**只含需要关注的行**（分类降级 / 疑似重复 / 无法导入）。' +
+      '正常行不回传 —— 真实账单里它们占 99%，带上只会淹掉异常、还白撑响应体。',
+  })
+  rows: ImportRowReportVO[];
+
+  @ApiProperty({ description: '需要关注的行总数（rows 可能被截断，计数以此为准）', example: 1 })
+  abnormal: number;
+
+  @ApiProperty({ description: 'rows 是否被截断（**只影响展示，不影响导入条数**）', example: false })
+  rowsTruncated: boolean;
+}
+
+export class ImportPreviewResponseVO {
+  @ApiProperty({ example: 0 })
+  code: number;
+
+  @ApiProperty({ type: ImportPreviewResultVO })
+  data: ImportPreviewResultVO;
+
+  @ApiProperty({ example: 'success' })
+  message: string;
+}
+
+export class ImportCommitResultVO {
+  @ApiProperty({ description: '目标账本 ID', example: '1' })
+  accountId: string;
+
+  @ApiProperty({ description: '目标账本名', example: '默认账本' })
+  accountName: string;
+
+  @ApiProperty({ description: '实际写入条数', example: 660 })
+  imported: number;
+
+  @ApiProperty({ description: '因重复跳过的条数', example: 4 })
+  skipped: number;
+
+  @ApiProperty({ description: '字段不合法、无法导入的条数', example: 0 })
+  failed: number;
+
+  @ApiProperty({
+    description: '分类降级（挂一级 / 记为未分类）的条数 —— **这些是导入成功的**，只是分类不精确',
+    example: 1,
+  })
+  unmatched: number;
+
+  @ApiProperty({ description: '降级 / 失败明细（最多 200 条）' })
+  failures: { rowNo: number; message: string }[];
+}
+
+export class ImportCommitResponseVO {
+  @ApiProperty({ example: 0 })
+  code: number;
+
+  @ApiProperty({ type: ImportCommitResultVO })
+  data: ImportCommitResultVO;
+
+  @ApiProperty({ example: 'success' })
+  message: string;
+}
+
 /** 业务失败响应（HTTP 状态码通常与业务码段对应） */
 export class ErrorResponseVO {
   @ApiProperty({
     description:
-      '业务错误码：40000 参数无效 / 40100 未认证 / 40101 登录失败 / 40401 分类不存在 / 40402 账单不存在 / 40901 用户名已存在 / 40902 分类名已存在 / 50000 服务异常',
+      '业务错误码：40000 参数无效 / 40004 分类下有交易 / 40006 默认账本分类受保护 / 40007 导入文件不可解析 / 40008 导入文件超限 / 40009 导入文件缺列 / 40010 无有效数据 / 40100 未认证 / 40101 登录失败 / 40401 分类不存在 / 40402 账单不存在 / 40901 用户名已存在 / 40902 分类名已存在 / 50000 服务异常',
     example: 40901,
   })
   code: number;

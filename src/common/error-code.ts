@@ -49,6 +49,16 @@ export enum ErrorCode {
   /** 默认账本（分类母本）的分类不允许删除（设计 D16） */
   CATEGORY_DEFAULT_PROTECTED = 40006,
 
+  // 流水导入（400xx 段）
+  /** 导入文件不是可解析的 xlsx（格式不支持 / 已损坏 / 加密） */
+  IMPORT_FILE_INVALID = 40007,
+  /** 导入文件超过体积上限 */
+  IMPORT_FILE_TOO_LARGE = 40008,
+  /** 导入文件缺少必要列 */
+  IMPORT_HEADER_MISSING = 40009,
+  /** 导入文件里没有一条可导入的数据 */
+  IMPORT_NO_VALID_ROWS = 40010,
+
   // 分类排序（400xx 段）
   /**
    * 排序列表里有重复的分类 ID。

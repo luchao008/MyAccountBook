@@ -65,6 +65,21 @@ export default {
     credentials: false,
   },
 
+  /**
+   * 请求体上限。
+   *
+   * 默认 jsonLimit 是 1mb；流水导入用 JSON + base64 承载 xlsx
+   * （随手记账单 664 行约 41KB → base64 约 55KB），1MB 也够，
+   * 但**显式写出来**：这个上限是接口契约的一部分，
+   * 后端 `MAX_XLSX_BYTES`（2MB → base64 约 2.7MB）必须落在它之内，
+   * 否则用户会拿到 Koa 的 413 而不是我们可读的 40008。
+   */
+  bodyParser: {
+    jsonLimit: '8mb',
+    formLimit: '8mb',
+    textLimit: '8mb',
+  },
+
   // Swagger 接口文档
   // 访问 http://127.0.0.1:7001/swagger-ui
   swagger: {

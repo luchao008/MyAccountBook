@@ -2,12 +2,14 @@ import { Controller, Get, Post, Put, Del, Body, Param, Query, Inject } from '@mi
 import { Context } from '@midwayjs/koa';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@midwayjs/swagger';
 import { TransactionService } from './transaction.service';
+import { TransactionImportService } from './transaction-import.service';
 import {
   CreateTransactionDTO,
   UpdateTransactionDTO,
   QueryTransactionDTO,
   SummaryQueryDTO,
 } from './dto/transaction.dto';
+import { ImportPreviewDTO, ImportCommitDTO } from './dto/transaction-import.dto';
 import {
   TransactionPageResponseVO,
   TransactionDetailResponseVO,
@@ -22,6 +24,9 @@ import {
 export class TransactionController {
   @Inject()
   transactionService: TransactionService;
+
+  @Inject()
+  transactionImportService: TransactionImportService;
 
   @Inject()
   ctx: Context;
@@ -80,6 +85,43 @@ export class TransactionController {
   @Post('/:id/restore')
   async restore(@Param('id') id: string) {
     return this.transactionService.restore(this.userId, id);
+  }
+
+  @ApiOperation({
+    summary: '流水导入 · 预览',
+    description:
+      '解析随手记导出的 .xlsx（JSON + base64 承载），按当前账本的分类树匹配，' +
+      '并与库内已有流水比对疑似重复。**本接口不写库**，只返回汇总 + **需要关注的逐行报告**' +
+      '（正常行不回传：真实账单里它们占 99%，带上只会淹掉异常并撑大响应体）。' +
+      '分类未命中一律降级（挂一级 / 记为未分类），**不自动创建分类**。',
+  })
+  @ApiResponse({ status: 200, description: '解析成功' })
+  @ApiResponse({
+    status: 200,
+    type: ErrorResponseVO,
+    description:
+      '文件不可解析 code=40007；超过体积上限 code=40008；缺必要列 code=40009；无可导入数据 code=40010',
+  })
+  @Post('/import/preview')
+  async previewImport(@Body() dto: ImportPreviewDTO) {
+    return this.transactionImportService.preview(this.userId, dto);
+  }
+
+  @ApiOperation({
+    summary: '流水导入 · 提交',
+    description:
+      '把文件写入当前账本。**入参与预览完全相同**（同文件 / 同账本 / 同开关）—— ' +
+      '服务端**重新解析该文件**并重新读取分类树。因此：' +
+      '① 行数上限只有「文件体积 2MB」一条（约 3 万行），**不存在按行数截断**；' +
+      '② 预览与提交口径天然一致（同一份解析逻辑）；' +
+      '③ 预览到提交之间分类若被改名 / 删除，会自然走降级路径（挂一级 / 记为未分类）并计入 unmatched。' +
+      '整体在一个事务里分批写入。',
+  })
+  @ApiResponse({ status: 200, description: '导入完成' })
+  @ApiResponse({ status: 422, type: ErrorResponseVO, description: '参数校验失败' })
+  @Post('/import/commit')
+  async commitImport(@Body() dto: ImportCommitDTO) {
+    return this.transactionImportService.commit(this.userId, dto);
   }
 
   @ApiOperation({ summary: '账单详情' })

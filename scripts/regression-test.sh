@@ -241,6 +241,53 @@ check "merge self 400" 400 "$(code -X POST $BASE/api/accounts/merge -H "Authoriz
 check "no token 401" 401 "$(code $BASE/api/accounts)"
 echo ""
 
+echo "[transaction import]"
+# 测试用 xlsx 由 scripts/gen-import-fixture.mjs 生成（3 笔支出 + 1 笔收入）。
+# 必须是真的 xlsx：后端要解 zip + XML，拿假 base64 测不出解析链路。
+B64=$(base64 -i scripts/fixtures/ledger-sample.xlsx | tr -d '\n')
+# 默认账本在本脚本前面已经被塞过几笔（`[transaction]` 段那些不传 accountId 的用例），
+# 所以条数断言一律用**相对量**（基线 + N），不写死绝对值 ——
+# 写死 0 / 4 这种数在脚本一长就会碎（这次就碎了）。
+IMP_BASE=$(curl -s "$BASE/api/transactions?accountId=$DEF_ID&page=1&size=1" -H "Authorization: Bearer $TOKEN" | jq_get "data.total")
+cat > $TMP/imp_preview.json <<EOF
+{"filename":"ledger-sample.xlsx","contentBase64":"$B64","accountId":"$DEF_ID"}
+EOF
+IMP=$(curl -s -X POST $BASE/api/transactions/import/preview -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/imp_preview.json)
+check "import preview 200" 200 "$(code -X POST $BASE/api/transactions/import/preview -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/imp_preview.json)"
+check "import preview rows 4" "4" "$(echo "$IMP" | jq_get "data.summary.total")"
+# ⚠️ 刻意**不断言 unmatched**：它取决于目标账本里有没有对应分类，
+#    而本脚本用的新注册用户，其默认账本一个分类都没有（4 行全部降级）。
+#    「分类降级」的正确性由单测（transaction-import.service.test.ts）覆盖，
+#    那里能精确造出「一级存在 / 二级不存在」的场景。这里只断言与账本内容无关的量。
+check "import preview invalid 0" "0" "$(echo "$IMP" | jq_get "data.summary.invalid")"
+check "import preview importable 4" "4" "$(echo "$IMP" | jq_get "data.summary.importable")"
+# 预览**不写库**：紧接着查该账本，条数应仍等于基线
+check "import preview does not write" "$IMP_BASE" "$(curl -s "$BASE/api/transactions?accountId=$DEF_ID&page=1&size=1" -H "Authorization: Bearer $TOKEN" | jq_get "data.total")"
+# ★ 预览的 rows **只含需要关注的行**（正常行不回传），abnormal 是它的总数
+check "import preview rows only abnormal" "4" "$(echo "$IMP" | jq_get "data.abnormal")"
+check "import preview rows array length" "4" "$(echo "$IMP" | jq_get "data.rows.length")"
+
+# 合法 base64、内容不是 xlsx -> 40007
+echo '{"filename":"x.xlsx","contentBase64":"bm90IGFuIHhsc3g=","accountId":"'"$DEF_ID"'"}' > $TMP/imp_bad.json
+check "import preview bad file 400" 400 "$(code -X POST $BASE/api/transactions/import/preview -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/imp_bad.json)"
+
+# 提交：**传与预览完全相同的文件**（方案 B —— 不再回传逐行数据）
+cat > $TMP/imp_commit.json <<EOF
+{"filename":"ledger-sample.xlsx","contentBase64":"$B64","accountId":"$DEF_ID","skipDuplicates":true}
+EOF
+IMP_COMMIT=$(curl -s -X POST $BASE/api/transactions/import/commit -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/imp_commit.json)
+check "import commit 200" 200 "$(code -X POST $BASE/api/transactions/import/commit -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/imp_commit.json)"
+check "import commit imported 4" "4" "$(echo "$IMP_COMMIT" | jq_get "data.imported")"
+# 落库后 = 基线 + 4
+check "import commit wrote to db" "$((IMP_BASE + 4))" "$(curl -s "$BASE/api/transactions?accountId=$DEF_ID&page=1&size=1" -H "Authorization: Bearer $TOKEN" | jq_get "data.total")"
+# 幂等：同一份文件再提交一次，全部被判重复跳过（指纹去重）
+IMP_AGAIN=$(curl -s -X POST $BASE/api/transactions/import/commit -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/imp_commit.json)
+check "import commit idempotent (0 imported)" "0" "$(echo "$IMP_AGAIN" | jq_get "data.imported")"
+check "import commit idempotent (4 skipped)" "4" "$(echo "$IMP_AGAIN" | jq_get "data.skipped")"
+# 提交入参不合法 → 与预览同一套校验（40007）
+check "import commit bad file 400" 400 "$(code -X POST $BASE/api/transactions/import/commit -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/imp_bad.json)"
+echo ""
+
 echo "=========================================="
 echo " Result: PASS=$PASS  FAIL=$FAIL"
 echo "=========================================="
