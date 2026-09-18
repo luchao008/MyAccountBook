@@ -371,10 +371,27 @@ console.log('\n══ ⑫ 批量删除（自建分类，结束即清理）══
   await openCategoryPage('expense');
   await barAction('批量操作').click();
   await page.waitForTimeout(300);
-  await rowByName(`__pg_root_${ts}`).click();
+
+  /*
+   * 先只选**二级**（孤立子分类）：确认框**不应**出现「连同其下 N 个二级」。
+   * 与下面「选一级应出现」成对 —— 历史上两处都传错过（删一级传 0 不提示、
+   * 删二级传兄弟数误提示），且都不报错、只让用户看到一句错话，必须自动盯住。
+   */
+  await rowByName(`__pg_child_${ts}`).click();
+  await page.waitForTimeout(300);
+  await barAction('删除').click();
+  await page.waitForTimeout(700);
+  const childModalText = await page.evaluate(() => document.body.innerText);
+  check('只选二级：确认框**不**出现级联提示', /连同其下/.test(childModalText), false);
+  // 取消（点非 primary 按钮），并取消二级选中
+  await page.locator('.uni-modal__btn:not(.uni-modal__btn_primary)').first().click();
+  await page.waitForTimeout(500);
+  await rowByName(`__pg_child_${ts}`).click();
   await page.waitForTimeout(300);
 
-  // 弹出的确认框：只读文案，然后确认删除
+  // 改选一级：确认框应出现「连同其下 1 个二级分类」
+  await rowByName(`__pg_root_${ts}`).click();
+  await page.waitForTimeout(300);
   page.once('dialog', () => {});
   await barAction('删除').click();
   await page.waitForTimeout(700);
