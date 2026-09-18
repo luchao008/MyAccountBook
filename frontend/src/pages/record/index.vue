@@ -84,6 +84,7 @@ import {
   updateTransaction,
   deleteTransaction,
 } from '@/api/transaction';
+import { enqueue, genClientId, isOnline } from '@/utils/offline';
 
 const categoryStore = useCategoryStore();
 const accountStore = useAccountStore();
@@ -137,9 +138,22 @@ function today(): string {
 }
 
 onLoad(async (options?: { id?: string; copyFrom?: string }) => {
-  await accountStore.load();
-  // 设计 D18：空账本（迁移后的老非默认账本）静默从母本导入全部分类
-  await categoryStore.ensureFromMother();
+  // 离线时账本列表拉不到 —— 包 try/catch，用本地已存的 currentId 继续
+  try {
+    await accountStore.load();
+  } catch (err) {
+    console.warn('[record] 账本加载失败（离线？）', err);
+  }
+  /*
+   * 设计 D18：空账本静默从母本导入全部分类。
+   * ⚠️ 离线时这里会失败（分类 store 已尽量读本地缓存）—— 包 try/catch
+   *    避免整页崩掉；缓存命中时分类选择器仍可用，可继续离线记账。
+   */
+  try {
+    await categoryStore.ensureFromMother();
+  } catch (err) {
+    console.warn('[record] 分类加载失败（离线？），使用本地缓存', err);
+  }
 
   // 带 id 进入 = 编辑已有账单
   if (options?.id) {
@@ -251,6 +265,22 @@ async function save() {
     ...(isEdit.value ? {} : { accountId: accountStore.currentId }),
   };
 
+  /*
+   * 离线分支（仅新增/复制；编辑不支持离线 —— 见下）。
+   *
+   * 判据用 isOnline()（navigator.onLine），而不是"请求失败后再入队"：
+   * 后者要先等一次超时（10s），用户体验差且可能因"服务端其实收到了但响应丢了"
+   * 而误入队。先判断在线状态更直接。若在线但实际请求失败，仍走 catch 兜底提示。
+   */
+  if (!isEdit.value && !isOnline()) {
+    enqueue({ clientId: genClientId(), queuedAt: Date.now(), payload });
+    uni.showToast({ title: '离线保存成功，联网后自动上传', icon: 'none' });
+    setTimeout(() => {
+      uni.navigateBack({ fail: () => uni.reLaunch({ url: '/pages/main/index' }) });
+    }, 800);
+    return;
+  }
+
   submitting.value = true;
   try {
     if (isEdit.value) {
@@ -269,6 +299,19 @@ async function save() {
     }, 600);
   } catch (err) {
     console.error('[record] 保存失败', err);
+    /*
+     * 兜底：判在线但请求仍失败（断网瞬间 / 服务端不可达）。
+     * 对**新增**也入队（幂等键保证不会重复）；编辑则只能提示重试。
+     */
+    if (!isEdit.value) {
+      enqueue({ clientId: genClientId(), queuedAt: Date.now(), payload });
+      uni.showToast({ title: '网络异常，已离线保存，联网后自动上传', icon: 'none' });
+      setTimeout(() => {
+        uni.navigateBack({ fail: () => uni.reLaunch({ url: '/pages/main/index' }) });
+      }, 800);
+    } else {
+      uni.showToast({ title: '网络异常，请联网后重试', icon: 'none' });
+    }
   } finally {
     submitting.value = false;
   }

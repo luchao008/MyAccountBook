@@ -12,6 +12,9 @@ import {
 import { useAccountStore } from '@/store/account';
 import { getCategoryCandidates, importCategories } from '@/api/account';
 
+/** 分类缓存的 storage key 前缀（按账本隔离：cache:<accountId>） */
+const CACHE_PREFIX = 'categoryCache:';
+
 /**
  * 分类 store。
  *
@@ -95,9 +98,22 @@ export const useCategoryStore = defineStore('category', {
         return;
       }
       if (this.loaded && !force && this.loadedAccountId === accountId) return;
-      this.list = await getCategories(accountId);
-      this.loaded = true;
-      this.loadedAccountId = accountId;
+      try {
+        this.list = await getCategories(accountId);
+        this.loaded = true;
+        this.loadedAccountId = accountId;
+        // 落盘缓存：离线记账时「记一笔」页需要能读到分类（否则选择器是空的）
+        uni.setStorageSync(CACHE_PREFIX + accountId, this.list);
+      } catch (err) {
+        // 离线兜底：读上一次的缓存。没有缓存时保持空（调用方展示空选择器）
+        const cached = uni.getStorageSync(CACHE_PREFIX + accountId);
+        if (Array.isArray(cached) && cached.length) {
+          this.list = cached;
+          this.loaded = true;
+          this.loadedAccountId = accountId;
+        }
+        throw err;
+      }
     },
 
     /**

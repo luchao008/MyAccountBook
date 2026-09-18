@@ -1,8 +1,32 @@
 <script setup lang="ts">
 import { onLaunch } from '@dcloudio/uni-app';
+import { flushQueue, isOnline, queueCount } from '@/utils/offline';
+
+/**
+ * 尝试补传离线队列。
+ *
+ * 只在**已登录**时做（未登录补传会 401，而 request.ts 遇 401 会 reLaunch 到登录页，
+ * 在启动阶段触发会很唐突）。补传失败（仍未联网 / 业务错）静默保留队列。
+ */
+async function tryFlush() {
+  if (!uni.getStorageSync('token')) return;
+  if (!isOnline()) return;
+  if (!queueCount()) return;
+  const { sent } = await flushQueue();
+  if (sent > 0) {
+    uni.showToast({ title: `已补传 ${sent} 笔离线记账`, icon: 'none' });
+  }
+}
 
 onLaunch(() => {
-  // 应用启动：这里不做任何网络请求，登录态由各页面的 onShow 自行校验
+  // 应用启动：登录态由各页面的 onShow 自行校验；
+  // 这里只做一件事 —— 若有离线队列且在线，尝试补传
+  tryFlush();
+
+  // 网络恢复时补传
+  uni.onNetworkStatusChange((res) => {
+    if (res.isConnected) tryFlush();
+  });
 });
 </script>
 

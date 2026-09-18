@@ -117,6 +117,8 @@ export function createTransaction(data: {
   /** HH:mm；不传表示不记录时间 */
   recordTime?: string;
   accountId?: string;
+  /** 客户端幂等键（离线补传用）：重试带同一个值，服务端只落一条 */
+  clientId?: string;
 }): Promise<TransactionItem> {
   return http.post('/transactions', data) as any;
 }
