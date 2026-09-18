@@ -162,6 +162,18 @@ const rowByName = (name) =>
  */
 const groupByName = (name) => page.locator('.group').filter({ hasText: name }).first();
 
+/**
+ * 点底栏某一格。
+ *
+ * ⚠️ 普通态（排序 / 批量操作 / 新建分类）与批量态（删除 / 隐藏 / 恢复显示）
+ *    **共用 `.batch-act` 这一套样式**（这样三种模式的底栏高度一致），
+ *    所以 `.batch-act` 的**下标在不同模式下含义不同**，不能按 nth 点。
+ *    必须按文案定位。文案用 .batch-act-label 而不是整格 textContent ——
+ *    图标是 svg，textContent 里只有文案，但整格还可能有别的空白节点。
+ */
+const barAction = (label) =>
+  page.locator('.batch-act').filter({ has: page.locator('.batch-act-label', { hasText: label }) }).first();
+
 // ═══════════════════════════════════════════════════════════ ① 布局与数据
 console.log('\n══ ① 布局与数据 ══');
 await openCategoryPage('expense');
@@ -190,7 +202,7 @@ await openCategoryPage('expense');
 // ═══════════════════════════════════════════════════════════ ② 进入批量
 console.log('\n══ ② 进入批量模式 ══');
 {
-  await page.locator('.batch-entry').click();
+  await barAction('批量操作').click();
   await page.waitForTimeout(400);
   check('标题变为「选择支出分类」', (await page.locator('.nav-title').textContent()).trim(), '选择支出分类');
   check('左侧是「取消」', (await page.locator('.nav-action').first().textContent()).trim(), '取消');
@@ -224,9 +236,9 @@ console.log('\n══ ④ 选中一个可见分类 ══');
 // ═══════════════════════════════════════════════════════════ ⑤ 隐藏 → 选择器不可见
 console.log('\n══ ⑤ 隐藏 → 记一笔选择器里看不到 ══');
 {
-  await page.locator('.batch-act').nth(1).click(); // 隐藏
+  await barAction('隐藏').click();
   await page.waitForTimeout(1200);
-  check('批量模式已退出', await page.locator('.batch-entry').count(), 1);
+  check('批量模式已退出（底栏回到三格）', await page.locator('.batch-act').count(), 3);
 
   const hiddenRow = rowByName('日常用品');
   check('该行出现「已隐藏」标记', await hiddenRow.locator('.hidden-tag').count(), 1);
@@ -245,7 +257,7 @@ console.log('\n══ ⑤ 隐藏 → 记一笔选择器里看不到 ══');
 console.log('\n══ ⑥ 恢复显示 → 又能看到 ══');
 {
   await openCategoryPage('expense');
-  await page.locator('.batch-entry').click();
+  await barAction('批量操作').click();
   await page.waitForTimeout(300);
   await rowByName('日常用品').click();
   await page.waitForTimeout(300);
@@ -256,7 +268,7 @@ console.log('\n══ ⑥ 恢复显示 → 又能看到 ══');
   check('选中已隐藏项：删除可用 / 隐藏禁用 / 恢复显示可用', cls, [false, true, false]);
   await page.screenshot({ path: `${SHOTS}/05-batch-hidden-picked.png` });
 
-  await page.locator('.batch-act').nth(2).click(); // 恢复显示
+  await barAction('恢复显示').click();
   await page.waitForTimeout(1200);
   check('「已隐藏」标记消失', await rowByName('日常用品').locator('.hidden-tag').count(), 0);
 
@@ -267,7 +279,7 @@ console.log('\n══ ⑥ 恢复显示 → 又能看到 ══');
 // ═══════════════════════════════════════════════════════════ ⑦ 全选 / 取消全选
 console.log('\n══ ⑦ 全选 / 取消全选 ══');
 {
-  await page.locator('.batch-entry').click();
+  await barAction('批量操作').click();
   await page.waitForTimeout(300);
   await page.locator('.nav-action').last().click(); // 全选
   await page.waitForTimeout(400);
@@ -326,7 +338,7 @@ console.log('\n══ ⑩ 新建与编辑入口的跳转参数 ══');
 
   // 新建一级：跳到 category-new?type=expense
   await openCategoryPage('expense');
-  await page.locator('.add-root').click();
+  await barAction('新建分类').click();
   await page.waitForTimeout(1200);
   check('新建一级入口只带 type（不带 parentId）', /type=expense/.test(page.url()) && !/parentId/.test(page.url()), true);
   await page.screenshot({ path: `${SHOTS}/08-new-root.png` });
@@ -357,14 +369,14 @@ console.log('\n══ ⑫ 批量删除（自建分类，结束即清理）══
   check('测试用二级分类已建好（用于验证级联提示）', !!child?.id && child.parentId === root.id, true);
 
   await openCategoryPage('expense');
-  await page.locator('.batch-entry').click();
+  await barAction('批量操作').click();
   await page.waitForTimeout(300);
   await rowByName(`__pg_root_${ts}`).click();
   await page.waitForTimeout(300);
 
   // 弹出的确认框：只读文案，然后确认删除
   page.once('dialog', () => {});
-  await page.locator('.batch-act').first().click();
+  await barAction('删除').click();
   await page.waitForTimeout(700);
   const modalText = await page.evaluate(() => document.body.innerText);
   check('确认框说明了会连带删除二级', /连同其下 1 个二级分类/.test(modalText), true);
@@ -378,6 +390,209 @@ console.log('\n══ ⑫ 批量删除（自建分类，结束即清理）══
 
   const left = (await api('GET', '/categories?type=expense')).data.map((c) => c.name);
   check('新建的一级与二级都已删除', left.includes(`__pg_root_${ts}`) || left.includes(`__pg_child_${ts}`), false);
+}
+
+// ═══════════════════════════════════════════════════════════ ⑬ 拖动排序
+console.log('\n══ ⑬ 拖动排序（本地改 → 取消丢弃 → 完成落库）══');
+{
+  await openCategoryPage('expense');
+
+  /** 屏幕上的一级分类顺序（只取一级行） */
+  const screenRoots = async () =>
+    (await page.locator('.root-row .root-name').allTextContents()).map((s) => s.trim());
+
+  /** 后端的一级分类顺序 */
+  const apiRootPairs = async () =>
+    (await api('GET', '/categories?type=expense'))
+      .data.filter((c) => !c.parentId)
+      .map((c) => ({ id: c.id, name: c.name }));
+  const apiRoots = async () => (await apiRootPairs()).map((p) => p.name);
+
+  const original = await apiRoots();
+
+  /** 屏幕上一级行的顺序 == 后端顺序（起点一致性，后面所有比较都基于它） */
+  check('起点：屏幕顺序 == 后端顺序', await screenRoots(), original);
+
+  // ── 普通态底栏是三格（本次改动）
+  {
+    const labels = (await page.locator('.batch-act-label').allTextContents()).map((s) => s.trim());
+    check('普通态底栏三格 = 排序 / 批量操作 / 新建分类', labels, ['排序', '批量操作', '新建分类']);
+  }
+
+  // ── 进入排序态
+  await barAction('排序').click();
+  await page.waitForTimeout(600);
+  check('顶栏标题变为「支出分类排序」', (await page.locator('.nav-title').textContent()).trim(), '支出分类排序');
+  check('顶栏左侧是「取消」', (await page.locator('.nav-action').first().textContent()).trim(), '取消');
+  check('底栏只剩一个「完成」', await page.locator('.sort-done').count(), 1);
+  check('底栏不再有图标栅格', await page.locator('.batch-act').count(), 0);
+  check('说明条出现（讲清何时才真的保存）', await page.locator('.sort-hint').count(), 1);
+
+  // ── D2：默认全部折叠
+  check('排序态默认全折叠（二级 0 行）', await page.locator('.child-row').count(), 0);
+  check('排序态一级仍有 13 组', await page.locator('.root-row').count(), 13);
+  check('每行都有一个拖拽把手', await page.locator('.root-row .grip').count(), 13);
+  await page.screenshot({ path: SHOTS + '/11-sort-collapsed.png' });
+
+  // ── D8：点一级行展开，展开新的自动收起旧的
+  await rowByName('居家物业').click();
+  await page.waitForTimeout(500);
+  check('点一级行展开它的二级（居家物业 7 个）', await page.locator('.child-row').count(), 7);
+  await rowByName('行车交通').click();
+  await page.waitForTimeout(500);
+  check('展开另一组后前一组已收起（仍只有一组的二级）', await page.locator('.child-row').count(), 3);
+  await rowByName('行车交通').click();
+  await page.waitForTimeout(500);
+  check('再点一次收起，回到全折叠', await page.locator('.child-row').count(), 0);
+
+  /**
+   * 模拟一次真实拖动：按住把手 → 分步移动 → 松手。
+   *
+   * 分步而不是一步到位：落点是在 mousemove 里逐帧算的，
+   * 一步跳到终点会让中间过程全被跳过（那样测不到落点线）。
+   */
+  const dragBy = async (name, dy) => {
+    const grip = rowByName(name).locator('.grip');
+    const box = await grip.boundingBox();
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    // 等测量完成（onGripStart 是异步的，测完之前 move 会被忽略）
+    await page.waitForTimeout(150);
+    for (let i = 1; i <= 10; i += 1) {
+      await page.mouse.move(x, y + (dy * i) / 10);
+      await page.waitForTimeout(25);
+    }
+    await page.waitForTimeout(100);
+    const ghost = await page.locator('.drag-ghost').count();
+    const line = await page.locator('.drop-line').count();
+    await page.mouse.up();
+    await page.waitForTimeout(500);
+    return { ghost, line };
+  };
+
+  /** 相邻两行的实际间距（不写死 56px —— 行高是 min-height，可能被文案撑高） */
+  const rowPitch = (sel) =>
+    page.evaluate((s) => {
+      const rows = document.querySelectorAll(s);
+      return rows[1].getBoundingClientRect().top - rows[0].getBoundingClientRect().top;
+    }, sel);
+
+  // ── D1 / D6：拖动 + 浮层 + 落点线
+  const before = await screenRoots();
+  const pitch = await rowPitch('.root-row');
+  check('行间距量到了（>0）', pitch > 0, true);
+
+  const d1 = await dragBy(before[0], pitch);
+  check('★ 拖动中出现浮层（跟着手指的那一行）', d1.ghost, 1);
+  check('★ 拖动中出现落点提示线', d1.line, 1);
+
+  const afterDrag = await screenRoots();
+  check('拖动后屏幕顺序已变（原第 1 个挪到第 2 位）', afterDrag[0], before[1]);
+  check('被拖的那一行落到第 2 位', afterDrag[1], before[0]);
+  check('其余行相对顺序不变', afterDrag.slice(2), before.slice(2));
+  check('松手后浮层已消失', await page.locator('.drag-ghost').count(), 0);
+  check('松手后落点线已消失', await page.locator('.drop-line').count(), 0);
+  await page.screenshot({ path: SHOTS + '/12-sort-dragged.png' });
+
+  // ── D4：还没点「完成」，后端必须一个字都没改
+  check('★ 未点「完成」时后端顺序未变', await apiRoots(), original);
+
+  // ── D4：取消 = 丢弃全部未提交改动
+  await page.locator('.nav-action').first().click();
+  await page.waitForTimeout(600);
+  check('点「取消」回到普通态', (await page.locator('.nav-title').textContent()).trim(), '支出分类管理');
+  check('★ 取消后屏幕顺序已还原', await screenRoots(), original);
+  check('★ 取消后后端顺序仍未变', await apiRoots(), original);
+
+  // ── D4：再拖一次，这次点「完成」落库
+  await barAction('排序').click();
+  await page.waitForTimeout(600);
+  await dragBy(before[0], pitch);
+  check('重新拖动后屏幕顺序已变', (await screenRoots())[0], before[1]);
+
+  await page.locator('.sort-done').click();
+  await page.waitForTimeout(2500);
+  check('点「完成」后回到普通态', (await page.locator('.nav-title').textContent()).trim(), '支出分类管理');
+
+  const persisted = await apiRoots();
+  check('★ 落库成功：后端第 1 位 = 原第 2 个', persisted[0], before[1]);
+  check('★ 落库成功：后端第 2 位 = 原第 1 个', persisted[1], before[0]);
+  check('★ 其余行顺序未受影响', persisted.slice(2), before.slice(2));
+
+  // ── 刷新后顺序保持（说明真的落在库里，不是前端假象）
+  await openCategoryPage('expense');
+  check('★ 重新打开页面顺序仍是新顺序', (await screenRoots())[0], before[1]);
+
+  // ── 排二级：只动该组，不动一级
+  await barAction('排序').click();
+  await page.waitForTimeout(600);
+  await rowByName('居家物业').click();
+  await page.waitForTimeout(600);
+
+  const kidsBefore = (await page.locator('.child-row .child-name').allTextContents()).map((s) =>
+    s.trim()
+  );
+  check('展开后能看到居家物业的 7 个二级', kidsBefore.length, 7);
+  check('二级行也有把手', await page.locator('.child-row .grip').count(), 7);
+
+  const kidsPitch = await rowPitch('.child-row');
+  await dragBy(kidsBefore[0], kidsPitch);
+  const kidsAfter = (await page.locator('.child-row .child-name').allTextContents()).map((s) =>
+    s.trim()
+  );
+  check('二级顺序已在屏幕上改变', kidsAfter[0], kidsBefore[1]);
+  check('★ 拖二级时一级顺序不受影响', (await screenRoots())[0], before[1]);
+
+  await page.locator('.sort-done').click();
+  await page.waitForTimeout(2500);
+
+  const pairs = await apiRootPairs();
+  const jujia = pairs.find((p) => p.name === '居家物业');
+  const kidsApi = (await api('GET', '/categories?type=expense'))
+    .data.filter((c) => c.parentId === jujia.id)
+    .map((c) => c.name);
+  check('★ 二级排序已落库', kidsApi[0], kidsBefore[1]);
+  check('★ 落库的二级数量仍是 7（没有多删少改）', kidsApi.length, 7);
+
+  // ── D3：拖到列表边缘时自动滚动
+  //   判据用**用户看得见的东西**（第一行的屏幕位置），不去掏 scroll-view 内部 DOM。
+  {
+    await barAction('排序').click();
+    await page.waitForTimeout(600);
+
+    const firstTop = () =>
+      page.evaluate(() => Math.round(document.querySelector('.root-row').getBoundingClientRect().top));
+
+    // 先把列表滚到底，给「向上自动滚动」留出空间
+    await page.mouse.move(187, 400);
+    await page.mouse.wheel(0, 600);
+    await page.waitForTimeout(700);
+    const scrolledTop = await firstTop();
+    check('列表能滚动（滚到底后第一行上移）', scrolledTop < 100, true);
+
+    // 抓住最后一行，把手指停到列表顶部边缘并**保持不动**
+    const lastName = (await screenRoots())[12];
+    const grip = rowByName(lastName).locator('.grip');
+    const box = await grip.boundingBox();
+    const gx = box.x + box.width / 2;
+    const gy = box.y + box.height / 2;
+    await page.mouse.move(gx, gy);
+    await page.mouse.down();
+    await page.waitForTimeout(150);
+    await page.mouse.move(gx, 96); // 落在顶部自动滚动区（列表顶 ≈ 80 + 72）
+    await page.waitForTimeout(120);
+    const t0 = await firstTop();
+    await page.waitForTimeout(600); // 手指不动，只看列表自己滚
+    const t1 = await firstTop();
+    await page.mouse.up();
+    await page.waitForTimeout(400);
+
+    check('★ 手指停在顶部边缘时列表自动向上滚（第一行下移）', t1 > t0, true);
+    check('★ 自动滚动有界（没有滚过头）', t1 <= 100, true);
+    await page.screenshot({ path: SHOTS + '/13-sort-autoscroll.png' });
+  }
 }
 
 // ── 收尾：确保没有残留的隐藏标记与测试分类
