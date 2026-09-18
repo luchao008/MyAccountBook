@@ -1,18 +1,23 @@
 import { MidwayConfig } from '@midwayjs/core';
-import { join, relative } from 'path';
+import { User } from '../entity/user.entity';
+import { Category } from '../entity/category.entity';
+import { Transaction } from '../entity/transaction.entity';
+import { Account } from '../entity/account.entity';
 
 /**
- * 计算实体文件的 glob 路径。
+ * 实体列表。
  *
- * 背景：@midwayjs/typeorm 内部用 @midwayjs/glob 扫描实体，
- * 其匹配逻辑是把文件绝对路径 replace(entryDir, '') 后比对 pattern，
- * 而 entryDir = baseDir = <项目根>/src。
- * 因此 pattern 必须是【以 / 开头、相对 src 目录】的路径，
- * 例如 '/entity/*.entity{.ts,.js}'。
- * 直接传 join(__dirname, ...) 的绝对路径会匹配不到任何文件。
+ * ⚠️ **直接传实体类数组，不要用 glob 路径**（2026-09-18 修）。
+ *
+ * 原来用 `relative(process.cwd()/src, __dirname/../entity) + '/*.entity{...}'`
+ * 算 glob：开发时 baseDir = <根>/src，能匹配；但**构建后目录结构变成 dist**，
+ * 该计算失效 → 生产启动后所有走实体的查询抛
+ * `EntityMetadataNotFoundError: No metadata for "User" was found`（注册即 500）。
+ *
+ * 改为显式 import 实体类（与 `src/data-source.ts` 一致）：
+ * 不依赖任何运行时路径，dev / prod 都稳。
  */
-const entityPattern =
-  relative(join(process.cwd(), 'src'), join(__dirname, '../entity')) + '/*.entity{.ts,.js}';
+const entities = [User, Category, Transaction, Account];
 
 export default {
   keys: process.env.APP_KEYS || 'my-account-book-secret-key',
@@ -109,7 +114,7 @@ export default {
         // 生产用迁移，禁止自动改表（文档第 4.1 节）
         synchronize: false,
         logging: false,
-        entities: [entityPattern],
+        entities,
       },
     },
   },

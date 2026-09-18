@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "mw dev --ts",
-    "build": "mw build -c",
+    "build": "mw build -c --tsConfig tsconfig.build.json",
     "start": "NODE_ENV=production node bootstrap.js",
     "test": "mw test --ts",
     "lint": "eslint .",
