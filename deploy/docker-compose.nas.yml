@@ -1,0 +1,44 @@
+services:
+  db:
+    image: mariadb:10.11
+    container_name: account-book-db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: "ChangeMe_123456"
+      MARIADB_DATABASE: account_book
+      MARIADB_CHARACTER_SET: utf8mb4
+      MARIADB_COLLATE: utf8mb4_general_ci
+    volumes:
+      - /volume1/docker/account-book/data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    image: account-book-backend:latest
+    container_name: account-book-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASSWORD: "ChangeMe_123456"
+      DB_NAME: account_book
+      JWT_SECRET: "ChangeMeJwtSecret_abcdef123456"
+      PORT: "7001"
+      NODE_ENV: production
+    command: sh -c "node ./node_modules/typeorm/cli.js migration:run -d dist/data-source.js && node bootstrap.js"
+
+  web:
+    image: account-book-frontend:latest
+    container_name: account-book-web
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
