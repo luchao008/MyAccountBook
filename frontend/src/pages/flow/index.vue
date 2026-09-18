@@ -492,7 +492,7 @@
  * 两者共用同一套筛选参数，见 service 层的 applyFilters 注释。
  */
 import { ref, reactive, computed, onMounted, nextTick } from 'vue';
-import { onPageScroll, onLoad } from '@dcloudio/uni-app';
+import { onPageScroll, onLoad, onShow } from '@dcloudio/uni-app';
 import SvgIcon from '@/components/SvgIcon.vue';
 import CategoryIcon from '@/components/CategoryIcon.vue';
 import EmptyState from '@/components/EmptyState.vue';
@@ -1274,6 +1274,33 @@ onMounted(async () => {
   measureHeader();
 });
 
+/**
+ * 从「记账页」（新增 / 编辑 / 复制）返回时刷新。
+ *
+ * ⚠️ **必须用 `onShow`，不能只靠 `onMounted`**（2026-09-17 修复）。
+ * `uni.navigateBack()` 返回时**当前页面实例并没有被销毁** ——
+ * `onMounted` 只在页面首次创建时跑一次，所以返回后列表还是旧数据。
+ * 用户看到的就是「编辑完回来，金额没变」。
+ *
+ * 首次进入由上面的 `onMounted` 负责（它要等 `categoryStore.load()` 完成，
+ * 顺序不能变），这里用 `firstShow` 跳过，避免同一个页面加载两次。
+ */
+let firstShow = true;
+onShow(() => {
+  if (firstShow) {
+    firstShow = false;
+    return;
+  }
+  /*
+   * 用 `reloadAll()` 而不是 `loadGroups()`：它会先清空 `expanded` 与 `details`，
+   * 于是重新加载后默认展开第一个分组并拉新明细 —— 与刚进页面时完全一致。
+   * 若只调 `loadGroups()`，已展开分组的 `details[key]` 还在缓存里（`toggleGroup`
+   * 见缓存直接 return），金额会更新但明细行仍是旧的。
+   */
+  reloadAll();
+  // 渐变头高度可能因筛选提示条出现/消失而变，重新测一次
+  measureHeader();
+});
 </script>
 
 <style scoped lang="scss">
