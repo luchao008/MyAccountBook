@@ -1,5 +1,79 @@
 <template>
   <view class="page">
+    <!--
+      ══════ 首屏骨架 ══════
+
+      ⚠️ 只在**首屏**出现（`skeleton` = 正在请求 && 从未拿到过数据）。
+      刷新时（下拉 / 切账本 / 从别的页回来）不铺骨架：那时页面上已经有上一次的
+      真实数字，把它换成灰块是**信息量倒退** —— 用户本来能看着旧数字等新数字。
+      这就是为什么判据不是 `loading` 而是 `skeleton`。
+    -->
+    <template v-if="skeleton">
+      <!-- banner：金色系块（灰块压浅金渐变会发脏，见 Skeleton.vue 注释） -->
+      <view class="banner">
+        <view class="banner-top">
+          <Skeleton hero w="112" h="30" r="14" />
+          <Skeleton hero w="28" h="28" r="8" />
+        </view>
+        <view class="banner-main">
+          <Skeleton hero w="48" h="14" />
+          <Skeleton hero style="margin-top: 6px" w="176" h="36" r="8" />
+        </view>
+        <view class="banner-sub">
+          <view class="sub-item"><Skeleton hero w="96" h="16" /></view>
+          <view class="sub-item"><Skeleton hero w="96" h="16" /></view>
+        </view>
+      </view>
+
+      <!-- 区间卡：5 行（今天 / 本周 / 本月 / 本年 / 去年） -->
+      <view class="card range-card">
+        <view v-for="n in 5" :key="n" class="range-row">
+          <Skeleton w="32" h="32" r="9" />
+          <view class="range-main">
+            <Skeleton w="56" h="14" />
+            <Skeleton w="104" h="12" />
+          </view>
+          <view class="range-amounts">
+            <Skeleton w="88" h="12" />
+            <Skeleton w="88" h="12" />
+          </view>
+        </view>
+      </view>
+
+      <!-- 排行卡：标题行 + 5 条 -->
+      <view class="card rank-card">
+        <view class="rank-header">
+          <Skeleton w="120" h="16" />
+          <Skeleton w="88" h="12" />
+        </view>
+        <view class="rank-list">
+          <view v-for="n in 5" :key="n" class="rank-item">
+            <Skeleton w="16" h="16" r="4" />
+            <view class="rank-body">
+              <view class="rank-line">
+                <view class="rank-name">
+                  <Skeleton circle :h="36" />
+                  <Skeleton w="56" h="14" />
+                </view>
+                <Skeleton w="64" h="14" />
+              </view>
+              <Skeleton w="100%" h="6" r="3" />
+            </view>
+          </view>
+        </view>
+      </view>
+    </template>
+
+    <!-- 首屏失败：给重试入口，而不是让用户看着一片灰 -->
+    <EmptyState
+      v-else-if="error"
+      icon="icon-alert"
+      text="加载失败，请稍后重试"
+      button-text="重试"
+      @action="loadData"
+    />
+
+    <template v-else>
     <!-- 顶部 banner：当前账本的历年累计 -->
     <view class="banner">
       <view class="banner-top">
@@ -106,6 +180,8 @@
       </view>
     </view>
 
+    </template>
+
     <!-- 底栏的「记一笔」与导航由容器统一承载，视图内不再持有 -->
   </view>
 </template>
@@ -113,6 +189,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
 import EmptyState from '@/components/EmptyState.vue';
+import Skeleton from '@/components/Skeleton.vue';
 import { useUserStore } from '@/store/user';
 import { useAccountStore } from '@/store/account';
 import { useCategoryStore } from '@/store/category';
@@ -128,6 +205,24 @@ const accountStore = useAccountStore();
 const categoryStore = useCategoryStore();
 
 const loading = ref(false);
+/**
+ * 首屏骨架的判据：**正在请求 && 从未成功拿到过数据**。
+ *
+ * 为什么不能直接用 `loading`：下拉刷新、切账本、从别的页面切回来都会走 loadData，
+ * 那些时刻页面上已经有上一次的真实数字，把它们换成灰块是信息量倒退 ——
+ * 用户本来可以看着旧数字等新数字，现在只能看一片灰。
+ *
+ * 判据用 `loaded` 而不是「有没有数据」：账本可能真的是空的（0 条流水），
+ * 那时「拿到过空数据」也必须停止铺骨架，否则骨架会永远停在那儿。
+ */
+const skeleton = ref(false);
+/**
+ * 是否成功拿到过一次数据（失败不算 —— 首屏失败后点重试仍要铺骨架）。
+ *
+ * 是响应式的：错误态与「空数据」态都要读它来判断该显示什么。
+ */
+const loaded = ref(false);
+const error = ref(false);
 const ranking = ref<CategoryStatItem[]>([]);
 
 /** 折叠时展示的条数（与参考图一致：默认 5 条 + 「点击展开」） */
@@ -225,6 +320,9 @@ function currentMonth(): string {
 
 async function loadData() {
   loading.value = true;
+  // 只有「从未成功过」才铺骨架；失败后重试仍算首屏，所以看的是 loaded
+  if (!loaded.value) skeleton.value = true;
+  error.value = false;
   try {
     const accountId = accountStore.currentId;
     const [ov, rank] = await Promise.all([
@@ -236,10 +334,13 @@ async function loadData() {
     // 保留全量：折叠/展开由 visibleRanking 控制，不在这里截断
     ranking.value = rank;
     expanded.value = false;
+    loaded.value = true;
   } catch (err) {
     console.error('[home] 加载失败', err);
+    error.value = true;
   } finally {
     loading.value = false;
+    skeleton.value = false;
     uni.stopPullDownRefresh();
   }
 }

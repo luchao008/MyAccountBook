@@ -51,10 +51,41 @@
       </view>
     </view>
 
-    <!-- 加载中 -->
-    <view v-if="loading" class="state">
-      <text class="state-text">加载中…</text>
-    </view>
+    <!--
+      首屏骨架：照抄真实结构（账本流水统计大数字 + 记账里程碑 + 两个面板）。
+      ⚠️ 只在**首屏**出现（`skeleton` = 正在请求 && 从未拿到过数据）。
+      切换 Tab / 改时段都不铺 —— 那时旧报表还在，换成灰块是信息量倒退。
+    -->
+    <template v-if="skeleton">
+      <view class="hero">
+        <Skeleton w="80" h="14" />
+        <view class="sk-balance">
+          <Skeleton w="32" h="14" />
+          <Skeleton w="160" h="28" r="8" />
+        </view>
+        <Skeleton class="sk-io" w="200" h="13" />
+      </view>
+
+      <view class="milestone">
+        <Skeleton w="20" h="20" r="6" />
+        <Skeleton w="72" h="14" />
+        <Skeleton w="88" h="14" />
+      </view>
+
+      <view v-for="n in 2" :key="n" class="panel">
+        <Skeleton w="72" h="16" />
+        <view class="sk-ranks">
+          <view v-for="m in 3" :key="m" class="sk-rank">
+            <Skeleton w="20" h="20" r="6" />
+            <view class="sk-rank-main">
+              <Skeleton w="96" h="14" />
+              <Skeleton w="100%" h="6" r="3" />
+            </view>
+            <Skeleton w="56" h="14" />
+          </view>
+        </view>
+      </view>
+    </template>
 
     <!-- 请求失败 -->
     <EmptyState
@@ -192,6 +223,7 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import SvgIcon from '@/components/SvgIcon.vue';
 import EmptyState from '@/components/EmptyState.vue';
+import Skeleton from '@/components/Skeleton.vue';
 import RankList from '@/components/RankList.vue';
 import RingChart from '@/components/RingChart.vue';
 import TrendChart from '@/components/TrendChart.vue';
@@ -207,6 +239,18 @@ const tab = ref<'basic' | 'category'>('basic');
 const pickerVisible = ref(false);
 const loading = ref(false);
 const error = ref(false);
+/**
+ * 首屏骨架（2026-09-18）。
+ *
+ * 判据是 **正在请求 && 从未成功拿到过数据**，不是 `loading`：
+ * 切 Tab、改时段、切账本都会走 loadData，那些时刻旧报表还在屏幕上，
+ * 换成灰块是信息量倒退（用户本来能看着上个月的数据等新的）。
+ *
+ * 用 `loaded` 而不是 `hasData`：该账本该时段确实可能没有记录，
+ * 那种情况也必须停止铺骨架，否则骨架会永远停在那儿。
+ */
+const skeleton = ref(false);
+const loaded = ref(false);
 
 /**
  * 时段按 Tab **各自记忆**。
@@ -292,17 +336,21 @@ const incomeChartItems = computed(() => toChartItems(report.incomeCategoriesL2))
 async function loadData() {
   loading.value = true;
   error.value = false;
+  // 只有「从未成功过」才铺骨架；切 Tab / 改时段时旧报表还在，不铺
+  if (!loaded.value) skeleton.value = true;
   try {
     await accountStore.load();
     const data = await getReport(period.value, accountStore.currentId);
     Object.assign(report, data);
     // 时段回填：PeriodPicker 需要知道当前粒度才能正确回显模式
     report.period = data.period;
+    loaded.value = true;
   } catch (err) {
     console.error('[report] 加载失败', err);
     error.value = true;
   } finally {
     loading.value = false;
+    skeleton.value = false;
   }
 }
 
@@ -564,18 +612,43 @@ onMounted(loadData);
   color: $v11-text-primary;
 }
 
-/* ── 状态 ── */
-.state {
-  padding: $space-8 0;
+/*
+ * ── 首屏骨架 ──
+ *
+ * 骨架照抄真实结构，所以它**复用真容器的类**（.hero / .milestone / .panel），
+ * 只给内部排列补几条规则 —— 这样容器宽度、圆角、间距天然与真数据一致，
+ * 数据到位时不跳。
+ */
+.sk-balance {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: baseline;
+  gap: $space-2;
+  margin-top: $space-2;
 }
 
-.state-text {
-  font-size: $font-body-sm;
-  line-height: $lh-body-sm;
-  color: $v11-text-secondary;
+.sk-io {
+  margin-top: $space-2;
+}
+
+.sk-ranks {
+  margin-top: $space-3;
+  display: flex;
+  flex-direction: column;
+  gap: $space-3;
+}
+
+.sk-rank {
+  display: flex;
+  align-items: center;
+  gap: $space-3;
+}
+
+.sk-rank-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 /* ── 账本流水统计 ── */

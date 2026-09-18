@@ -44,15 +44,31 @@
 
       <!-- 结余（原 hero 内容，现与 nav 同处一块渐变） -->
       <view class="hero">
-        <view class="hero-main">
-          <text class="hero-balance">{{ formatMoney(total.balance) }}</text>
-          <text class="hero-balance-label">结余</text>
-        </view>
-        <view class="hero-io">
-          <text class="hero-io-item">收入 {{ formatMoney(total.income) }}</text>
-          <text class="hero-io-sep">|</text>
-          <text class="hero-io-item">支出 {{ formatMoney(total.expense) }}</text>
-        </view>
+        <!--
+          首屏：结余也铺骨架。
+          不铺的话屏幕上会是一个 **0.00** —— 它看起来像真数据（今天没花钱），
+          比空着更误导。骨架至少诚实地说明「还没算出来」。
+        -->
+        <template v-if="skeleton">
+          <view class="hero-main">
+            <Skeleton hero w="180" h="34" r="8" />
+            <Skeleton hero w="32" h="12" />
+          </view>
+          <view class="hero-io">
+            <Skeleton hero w="140" h="12" />
+          </view>
+        </template>
+        <template v-else>
+          <view class="hero-main">
+            <text class="hero-balance">{{ formatMoney(total.balance) }}</text>
+            <text class="hero-balance-label">结余</text>
+          </view>
+          <view class="hero-io">
+            <text class="hero-io-item">收入 {{ formatMoney(total.income) }}</text>
+            <text class="hero-io-sep">|</text>
+            <text class="hero-io-item">支出 {{ formatMoney(total.expense) }}</text>
+          </view>
+        </template>
       </view>
     </view>
 
@@ -70,7 +86,39 @@
     </view>
 
     <!-- ── 状态 ── -->
-    <view v-if="loading" class="state"><text class="state-text">加载中…</text></view>
+    <!--
+      首屏骨架：铺**真的分组形状**（组头 + 两条明细），而不是一个转圈。
+      本页是「组头（结余/收入/支出）+ 明细行」的重复结构，骨架照抄这个形状 ——
+      数据到位时布局几乎不跳（CLS 小），用户也能预判马上会出现什么。
+      ⚠️ 只在首屏出现；筛选/搜索/返回刷新时不铺（那时旧数据还在，换成灰块是倒退）。
+    -->
+    <view v-if="skeleton" class="groups">
+      <view v-for="n in 4" :key="n" class="group">
+        <view class="group-head sk-head">
+          <view class="group-title-wrap">
+            <Skeleton w="48" h="16" />
+            <Skeleton w="32" h="11" />
+          </view>
+          <view class="group-right">
+            <Skeleton w="112" h="12" />
+            <Skeleton w="128" h="12" />
+          </view>
+        </view>
+        <view class="group-body">
+          <view class="sk-rows">
+            <view v-for="m in 2" :key="m" class="sk-row">
+              <Skeleton circle :h="28" />
+              <view class="sk-row-main">
+                <Skeleton w="72" h="14" />
+                <Skeleton w="104" h="11" />
+              </view>
+              <Skeleton w="64" h="14" />
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
     <EmptyState
       v-else-if="error"
       icon="icon-alert"
@@ -448,6 +496,7 @@ import { onPageScroll, onLoad } from '@dcloudio/uni-app';
 import SvgIcon from '@/components/SvgIcon.vue';
 import CategoryIcon from '@/components/CategoryIcon.vue';
 import EmptyState from '@/components/EmptyState.vue';
+import Skeleton from '@/components/Skeleton.vue';
 import FlowFilterPanel, { type FlowFilter } from '@/components/FlowFilterPanel.vue';
 import FlowTypePicker from '@/components/FlowTypePicker.vue';
 import FlowCategoryPicker from '@/components/FlowCategoryPicker.vue';
@@ -640,6 +689,18 @@ const timeLabel = computed(() => filterModel.timeLabel);
 /* ── 数据 ── */
 const loading = ref(false);
 const error = ref(false);
+/**
+ * 首屏骨架（2026-09-18）。
+ *
+ * 判据是 **正在请求 && 从未成功拿到过数据**，不是 `loading`：
+ * 筛选、搜索、从记账页返回都会走 loadGroups，那些时刻旧列表还在屏幕上，
+ * 换成灰块是信息量倒退。只有「页面还是空的」才需要占位。
+ *
+ * 用 `loaded` 而不是「有没有分组」：空账本也必须停止铺骨架，
+ * 否则骨架会永远停在那儿（用户以为一直在加载）。
+ */
+const skeleton = ref(false);
+const loaded = ref(false);
 const groups = ref<SummaryItem[]>([]);
 const expanded = ref<Set<string>>(new Set());
 const details = ref<Record<string, { date: string; items: TransactionItem[] }[]>>({});
@@ -754,6 +815,8 @@ function baseParams() {
 async function loadGroups() {
   loading.value = true;
   error.value = false;
+  // 只有「从未成功过」才铺骨架；筛选/搜索/返回刷新时旧列表还在，不铺
+  if (!loaded.value) skeleton.value = true;
   try {
     await accountStore.load();
     groups.value = await getTransactionSummary(baseParams());
@@ -765,11 +828,13 @@ async function loadGroups() {
     if (groups.value.length) {
       await toggleGroup(groups.value[0]);
     }
+    loaded.value = true;
   } catch (err) {
     console.error('[flow] 分组加载失败', err);
     error.value = true;
   } finally {
     loading.value = false;
+    skeleton.value = false;
   }
 }
 
@@ -1208,6 +1273,7 @@ onMounted(async () => {
   await loadGroups();
   measureHeader();
 });
+
 </script>
 
 <style scoped lang="scss">
@@ -1693,6 +1759,38 @@ onMounted(async () => {
      ⚠️ FL-1 里页面底与卡片同白，同一个 token 两用；改名后这类"白载体"
         会被误当成页面底而变灰 —— 判断标准是「它是页面本身，还是浮在页面上的一块」。 */
   background: $v11-bg-card;
+}
+
+/* ── 首屏骨架 ──
+ *
+ * 骨架**照抄真实结构**（组头 + 明细行），而不是画一堆等宽灰条：
+ * 数据到位时布局几乎不跳（CLS 小），用户也能预判马上会出现什么形状。
+ *
+ * ⚠️ 组头骨架复用 .group-head 的 padding 与 flex，只覆盖 sticky：
+ *    骨架不该吸顶（它又不是真组头，吸着反而像页面卡住了）。
+ */
+.sk-head {
+  position: static;
+  justify-content: space-between;
+}
+
+.sk-rows {
+  padding: $space-2 0;
+}
+
+.sk-row {
+  display: flex;
+  align-items: center;
+  gap: $space-3;
+  padding: $space-3 $space-4;
+}
+
+.sk-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .detail-loading {
