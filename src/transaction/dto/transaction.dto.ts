@@ -68,6 +68,18 @@ export class CreateTransactionDTO {
   })
   @Rule(RuleType.string().optional())
   accountId?: string;
+
+  @ApiProperty({
+    description:
+      '客户端幂等键（离线补传用）。前端为一次离线记账生成 UUID 带上；' +
+      '重试时带同一个值 —— 服务端据此判定"这是同一次操作的重试"，直接返回已有记录，' +
+      '不会写重复。在线正常新增不传（保持 NULL）。',
+    example: 'b3f1c2e4-...',
+    required: false,
+    nullable: true,
+  })
+  @Rule(RuleType.string().max(64).optional().allow(null, ''))
+  clientId?: string;
 }
 
 export class UpdateTransactionDTO {

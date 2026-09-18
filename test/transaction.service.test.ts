@@ -127,6 +127,70 @@ describe('TransactionService', () => {
         ErrorCode.CATEGORY_NOT_FOUND,
       );
     });
+
+    it('★ 幂等：同一 clientId 重复提交只落一条（离线补传重试）', async () => {
+      const clientId = 'offline-uuid-001';
+      const first = await transactionService.create(userId, {
+        type: 'expense',
+        amount: '18.80',
+        categoryId: expenseCategoryId,
+        recordDate: '2026-06-01',
+        note: '离线记的一笔',
+        clientId,
+      });
+      const second = await transactionService.create(userId, {
+        type: 'expense',
+        amount: '18.80',
+        categoryId: expenseCategoryId,
+        recordDate: '2026-06-01',
+        note: '离线记的一笔',
+        clientId,
+      });
+      // 第二次返回同一条（不新建）
+      expect(second.id).toBe(first.id);
+
+      // 库里确实只有一条
+      const page = await transactionService.page(userId, {
+        accountId: defaultAccountId,
+        start: '2026-06-01',
+        end: '2026-06-01',
+        page: 1,
+        size: 100,
+      });
+      expect(page.list.filter((t) => t.clientId === clientId).length).toBe(1);
+    });
+
+    it('不带 clientId 的两次新增是两条（在线正常新增不受影响）', async () => {
+      const a = await transactionService.create(userId, {
+        type: 'expense',
+        amount: '5.00',
+        recordDate: '2026-06-02',
+        note: '同款咖啡',
+      });
+      const b = await transactionService.create(userId, {
+        type: 'expense',
+        amount: '5.00',
+        recordDate: '2026-06-02',
+        note: '同款咖啡',
+      });
+      expect(a.id).not.toBe(b.id);
+    });
+
+    it('clientId 为空字符串：视同不传（不做幂等）', async () => {
+      const a = await transactionService.create(userId, {
+        type: 'expense',
+        amount: '6.00',
+        recordDate: '2026-06-03',
+        clientId: '',
+      });
+      const b = await transactionService.create(userId, {
+        type: 'expense',
+        amount: '6.00',
+        recordDate: '2026-06-03',
+        clientId: '',
+      });
+      expect(a.id).not.toBe(b.id);
+    });
   });
 
   describe('page', () => {

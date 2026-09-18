@@ -19,6 +19,8 @@ import { Account } from './account.entity';
 @Index('idx_user_type', ['userId', 'type', 'recordDate'])
 @Index('idx_user_account_date', ['userId', 'accountId', 'recordDate'])
 @Index('idx_user_deleted', ['userId', 'deletedAt'])
+// 离线补传幂等键：同一用户下 client_id 唯一（NULL 不参与唯一约束，正常在线新增不传）
+@Index('uk_user_client_id', ['userId', 'clientId'], { unique: true })
 export class Transaction {
   @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
   id: string;
@@ -51,6 +53,17 @@ export class Transaction {
 
   @Column({ length: 255, default: '' })
   note: string;
+
+  /**
+   * 客户端幂等键（离线补传用）。
+   *
+   * 离线记一笔时前端生成一个 UUID 带上；网络恢复后补传可能重试（超时后重发），
+   * 若没有这个键就会写入两条重复流水。唯一约束 `(user_id, client_id)` +
+   * create() 里"先查后插"保证幂等。在线正常新增不传（NULL），不参与唯一约束
+   * （MySQL 唯一索引允许多个 NULL）。
+   */
+  @Column({ name: 'client_id', type: 'varchar', length: 64, nullable: true })
+  clientId: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt: Date;

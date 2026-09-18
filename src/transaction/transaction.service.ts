@@ -22,6 +22,17 @@ import {
  * 放在模块级常量而不是方法里：它是 SQL 片段、不含运行时变量，
  * 写进方法内每次调用都会重建，且容易被人误以为"可以按用户传参拼接"（那是注入风险）。
  */
+/**
+ * 判断是否 MySQL 唯一键冲突（ER_DUP_ENTRY = 1062）。
+ *
+ * 用于离线补传的并发兜底：两个请求同时通过"先查"，唯一键会拦住第二个，
+ * 此时回查返回已有记录即可（幂等语义）。
+ */
+function isDuplicateKeyError(err: unknown): boolean {
+  const e = err as { errno?: number; code?: string } | undefined;
+  return e?.errno === 1062 || e?.code === 'ER_DUP_ENTRY';
+}
+
 const GROUP_FORMAT: Record<SummaryUnit, string> = {
   year: "DATE_FORMAT(t.record_date, '%Y')",
   quarter: "CONCAT(DATE_FORMAT(t.record_date, '%Y'), '-Q', QUARTER(t.record_date))",
@@ -95,6 +106,20 @@ export class TransactionService {
   }
 
   async create(userId: string, dto: CreateTransactionDTO) {
+    /*
+     * 幂等：带 clientId 的（离线补传）先查后插。
+     *
+     * 离线补传会因超时/断网重试，同一 clientId 必须只落一次。
+     * 正常路径（99.99%）"先查后插"直接命中返回；并发极端情况由唯一键
+     * uk_user_client_id 兜底（撞键回查）。**不带 clientId 的在线新增走原路径**，
+     * 不查也不受唯一约束影响（NULL 不参与）。
+     */
+    const clientId = dto.clientId?.trim() || null;
+    if (clientId) {
+      const existing = await this.repo.findOne({ where: { userId, clientId } });
+      if (existing) return this.findById(userId, existing.id);
+    }
+
     const account = await this.resolveAccount(userId, dto.accountId);
     await this.assertCategoryValid(account.id, dto.categoryId, dto.type);
 
@@ -108,9 +133,20 @@ export class TransactionService {
       // 前端只传 HH:mm，TIME 列需要秒，这里统一补齐
       recordTime: dto.recordTime ? `${dto.recordTime}:00` : null,
       note: dto.note ?? '',
+      clientId,
     });
-    const saved = await this.repo.save(entity);
-    return this.findById(userId, saved.id);
+
+    try {
+      const saved = await this.repo.save(entity);
+      return this.findById(userId, saved.id);
+    } catch (err) {
+      // 并发下两个请求同时通过了上面的"先查"，唯一键会拦住第二个 —— 回查返回已有的
+      if (clientId && isDuplicateKeyError(err)) {
+        const dup = await this.repo.findOne({ where: { userId, clientId } });
+        if (dup) return this.findById(userId, dup.id);
+      }
+      throw err;
+    }
   }
 
   /** 分页查询 + 多维筛选（支持：时间/类型/分类多选/账本/关键词/金额区间/排序） */
