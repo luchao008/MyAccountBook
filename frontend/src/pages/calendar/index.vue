@@ -164,6 +164,7 @@
  * 范围：2000-01 ~ 2049-12（600 个月）。配合虚拟列表，滑动接近"无限"。
  */
 import { ref, reactive, computed, onMounted, nextTick } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
 import SvgIcon from '@/components/SvgIcon.vue';
 import CategoryIcon from '@/components/CategoryIcon.vue';
 import EmptyState from '@/components/EmptyState.vue';
@@ -500,6 +501,45 @@ onMounted(async () => {
   await accountStore.load();
   ensureMonthsAround(selectedYear.value, selectedMonth.value);
   loadDetail();
+});
+
+/**
+ * 从「记账页」（新增 / 编辑 / 复制）返回时刷新。
+ *
+ * ⚠️ **必须用 `onShow`，不能只靠 `onMounted`**（2026-09-17 修复）。
+ * `uni.navigateBack()` 返回时当前页面实例并没有被销毁，`onMounted` 只跑一次 ——
+ * 用户看到的就是「编辑完回来，日历格子与当日明细都还是旧的」。
+ *
+ * ⚠️ 光调 `loadDetail()` 不够：它只刷**当日明细列表**，
+ *    而日历格子读的是 `dayAgg`（按月的日聚合缓存）。改金额 / 改日期都会动到聚合值，
+ *    且**改日期时影响的是两个月**（原日期少一笔、新日期多一笔），
+ *    所以这里直接把缓存清掉重拉 —— 比"只失效某一个 key"更难写错。
+ *    实测代价：一次覆盖 3 个月的 summary 请求（收起态）。
+ *
+ * 首次进入由上面的 `onMounted` 负责（它要先 `accountStore.load()`，顺序不能变），
+ * 这里用 `firstShow` 跳过，避免同一页加载两次。
+ */
+let firstShow = true;
+onShow(() => {
+  if (firstShow) {
+    firstShow = false;
+    return;
+  }
+  // ① 当日明细
+  loadDetail();
+  // ② 日聚合缓存整体失效，按当前形态重新拉可见范围
+  dayAgg.value = {};
+  loadedMonths.clear();
+  if (expanded.value) {
+    ensureRange(
+      RANGE_START_YEAR + Math.floor(startIdx.value / 12),
+      startIdx.value % 12,
+      RANGE_START_YEAR + Math.floor(endIdx.value / 12),
+      endIdx.value % 12
+    );
+  } else {
+    ensureMonthsAround(selectedYear.value, selectedMonth.value);
+  }
 });
 </script>
 
