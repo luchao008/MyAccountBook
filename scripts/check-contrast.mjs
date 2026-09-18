@@ -775,8 +775,15 @@ section('13. 字号阶梯自洽（文档 §3.2 ↔ tokens.scss ↔ 各 .vue）')
   //       该组选择器在 template 里确实没有对应元素了，不是漏改。
   //    ⚠️ 新增的 `components/Skeleton.vue` **刻意不含任何 font-size**（纯几何占位、
   //       不承载文字），所以它不参与本计数 —— 后续往骨架里加文字时才需要动这三个数。
-  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 238, 0);
-  expect('  其中文字字号 $font-*', nText, 236, 0);
+  //    2026-09-18 更新二十六：App.vue 新增「uni.showModal / showToast 视觉覆盖」
+  //    （贴合项目 v1.1 设计：圆角 16、金色主按钮、白卡 + 发丝线）→ 新增 5 处字号：
+  //    .uni-modal__title($font-h2) / .uni-modal__bd($font-body) /
+  //    .uni-modal__textarea($font-body-lg) / .uni-modal__btn($font-body-lg)
+  //    （toast 保持 uni 默认外观，仅抬高 z-index）→ 文字 236 → 240，总数 238 → 242。
+  //    ⚠️ 这 4 处都真实承载文案（标题 / 正文 / 输入框 / 按钮），不是死样式；
+  //       也都显式声明了 line-height（WCAG 1.4.12）。
+  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 242, 0);
+  expect('  其中文字字号 $font-*', nText, 240, 0);
   expect('  其中图标尺寸 $icon-*', nIcon, 2, 0);
   expect('  其中字面量（必须为 0）', nLiteral, 0, 0);
 }

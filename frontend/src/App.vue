@@ -86,5 +86,97 @@ uni-scroll-view .uni-scroll-view::-webkit-scrollbar {
   width: 0;
   height: 0;
 }
+
+/*
+ * uni.showModal / showToast 的默认 z-index 是 999，低于本项目自定义弹层
+ * （如 CategoryPicker 的遮罩是 1200）—— 于是在自定义弹层里调 showModal
+ * （如「记一笔 → 分类选择器 → 新增二级分类」）时，弹窗会被盖在下面点不到。
+ *
+ * 必须用标签选择器 uni-modal / uni-toast（外层自定义元素），不是类 .uni-modal
+ * （内层 div）：uni-app H5 结构是 <uni-modal style="z-index:999"><div class="uni-modal">
+ * </div></uni-modal> —— 真正决定层叠的是外层自定义元素的 z-index，只改内层无效（踩过）。
+ * 抬到 3000（高于项目里所有自定义弹层，最高 1200），保证弹窗/提示永远在最上层。
+ */
+uni-modal,
+uni-toast,
+uni-mask,
+.uni-modal,
+.uni-mask,
+.uni-toast,
+.uni-sample-toast,
+.uni-simple-toast {
+  z-index: 3000 !important;
+}
+
+/*
+ * uni.showModal 的视觉覆盖（贴合本项目 v1.1 设计）。
+ *
+ * 默认样式是 uni-app 自带的旧 Web 风格：小圆角、标题偏细、正文灰、按钮蓝。
+ * 这里全部改走项目 token（圆角 16、金色主按钮、白卡 + 发丝线），
+ * 与 CategoryPicker 等自绘弹层观感一致。
+ * （showToast 保持 uni 默认外观，仅由上方规则抬高 z-index 保证不被遮挡。）
+ *
+ * ⚠️ 字号声明会参与 check:contrast §13 的计数断言 —— 改这里要同步改脚本与文档。
+ */
+.uni-modal {
+  border-radius: $v11-radius-card;
+  background: $v11-bg-card;
+  overflow: hidden;
+}
+
+.uni-modal__hd {
+  padding: 24px 24px 8px;
+}
+
+.uni-modal__title {
+  font-size: $font-h2;
+  line-height: $lh-h2;
+  font-weight: $weight-semibold;
+  color: $v11-text-primary;
+}
+
+.uni-modal__bd {
+  font-size: $font-body;
+  line-height: $lh-body;
+  color: $v11-text-secondary;
+  padding: 16px 24px 24px;
+}
+
+/* 输入框（editable modal 用）：内嵌槽底 + 中圆角，与项目输入框一致 */
+.uni-modal__textarea {
+  font-size: $font-body-lg;
+  line-height: $lh-body-lg;
+  color: $v11-text-primary;
+  background: $v11-bg-inset;
+  border-radius: $radius-md;
+  padding: 12px;
+}
+
+/* 按钮行：顶部发丝线 + 两个按钮之间的竖分隔线 */
+.uni-modal__ft {
+  border-top: 1px solid $v11-line;
+}
+
+uni-modal .uni-modal__btn {
+  font-size: $font-body-lg;
+  line-height: 48px;
+  color: $v11-text-primary !important;
+}
+
+/* 按下反馈：与项目其它可点元素一致（浅底填充，无位移） */
+uni-modal .uni-modal__btn:active {
+  background: $v11-bg-inset;
+}
+
+/* 两个按钮之间的竖分隔线（默认用 border-right，这里换成发丝线） */
+uni-modal .uni-modal__btn::after {
+  border-color: $v11-line;
+}
+
+/* 主按钮：品牌金（与「保存 / 确定」类主操作同色） */
+uni-modal .uni-modal__btn_primary {
+  color: $v11-gold !important;
+  font-weight: $weight-medium;
+}
 /* #endif */
 </style>
