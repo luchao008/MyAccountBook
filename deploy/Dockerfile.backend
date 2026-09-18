@@ -1,0 +1,30 @@
+# ── 后端镜像（多阶段）──
+FROM node:20-slim AS builder
+# ⚠️ 清空代理：Docker 会把宿主的 HTTP_PROXY(127.0.0.1:xxxx) 注入构建容器，
+#    容器内 127.0.0.1 不是宿主机 → 走死代理会让 npm ci 卡死/崩溃。
+ENV HTTP_PROXY="" HTTPS_PROXY="" http_proxy="" https_proxy=""
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY patches ./patches
+# 国内镜像源（容器内访问官方源慢/不稳）
+RUN npm ci --no-audit --no-fund --registry https://registry.npmmirror.com
+COPY tsconfig.json tsconfig.build.json ./
+COPY src ./src
+COPY bootstrap.js ./
+# 容器内 npm ci 不生成 node_modules/.bin 符号链接（实测 .bin 为空），
+# 故不用 npm run build，直接调 CLI 入口
+RUN node node_modules/@midwayjs/cli/bin/midway-bin.js build -c --tsConfig tsconfig.build.json
+
+# ── 运行镜像 ──
+# ⚠️ 不在运行阶段再跑 npm ci：该环境里 `npm ci --omit=dev` 会触发
+#    "Exit handler never called" 并留下残缺的 node_modules（@midwayjs/bootstrap
+#    目录为空 → 启动即 MODULE_NOT_FOUND）。直接复用 builder 装好的依赖，
+#    代价是镜像包含 devDependencies（约 200MB），换来可靠。
+FROM node:20-slim
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY package.json bootstrap.js ./
+EXPOSE 7001
+CMD ["node", "bootstrap.js"]

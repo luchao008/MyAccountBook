@@ -1,0 +1,10 @@
+# ── 前端镜像 ──
+# ⚠️ 不在容器内构建：该环境里容器内 `npm ci` 不稳定（多次 "Exit handler
+#    never called" 崩溃）。前端本就只是静态产物，改为**在 Mac 上先构建好**
+#    `frontend/dist/build/h5`，镜像只负责把它拷进 nginx。
+#    构建前请先跑：cd frontend && npm run build:h5
+#    （deploy/build-and-export.sh 已自动包含这一步）
+FROM nginx:alpine
+COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+COPY frontend/dist/build/h5 /usr/share/nginx/html
+EXPOSE 80

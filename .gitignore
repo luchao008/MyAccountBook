@@ -15,3 +15,7 @@ unpackage/
 
 # 智能体工作目录：内容与 memo/ 重复，项目记忆以 memo/ 为准
 .workbuddy/
+
+# 部署：导出的镜像 tar 很大，不入库；.env 含密码
+deploy/out/
+deploy/.env

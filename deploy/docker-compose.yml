@@ -1,0 +1,50 @@
+# 群晖 NAS 部署（x86_64）。镜像在 Mac 上构建后用 docker load 导入。
+# 起服务：docker compose up -d
+# 首次会自动建表（backend 的 command 先跑 migration 再启动）。
+services:
+  db:
+    image: mariadb:10.11
+    container_name: account-book-db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_PASSWORD}
+      MARIADB_DATABASE: ${DB_NAME}
+      MARIADB_CHARACTER_SET: utf8mb4
+      MARIADB_COLLATE: utf8mb4_general_ci
+    volumes:
+      # ⚠️ 群晖上这个目录必须先手动建好并给写权限（README §3 有说明）
+      - ${DATA_DIR}:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    # 不对宿主暴露端口：只在 compose 内网，供 backend 连接
+
+  backend:
+    image: account-book-backend:latest
+    container_name: account-book-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 7001
+      NODE_ENV: production
+    # 先跑迁移（幂等：已执行的会跳过）再启动服务，首次部署一条命令即可
+    command: sh -c "node ./node_modules/typeorm/cli.js migration:run -d dist/data-source.js && node bootstrap.js"
+
+  web:
+    image: account-book-frontend:latest
+    container_name: account-book-web
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${WEB_PORT}:80"
