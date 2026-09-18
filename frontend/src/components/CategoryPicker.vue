@@ -344,27 +344,13 @@ function onCreateChild() {
     uni.showToast({ title: '请先在左侧选择一个分类', icon: 'none' });
     return;
   }
-  uni.showModal({
-    title: `在「${parent.name}」下新建`,
-    editable: true,
-    placeholderText: '输入二级分类名称',
-    success: async (res) => {
-      if (!res.confirm) return;
-      const name = (res.content || '').trim();
-      if (!name) return;
-      try {
-        await categoryStore.add({
-          name,
-          type: props.type,
-          icon: 'cat-misc',
-          parentId: parent.id,
-        });
-        await measureAnchors();
-        uni.showToast({ title: '已新建', icon: 'success' });
-      } catch (err) {
-        console.error('[CategoryPicker] 新建失败', err);
-      }
-    },
+  /*
+   * 跳转到「新建分类」页去建二级分类（带 parentId + type）。
+   * 不在弹层里内联输入：新建页有图标选择等完整能力，体验更一致；
+   * 返回后由宿主页 onShow 重新拉分类列表（见 record/index.vue）。
+   */
+  uni.navigateTo({
+    url: `/pages/category-new/index?parentId=${parent.id}&type=${props.type}`,
   });
 }
 

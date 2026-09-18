@@ -71,7 +71,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { onLoad } from '@dcloudio/uni-app';
+import { onLoad, onShow } from '@dcloudio/uni-app';
 import AmountKeyboard from '@/components/AmountKeyboard.vue';
 import CategoryPicker from '@/components/CategoryPicker.vue';
 import DateTimePicker from '@/components/DateTimePicker.vue';
@@ -184,6 +184,26 @@ onLoad(async (options?: { id?: string; copyFrom?: string }) => {
   }
 
   uni.setNavigationBarTitle({ title: `记一笔 · ${accountStore.currentName}` });
+});
+
+/**
+ * 从「新建分类」页返回时刷新分类列表。
+ *
+ * CategoryPicker 的「+」会跳去 `pages/category-new` 新建二级分类；
+ * navigateBack 回来时本页实例未销毁、onLoad 不会再跑 —— 不刷新的话
+ * 选择器里看不到刚建的分类。首次进入由 onLoad 负责，这里用 firstShow 跳过。
+ */
+let firstShow = true;
+onShow(async () => {
+  if (firstShow) {
+    firstShow = false;
+    return;
+  }
+  try {
+    await categoryStore.load(true);
+  } catch (err) {
+    console.warn('[record] 返回后刷新分类失败', err);
+  }
 });
 
 async function loadDetail(id: string) {
