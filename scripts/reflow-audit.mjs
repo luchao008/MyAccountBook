@@ -94,6 +94,7 @@ const PAGES = [
   ['account', '#/pages/account/index'],
   ['record', '#/pages/record/index'],
   ['export', '#/pages/export/index'],
+  ['import', '#/pages/import/index', { guard: '.nav-inner' }],
   ['account-new', '#/pages/account-new/index'],
   ['account-category', '#/pages/account-category/index'],
   ['account-import', '#/pages/account-import/index'],
