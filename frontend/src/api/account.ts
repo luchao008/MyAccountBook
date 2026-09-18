@@ -75,15 +75,22 @@ export function getDeletePreview(id: string): Promise<{ transactionCount: number
 
 /**
  * 删除账本。必须传 confirmName 且与账本名完全一致，否则后端拒绝（40001）。
- * 走查询串而不是 body：DELETE 带 body 在部分客户端不受支持。
+ *
+ * ⚠️ **查询串必须拼进 URL，不能走 `http.delete(url, { params })`**（2026-09-17 修复）。
+ *
+ * luch-request 的签名是 `delete(url, data, options)` —— 第二个参数是**请求体**，
+ * 不是 axios 那种 config。于是 `{ params: {...} }` 被当成 body 发出去（还是 JSON），
+ * URL 上根本没有查询串，后端 `DeleteAccountQueryDTO.confirmName` 直接报
+ * 「"confirmName" 是必须的」（422 / 40000）。
+ * 用户视角就是「名字明明输对了，却提示没拿到名称」。
+ *
+ * 与 `category.ts` / `transaction.ts` 保持一致：查询串直接拼进 URL。
  */
 export function deleteAccount(
   id: string,
   confirmName: string
 ): Promise<{ success: boolean; deletedTransactions: number }> {
-  return http.delete(`/accounts/${id}`, {
-    params: { confirmName },
-  }) as any;
+  return http.delete(`/accounts/${id}?confirmName=${encodeURIComponent(confirmName)}`) as any;
 }
 
 /** 合并预检：算出会迁多少笔、去重多少笔 */
