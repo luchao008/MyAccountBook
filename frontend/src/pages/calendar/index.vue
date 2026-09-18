@@ -44,7 +44,16 @@
 
     <!-- 当日明细 -->
     <view class="detail">
-      <view v-if="loadingDetail" class="state"><text class="state-text">加载中…</text></view>
+      <view v-if="loadingDetail">
+        <view v-for="n in 4" :key="n" class="sk-txn">
+          <Skeleton circle :h="28" />
+          <view class="sk-txn-main">
+            <Skeleton w="72" h="14" />
+            <Skeleton w="104" h="11" />
+          </view>
+          <Skeleton w="64" h="14" />
+        </view>
+      </view>
       <EmptyState
         v-else-if="!dayItems.length"
         icon="icon-inbox"
@@ -159,6 +168,7 @@ import SvgIcon from '@/components/SvgIcon.vue';
 import CategoryIcon from '@/components/CategoryIcon.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import MonthGrid from '@/components/MonthGrid.vue';
+import Skeleton from '@/components/Skeleton.vue';
 import { useAccountStore } from '@/store/account';
 import { getTransactions, getTransactionSummary, type TransactionItem } from '@/api/transaction';
 import { useTxnSwipe } from '@/utils/txnSwipe';
@@ -645,6 +655,24 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* 明细骨架：照抄 .txn 的行几何（图标 + 两行文字 + 金额），
+   数据到位时布局几乎不跳 */
+.sk-txn {
+  display: flex;
+  align-items: center;
+  padding: $space-3 $space-4;
+  border-bottom: 1px solid $v11-line;
+}
+
+.sk-txn-main {
+  flex: 1;
+  min-width: 0;
+  margin-left: $space-3;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .state-text {

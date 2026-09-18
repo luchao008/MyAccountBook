@@ -16,7 +16,25 @@
       <text class="tip-text">删除的流水会保留 7 天，超期自动清除</text>
     </view>
 
-    <view v-if="loading" class="state"><text class="state-text">加载中…</text></view>
+    <!-- 骨架：照抄「组头 + 卡片内两行」的真实形状 -->
+    <view v-if="loading" class="list">
+      <view v-for="n in 3" :key="n">
+        <view class="group-head"><Skeleton w="120" h="12" /></view>
+        <view class="card">
+          <view v-for="m in 2" :key="m" class="item">
+            <view class="item-top">
+              <Skeleton w="44" h="12" />
+              <Skeleton w="56" h="14" />
+            </view>
+            <view class="item-main">
+              <view class="item-icon"><Skeleton circle :h="28" /></view>
+              <view class="item-name"><Skeleton w="80" h="14" /></view>
+              <view class="item-amount"><Skeleton w="56" h="14" /></view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
     <EmptyState
       v-else-if="!list.length"
       icon="icon-inbox"
@@ -70,6 +88,7 @@ import { ref, computed, onMounted } from 'vue';
 import SvgIcon from '@/components/SvgIcon.vue';
 import CategoryIcon from '@/components/CategoryIcon.vue';
 import EmptyState from '@/components/EmptyState.vue';
+import Skeleton from '@/components/Skeleton.vue';
 import { getDeletedTransactions, restoreTransaction, type TransactionItem } from '@/api/transaction';
 import { formatMoney } from '@/utils/format';
 

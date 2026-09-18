@@ -2,8 +2,16 @@
   <view class="page">
     <!-- ── 视图一：账本选择（本页默认视图） ── -->
     <scroll-view v-show="activeView === 'select'" class="list" scroll-y>
-      <!-- 加载中 -->
-      <view v-if="loading" class="tip">加载中...</view>
+      <!-- 加载中：骨架照抄 .account-item 的行几何（图标 + 两行文字 + 对勾位） -->
+      <view v-if="loading">
+        <view v-for="n in 4" :key="n" class="account-item">
+          <view class="item-icon"><Skeleton circle :h="22" /></view>
+          <view class="item-main">
+            <Skeleton w="96" h="14" />
+            <view class="sk-meta"><Skeleton w="64" h="11" /></view>
+          </view>
+        </view>
+      </view>
 
       <!-- 加载失败 -->
       <view v-else-if="failed" class="state-box">
@@ -77,6 +85,7 @@ import { ref, computed } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import EmptyState from '@/components/EmptyState.vue';
 import SvgIcon from '@/components/SvgIcon.vue';
+import Skeleton from '@/components/Skeleton.vue';
 import TabBar from '@/components/TabBar.vue';
 import MineView from '@/components/views/MineView.vue';
 import { useUserStore } from '@/store/user';
@@ -325,6 +334,11 @@ onShow(async () => {
   line-height: $lh-caption;
   color: $v11-text-secondary;
   margin-top: 2px;
+}
+
+/* 骨架第二行与第一行的间距（对齐 .item-meta 的 2px） */
+.sk-meta {
+  margin-top: 4px;
 }
 
 .item-check {
