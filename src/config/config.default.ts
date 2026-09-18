@@ -33,6 +33,38 @@ export default {
     throwValidateError: true,
   },
 
+  /**
+   * CORS（@midwayjs/cross-domain）。
+   *
+   * 背景：开发期前端走 Vite 代理（/api -> 127.0.0.1:7001）绕开跨域，
+   * 但**前端要独立域名部署时**必须由后端放行 —— 这里就是那个放行点。
+   *
+   * 策略：**白名单**，不是「反射任意 Origin」。允许的来源由环境变量
+   * `CORS_ORIGINS`（逗号分隔）提供，默认只放行本地开发源；
+   * 部署到独立域名时改环境变量即可，无需改代码。
+   *
+   * 只放行命中白名单的 Origin：不在名单里的返回 false，组件会跳过 CORS 头
+   * （浏览器侧照旧拦截）。非浏览器请求（无 Origin 头）不受影响。
+   *
+   * 本项目鉴权用 Bearer token（不依赖 cookie），故 credentials 保持 false。
+   */
+  cors: {
+    origin: (() => {
+      const raw = process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173';
+      const allow = raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      return (req: { get: (k: string) => string }) => {
+        const origin = req.get('origin');
+        return origin && allow.includes(origin) ? origin : false;
+      };
+    })(),
+    allowMethods: 'GET,HEAD,PUT,POST,DELETE,PATCH',
+    allowHeaders: 'Content-Type,Authorization',
+    credentials: false,
+  },
+
   // Swagger 接口文档
   // 访问 http://127.0.0.1:7001/swagger-ui
   swagger: {

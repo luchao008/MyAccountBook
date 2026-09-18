@@ -4,13 +4,14 @@ import * as typeorm from '@midwayjs/typeorm';
 import * as validate from '@midwayjs/validate';
 import * as jwt from '@midwayjs/jwt';
 import * as swagger from '@midwayjs/swagger';
+import * as crossDomain from '@midwayjs/cross-domain';
 import { join } from 'path';
 import { DefaultErrorFilter } from './filter/default.filter';
 import { JwtGuardMiddleware } from './middleware/jwt.guard';
 import { ResponseMiddleware } from './middleware/response.middleware';
 
 @Configuration({
-  imports: [koa, typeorm, validate, jwt, swagger],
+  imports: [koa, typeorm, validate, jwt, swagger, crossDomain],
   importConfigs: [join(__dirname, './config')],
   // Midway v4 的文件扫描器需显式声明，
   // 否则 controller / middleware / filter 等文件不会被自动加载
