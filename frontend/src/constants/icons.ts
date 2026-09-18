@@ -106,6 +106,8 @@ export const UI_ICONS = {
    *    在视觉上难以区分 —— 圆点版与它一眼可分。
    */
   'icon-grip': 'M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01',
+  /* 导入（箭头落入托盘） */ 'icon-upload':
+    'M12 15V4M8.5 7.5 12 4l3.5 3.5M4 14v4.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V14',
 } as const;
 
 export type UiIconName = keyof typeof UI_ICONS;

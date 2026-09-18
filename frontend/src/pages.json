@@ -102,6 +102,13 @@
       "style": {
         "navigationBarTitleText": "从母本导入"
       }
+    },
+    {
+      "path": "pages/import/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "流水导入"
+      }
     }
   ],
   "globalStyle": {

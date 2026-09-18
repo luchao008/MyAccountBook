@@ -46,6 +46,11 @@
         <text class="menu-text">数据导出</text>
         <SvgIcon class="menu-arrow" name="icon-chevron-right" :size="16" />
       </view>
+      <view class="menu-item" @click="goImport">
+        <SvgIcon class="menu-icon" name="icon-upload" :size="28" />
+        <text class="menu-text">流水导入</text>
+        <SvgIcon class="menu-arrow" name="icon-chevron-right" :size="16" />
+      </view>
     </view>
 
     <view class="logout-box">
@@ -96,6 +101,10 @@ function goRecycle() {
 
 function goExport() {
   uni.navigateTo({ url: '/pages/export/index' });
+}
+
+function goImport() {
+  uni.navigateTo({ url: '/pages/import/index' });
 }
 
 function onLogout() {
