@@ -111,3 +111,30 @@ export function batchHideCategories(
 ): Promise<{ success: boolean; updated: number; hidden: boolean }> {
   return http.post('/categories/batch-hide', { accountId, ids, hidden }) as any;
 }
+
+/**
+ * 拖动排序：把某一层级下的分类按 `ids` 顺序重排。
+ *
+ * ⚠️ **作用域是 `(accountId, type, parentId)` 三元组**，不是整个账本：
+ *   - 支出与收入的一级分类是两条独立列表，各自从 0 开始编号（所以要传 `type`）
+ *   - 一级与二级是两层独立顺序（`parentId` 传 `null` = 排一级）
+ *
+ * ⚠️ **`ids` 必须是该层级下的全集**（顺序即目标顺序）。只传一部分后端会拒绝
+ * （`40013`）而不是"剩下的保持原样"—— 那会产生一个没人能预测的顺序。
+ *
+ * 失败码：`40011` 有重复 id / `40012` 跨层级或跨收支类型 / `40013` 不是全集 / `40401` 分类不存在。
+ */
+export function reorderCategories(
+  accountId: string,
+  type: 'income' | 'expense',
+  parentId: string | null,
+  ids: string[]
+): Promise<{ success: boolean; updated: number }> {
+  // parentId 传空字符串表示"排一级"（后端 DTO 用 optional().allow(null, '') 接）
+  return http.post('/categories/reorder', {
+    accountId,
+    type,
+    parentId: parentId ?? '',
+    ids,
+  }) as any;
+}

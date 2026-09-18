@@ -146,3 +146,58 @@ export class BatchHideCategoryDTO {
   @Rule(RuleType.boolean().required())
   hidden: boolean;
 }
+
+/**
+ * 分类拖动排序。
+ *
+ * ────────────────────────────────────────────────────────────────────────
+ * **作用域是 `(accountId, type, parentId)` 三元组**，不是「整个账本」。
+ *
+ * 为什么必须带 `type`：分类管理页是**按收支类型进入**的
+ * （`?type=expense|income`），页面上一次只显示一种类型的一级分类。
+ * 支出与收入的一级分类是两条独立的列表，各自从 0 开始编号即可 ——
+ * 强行统一编号反而会让「排支出」连带改动收入的 sort 值。
+ *
+ * 为什么必须带 `parentId`：一级与二级是两层独立的顺序。
+ * `parentId` 传空 / 不传 = 排一级分类；传具体 ID = 排该一级下的二级分类。
+ *
+ * ⚠️ **`ids` 必须是该作用域下的全集**（顺序即目标顺序）。
+ * 只传子集时归一化会把未列出的分类挤到未知位置，所以后端直接拒绝
+ * （`40013`），而不是「先按传入的重排、剩下的保持原样」—— 后者会产生
+ * 一个没人能预测的顺序。
+ * ────────────────────────────────────────────────────────────────────────
+ */
+export class ReorderCategoryDTO {
+  @ApiProperty({ description: '所属账本 ID（必传）', example: '1', required: true })
+  @Rule(RuleType.string().required())
+  accountId: string;
+
+  @ApiProperty({
+    description: '收支类型。一级分类按类型分开排序，所以必传',
+    example: 'expense',
+    enum: ['income', 'expense'],
+    required: true,
+  })
+  @Rule(RuleType.string().required().valid('income', 'expense'))
+  type: 'income' | 'expense';
+
+  @ApiProperty({
+    description: '要排序的层级：传具体 ID = 排该一级分类下的二级分类；传空 / 不传 = 排一级分类。',
+    example: '1',
+    required: false,
+    nullable: true,
+  })
+  @Rule(RuleType.string().optional().allow(null, ''))
+  parentId?: string;
+
+  @ApiProperty({
+    description:
+      '该层级下的**全部**分类 ID，顺序即目标顺序（第 0 个排最前）。' +
+      '不能只传一部分：后端会与库内该层级的全集比对，对不上整单拒绝（40013）。' +
+      '含重复 id 时拒绝（40011）。',
+    example: ['3', '1', '2'],
+    required: true,
+  })
+  @Rule(RuleType.array().items(RuleType.string().required()).required().min(1).max(500))
+  ids: string[];
+}

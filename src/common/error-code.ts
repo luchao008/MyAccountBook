@@ -49,6 +49,18 @@ export enum ErrorCode {
   /** 默认账本（分类母本）的分类不允许删除（设计 D16） */
   CATEGORY_DEFAULT_PROTECTED = 40006,
 
+  // 分类排序（400xx 段）
+  /**
+   * 排序列表里有重复的分类 ID。
+   * 单列一个码而不并进「不完整」：重复与漏传是两种不同的客户端 bug，
+   * 修法不同（去重 vs 补全），混在一个码里排查时还得再猜。
+   */
+  CATEGORY_REORDER_DUPLICATE = 40011,
+  /** 排序列表里混入了其他层级或其他收支类型的分类（跨级拖动） */
+  CATEGORY_REORDER_LEVEL_MISMATCH = 40012,
+  /** 排序列表不是该层级的全集 —— 归一化会漏掉未列出的分类 */
+  CATEGORY_REORDER_INCOMPLETE = 40013,
+
   // 服务端
   INTERNAL = 50000,
 }

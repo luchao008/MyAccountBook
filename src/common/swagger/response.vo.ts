@@ -178,6 +178,29 @@ export class BatchHideResponseVO {
   message: string;
 }
 
+/** 分类拖动排序结果 */
+export class ReorderCategoryResultVO {
+  @ApiProperty({ description: '操作结果', example: true })
+  success: boolean;
+
+  @ApiProperty({
+    description: '实际重排的分类数量。等于传入的 id 数（后端要求传全集）',
+    example: 13,
+  })
+  updated: number;
+}
+
+export class ReorderCategoryResponseVO {
+  @ApiProperty({ example: 0 })
+  code: number;
+
+  @ApiProperty({ type: ReorderCategoryResultVO })
+  data: ReorderCategoryResultVO;
+
+  @ApiProperty({ example: 'success' })
+  message: string;
+}
+
 /** 账单内的分类快照（未分类时为 null） */
 export class TransactionCategoryVO {
   @ApiProperty({ description: '分类 ID', example: '1' })

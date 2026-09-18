@@ -6,6 +6,7 @@ import {
   deleteCategory,
   batchDeleteCategories,
   batchHideCategories,
+  reorderCategories,
   type CategoryItem,
 } from '@/api/category';
 import { useAccountStore } from '@/store/account';
@@ -156,6 +157,24 @@ export const useCategoryStore = defineStore('category', {
     /** 批量隐藏（hidden=true）或恢复显示（hidden=false） */
     async batchHide(ids: string[], hidden: boolean) {
       const res = await batchHideCategories(this.currentAccountId(), ids, hidden);
+      await this.load(true);
+      return res;
+    },
+
+    /**
+     * 拖动排序：把某一层级下的分类按 `ids` 顺序重排。
+     *
+     * ⚠️ **成功后强制 `load(true)` 重拉**，而不是本地改 `sort` 就完事：
+     * 后端会把 `sort` 归一化成 `0..n-1`（可能与我们本地推断的值不同），
+     * 本地推断一旦与服务端不一致，下次进页面顺序就会「跳」一下。
+     * 重拉一次的成本是一次 GET，换来的是「屏幕上看到的顺序就是库里的顺序」。
+     */
+    async reorder(
+      type: 'income' | 'expense',
+      parentId: string | null,
+      ids: string[]
+    ): Promise<{ success: boolean; updated: number }> {
+      const res = await reorderCategories(this.currentAccountId(), type, parentId, ids);
       await this.load(true);
       return res;
     },

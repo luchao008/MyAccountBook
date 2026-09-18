@@ -6,7 +6,12 @@ import { Account } from '../entity/account.entity';
 import { Transaction } from '../entity/transaction.entity';
 import { BusinessError } from '../common/business.error';
 import { ErrorCode } from '../common/error-code';
-import { CreateCategoryDTO, UpdateCategoryDTO, QueryCategoryDTO } from './dto/category.dto';
+import {
+  CreateCategoryDTO,
+  UpdateCategoryDTO,
+  QueryCategoryDTO,
+  ReorderCategoryDTO,
+} from './dto/category.dto';
 
 /** 最多两级：二级分类下不允许再挂子分类 */
 const MAX_DEPTH = 2;
@@ -191,6 +196,88 @@ export class CategoryService {
     }
 
     return { success: true, updated: targets.length, hidden };
+  }
+
+  /**
+   * 拖动排序：把某一层级下的分类按传入顺序重排，`sort` 归一化为 `0..n-1`。
+   *
+   * ────────────────────────────────────────────────────────────────────────
+   * **作用域 = `(accountId, type, parentId)`**（原因见 `ReorderCategoryDTO` 注释）。
+   *
+   * 四道校验，任何一道不过就**整单拒绝**，不做部分写入：
+   *
+   *   ① 列表内有重复 id        → 40011
+   *   ② id 不属于当前账本      → 40401（`findOwned` 已有语义）
+   *   ③ id 落在作用域之外      → 40012（跨级 / 跨收支类型）
+   *   ④ id 集合 ≠ 该层级全集   → 40013
+   *
+   * 为什么 ④ 必须拒绝而不是「按传入的重排、剩下的保持原样」：
+   * 归一化会重写 `0..n-1`，未列出的分类原本的 sort 必然与新值撞车或错位，
+   * 结果是一个**没人能预测的顺序**。宁可报错让客户端把全集补齐。
+   *
+   * 写入放在**一个事务**里：排序是多行的一致性约束，中途失败留下半套顺序
+   * 比整体失败更难恢复（用户看不出哪几行是新的）。
+   * ────────────────────────────────────────────────────────────────────────
+   */
+  async reorder(userId: string, dto: ReorderCategoryDTO) {
+    const accountId = dto.accountId;
+    await this.assertAccount(userId, accountId);
+
+    const parentId = dto.parentId || null;
+
+    // 排二级时必须校验父：存在、属于该账本、且自身是一级
+    if (parentId) {
+      const parent = await this.resolveParent(accountId, parentId);
+      // 父的 type 与请求的 type 不一致 → 是在排「支出」却指定了收入父
+      if (parent && parent.type !== dto.type) {
+        throw new BusinessError(
+          '指定的父分类与收支类型不一致',
+          ErrorCode.CATEGORY_REORDER_LEVEL_MISMATCH,
+        );
+      }
+    }
+
+    // ① 重复
+    const unique = new Set(dto.ids);
+    if (unique.size !== dto.ids.length) {
+      throw new BusinessError('排序列表里有重复的分类 ID', ErrorCode.CATEGORY_REORDER_DUPLICATE);
+    }
+
+    // ② 归属（任一 id 不属于该账本 → 40401）
+    const found = await this.findOwned(accountId, dto.ids);
+
+    // ③ 层级：先把该作用域的全集捞出来
+    const scope = await this.repo.find({
+      where: { accountId, type: dto.type, parentId: parentId ?? IsNull() },
+      select: ['id', 'name'],
+    });
+    const scopeIds = new Set(scope.map((c) => c.id));
+
+    const outsider = found.find((c) => !scopeIds.has(c.id));
+    if (outsider) {
+      throw new BusinessError(
+        `分类「${outsider.name}」不属于本次排序的层级（不能跨层级拖动）`,
+        ErrorCode.CATEGORY_REORDER_LEVEL_MISMATCH,
+      );
+    }
+
+    // ④ 全集
+    if (scopeIds.size !== dto.ids.length) {
+      throw new BusinessError(
+        `排序列表不完整：该层级共 ${scopeIds.size} 个分类，收到 ${dto.ids.length} 个`,
+        ErrorCode.CATEGORY_REORDER_INCOMPLETE,
+      );
+    }
+
+    // 写入：事务内按数组下标归一化为 0..n-1
+    await this.dataSource.transaction(async (mgr) => {
+      const repo = mgr.getRepository(Category);
+      for (let i = 0; i < dto.ids.length; i += 1) {
+        await repo.update({ id: dto.ids[i], accountId }, { sort: i });
+      }
+    });
+
+    return { success: true, updated: dto.ids.length };
   }
 
   async findById(userId: string, accountId: string, id: string) {

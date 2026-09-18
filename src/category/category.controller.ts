@@ -8,6 +8,7 @@ import {
   QueryCategoryDTO,
   BatchDeleteCategoryDTO,
   BatchHideCategoryDTO,
+  ReorderCategoryDTO,
 } from './dto/category.dto';
 import {
   CategoryListResponseVO,
@@ -15,6 +16,7 @@ import {
   DeleteResponseVO,
   BatchDeleteResponseVO,
   BatchHideResponseVO,
+  ReorderCategoryResponseVO,
   ErrorResponseVO,
 } from '../common/swagger/response.vo';
 
@@ -135,5 +137,28 @@ export class CategoryController {
   @Post('/batch-hide')
   async batchHide(@Body() dto: BatchHideCategoryDTO) {
     return this.categoryService.batchHide(this.userId, dto.accountId, dto.ids, dto.hidden);
+  }
+
+  @ApiOperation({
+    summary: '分类拖动排序',
+    description:
+      '把某一层级下的分类按传入顺序重排，`sort` 归一化为 `0..n-1`。' +
+      '**作用域是 `(accountId, type, parentId)`** —— 支出与收入的一级分类各自独立编号，' +
+      '一级与二级也是两层独立的顺序（`parentId` 传空 / 不传 = 排一级分类）。' +
+      '`ids` 必须是该层级下的**全集**，只传一部分会被拒绝（40013）；' +
+      '有重复 id 拒绝（40011）；混入其他层级的分类拒绝（40012）。' +
+      '写入在单个事务内完成。',
+  })
+  @ApiResponse({ status: 200, type: ReorderCategoryResponseVO, description: '排序成功' })
+  @ApiResponse({ status: 422, type: ErrorResponseVO, description: '参数校验失败' })
+  @ApiResponse({
+    status: 200,
+    type: ErrorResponseVO,
+    description:
+      '重复 id code=40011 / 跨层级 code=40012 / 列表不完整 code=40013 / 分类不存在 code=40401',
+  })
+  @Post('/reorder')
+  async reorder(@Body() dto: ReorderCategoryDTO) {
+    return this.categoryService.reorder(this.userId, dto);
   }
 }

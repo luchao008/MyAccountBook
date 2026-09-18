@@ -792,4 +792,286 @@ describe('CategoryService', () => {
       );
     });
   });
+
+  /**
+   * 拖动排序。
+   *
+   * ⚠️ **每个用例用独立账本**：reorder 的语义是「该层级的全集」，
+   *    共享账本时前面用例建的分类会让 `ids` 永远凑不齐全集 → 全是 40013 假失败。
+   *    （同 §9.12「测试数据互相污染」的教训，只是换了个维度。）
+   */
+  describe('reorder（拖动排序）', () => {
+    /** 建一个空账本（不从母本复制分类），再按需造 n 个同层分类 */
+    async function freshAccount(
+      count: number,
+      type: 'income' | 'expense' = 'expense',
+      parentId?: string,
+    ) {
+      const acc = await accountService.create(userId, {
+        name: `排序${Math.random().toString(36).slice(2, 10)}`,
+        copyAll: false,
+        categoryIds: [],
+      });
+      const list = [];
+      for (let i = 0; i < count; i += 1) {
+        list.push(
+          await categoryService.create(userId, {
+            accountId: acc.id,
+            name: `${type === 'income' ? '收' : '支'}${i}`,
+            type,
+            sort: i,
+            parentId,
+          }),
+        );
+      }
+      return { accountId: acc.id, list };
+    }
+
+    /** 取某层级的当前顺序（只留 name，便于断言） */
+    async function orderOf(accountId: string, type: 'income' | 'expense', parentId?: string) {
+      const all = await categoryService.list(userId, { accountId });
+      return all
+        .filter((c) => c.type === type && (c.parentId ?? null) === (parentId ?? null))
+        .map((c) => c.name);
+    }
+
+    it('重排一级分类：顺序生效且 sort 归一化为 0..n-1', async () => {
+      const { accountId, list } = await freshAccount(3);
+      // 原顺序 支0 支1 支2 → 目标 支2 支0 支1
+      const target = [list[2].id, list[0].id, list[1].id];
+      const res = await categoryService.reorder(userId, {
+        accountId,
+        type: 'expense',
+        ids: target,
+      });
+      expect(res).toEqual({ success: true, updated: 3 });
+      expect(await orderOf(accountId, 'expense')).toEqual(['支2', '支0', '支1']);
+
+      const all = await categoryService.list(userId, { accountId });
+      const sortById = new Map(all.map((c) => [c.id, c.sort]));
+      expect(target.map((id) => sortById.get(id))).toEqual([0, 1, 2]);
+    });
+
+    it('重排二级分类：只动该父下的顺序，一级不受影响', async () => {
+      const { accountId, list } = await freshAccount(1);
+      const parentId = list[0].id;
+      const kids = [];
+      for (let i = 0; i < 3; i += 1) {
+        kids.push(
+          await categoryService.create(userId, {
+            accountId,
+            name: `子${i}`,
+            type: 'expense',
+            parentId,
+            sort: i,
+          }),
+        );
+      }
+      await categoryService.reorder(userId, {
+        accountId,
+        type: 'expense',
+        parentId,
+        ids: [kids[1].id, kids[2].id, kids[0].id],
+      });
+      expect(await orderOf(accountId, 'expense', parentId)).toEqual(['子1', '子2', '子0']);
+      // 一级仍是它自己一个，未被动过
+      expect(await orderOf(accountId, 'expense')).toEqual(['支0']);
+    });
+
+    it('作用域含 type：排支出不影响收入一级顺序', async () => {
+      const acc = await accountService.create(userId, {
+        name: `排序双类型${Math.random().toString(36).slice(2, 8)}`,
+        copyAll: false,
+        categoryIds: [],
+      });
+      const ex = [];
+      const inc = [];
+      for (let i = 0; i < 2; i += 1) {
+        ex.push(
+          await categoryService.create(userId, {
+            accountId: acc.id,
+            name: `支${i}`,
+            type: 'expense',
+            sort: i,
+          }),
+        );
+        inc.push(
+          await categoryService.create(userId, {
+            accountId: acc.id,
+            name: `收${i}`,
+            type: 'income',
+            sort: i,
+          }),
+        );
+      }
+      // 只反转支出
+      await categoryService.reorder(userId, {
+        accountId: acc.id,
+        type: 'expense',
+        ids: [ex[1].id, ex[0].id],
+      });
+      expect(await orderOf(acc.id, 'expense')).toEqual(['支1', '支0']);
+      expect(await orderOf(acc.id, 'income')).toEqual(['收0', '收1']);
+    });
+
+    it('有重复 id → 40011', async () => {
+      const { accountId, list } = await freshAccount(2);
+      await expectBusinessError(
+        () =>
+          categoryService.reorder(userId, {
+            accountId,
+            type: 'expense',
+            ids: [list[0].id, list[0].id],
+          }),
+        ErrorCode.CATEGORY_REORDER_DUPLICATE,
+      );
+    });
+
+    it('只传一部分（不是全集）→ 40013', async () => {
+      const { accountId, list } = await freshAccount(3);
+      await expectBusinessError(
+        () =>
+          categoryService.reorder(userId, {
+            accountId,
+            type: 'expense',
+            ids: [list[2].id, list[0].id],
+          }),
+        ErrorCode.CATEGORY_REORDER_INCOMPLETE,
+      );
+    });
+
+    it('把二级分类混进一级排序 → 40012', async () => {
+      const { accountId, list } = await freshAccount(2);
+      const kid = await categoryService.create(userId, {
+        accountId,
+        name: '子混入',
+        type: 'expense',
+        parentId: list[0].id,
+      });
+      await expectBusinessError(
+        () =>
+          categoryService.reorder(userId, {
+            accountId,
+            type: 'expense',
+            // 少一个一级、多一个二级 → 先撞层级校验
+            ids: [list[0].id, kid.id],
+          }),
+        ErrorCode.CATEGORY_REORDER_LEVEL_MISMATCH,
+      );
+    });
+
+    it('把收入分类混进支出排序 → 40012', async () => {
+      const acc = await accountService.create(userId, {
+        name: `排序跨类型${Math.random().toString(36).slice(2, 8)}`,
+        copyAll: false,
+        categoryIds: [],
+      });
+      const ex = await categoryService.create(userId, {
+        accountId: acc.id,
+        name: '支X',
+        type: 'expense',
+      });
+      const inc = await categoryService.create(userId, {
+        accountId: acc.id,
+        name: '收X',
+        type: 'income',
+      });
+      await expectBusinessError(
+        () =>
+          categoryService.reorder(userId, {
+            accountId: acc.id,
+            type: 'expense',
+            ids: [ex.id, inc.id],
+          }),
+        ErrorCode.CATEGORY_REORDER_LEVEL_MISMATCH,
+      );
+    });
+
+    it('指定了收入父分类却按支出排序 → 40012', async () => {
+      const acc = await accountService.create(userId, {
+        name: `排序父类型${Math.random().toString(36).slice(2, 8)}`,
+        copyAll: false,
+        categoryIds: [],
+      });
+      const incomeRoot = await categoryService.create(userId, {
+        accountId: acc.id,
+        name: '收父',
+        type: 'income',
+      });
+      const kid = await categoryService.create(userId, {
+        accountId: acc.id,
+        name: '收子',
+        type: 'income',
+        parentId: incomeRoot.id,
+      });
+      await expectBusinessError(
+        () =>
+          categoryService.reorder(userId, {
+            accountId: acc.id,
+            type: 'expense', // ← 与父的 type 不符
+            parentId: incomeRoot.id,
+            ids: [kid.id],
+          }),
+        ErrorCode.CATEGORY_REORDER_LEVEL_MISMATCH,
+      );
+    });
+
+    it('混入其他账本的分类 → 40401', async () => {
+      const { accountId, list } = await freshAccount(2);
+      const other = await freshAccount(2);
+      await expectBusinessError(
+        () =>
+          categoryService.reorder(userId, {
+            accountId,
+            type: 'expense',
+            ids: [list[0].id, other.list[0].id],
+          }),
+        ErrorCode.CATEGORY_NOT_FOUND,
+      );
+    });
+
+    it('不存在的账本 → 40403', async () => {
+      await expectBusinessError(
+        () =>
+          categoryService.reorder(userId, {
+            accountId: '999999999',
+            type: 'expense',
+            ids: ['1'],
+          }),
+        ErrorCode.ACCOUNT_NOT_FOUND,
+      );
+    });
+
+    it('★ 失败时不留半套顺序（事务 + 前置校验都在写之前）', async () => {
+      const { accountId, list } = await freshAccount(3);
+      await expectBusinessError(
+        () =>
+          categoryService.reorder(userId, {
+            accountId,
+            type: 'expense',
+            ids: [list[2].id, list[0].id], // 不完整
+          }),
+        ErrorCode.CATEGORY_REORDER_INCOMPLETE,
+      );
+      // 顺序必须原封不动，sort 也还是 0/1/2
+      expect(await orderOf(accountId, 'expense')).toEqual(['支0', '支1', '支2']);
+      const all = await categoryService.list(userId, { accountId });
+      const sortById = new Map(all.map((c) => [c.id, c.sort]));
+      expect(list.map((c) => sortById.get(c.id))).toEqual([0, 1, 2]);
+    });
+
+    it('默认账本也可排序（排序不是删除，不受 D16 保护限制）', async () => {
+      const list = await categoryService.list(userId, { accountId: defaultAccountId });
+      const roots = list.filter((c) => c.type === 'expense' && !c.parentId);
+      expect(roots.length).toBeGreaterThan(1);
+      const reversed = [...roots].reverse().map((c) => c.id);
+      await categoryService.reorder(userId, {
+        accountId: defaultAccountId,
+        type: 'expense',
+        ids: reversed,
+      });
+      const after = await orderOf(defaultAccountId, 'expense');
+      expect(after).toEqual([...roots].reverse().map((c) => c.name));
+    });
+  });
 });
