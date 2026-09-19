@@ -54,6 +54,37 @@ const cfu = {
   "option":{},
   //下面是自定义format配置，因除H5端外的其他端无法通过props传递函数，只能通过此属性对应下标的方式来替换
   "formatter":{
+    /*
+     * ⚠️ 以下两项为**项目新增**（2026-09-19，月报趋势图按参考图改版）。升级 uni_modules 时需重新加回。
+     * 为什么必须写在这里，而不是写在组件的 opts 里：
+     *   qiun-data-charts 会把 opts 做 JSON.parse(JSON.stringify())（optsProps / cfu.option[cid]），
+     *   **opts 里的函数会被静默丢掉**（TrendChart 里曾有一版 formatter 因此从未生效）。
+     *   这套"命名 formatter"是唯一通道：opts 里写 `format: '<名字>'`，由 formatterAssign 换成这里的方法。
+     *   （原注释：除 H5 端外的其他端无法通过 props 传递函数，只能通过此属性对应下标的方式来替换。）
+     */
+    /* Y 轴金额：≥1 万显示「x万」（整数不带小数点），否则整数元 —— 压力测试见 check:contrast 无关，纯展示 */
+    "amountWan":function(val, index, opts){
+      var n = Number(val);
+      if(!isFinite(n)) return '';
+      var abs = Math.abs(n);
+      if(abs >= 10000) return String(Number((n / 10000).toFixed(1)))+'万';
+      return String(Math.round(n));
+    },
+    /* tooltip 文案：参考图只要「序列名 + 金额」，不要 uCharts 默认的「月份 序列名:值」（月份已由高亮 chip 表达）。
+       通过 opts.tooltipFormat = 'trendTooltip' 挂上（见 qiun 组件的 _tooltipDefault / showTooltip 分支）。 */
+    "trendTooltip":function(item, category, index, opts){
+      var raw = item && item.data && typeof item.data === 'object' ? item.data.value : (item ? item.data : '');
+      var n = Number(raw);
+      return item.name + ' ' + (isFinite(n) ? n.toFixed(2) : raw);
+    },
+    /* X 轴月份：只显示**单数月**（01/03/05/07/09/11）；偶数月一律留空。
+       被选中的那个月由 TrendChart 的 DOM 高亮 chip 承担（可带白底/加粗，canvas 文字做不到），
+       所以这里不需要知道"谁是选中项"，函数保持无状态。 */
+    "oddMonth":function(val, index, opts){
+      var m = /^(\d{1,2})月$/.exec(String(val));
+      if(!m) return val;
+      return Number(m[1]) % 2 === 1 ? val : '';
+    },
     "yAxisDemo1":function(val, index, opts){return val+'元'},
     "yAxisDemo2":function(val, index, opts){return val.toFixed(2)},
     "xAxisDemo1":function(val, index, opts){return val+'年';},

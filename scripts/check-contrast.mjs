@@ -782,8 +782,13 @@ section('13. 字号阶梯自洽（文档 §3.2 ↔ tokens.scss ↔ 各 .vue）')
   //    （toast 保持 uni 默认外观，仅抬高 z-index）→ 文字 236 → 240，总数 238 → 242。
   //    ⚠️ 这 4 处都真实承载文案（标题 / 正文 / 输入框 / 按钮），不是死样式；
   //       也都显式声明了 line-height（WCAG 1.4.12）。
-  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 242, 0);
-  expect('  其中文字字号 $font-*', nText, 240, 0);
+  //    2026-09-19 更新二十七：月报趋势图按参考图改版，X 轴选中月份的**高亮 chip**
+  //    是叠在 canvas 上的 DOM 元素（`TrendChart.vue` 的 `.x-chip`，uCharts 的 canvas
+  //    文字做不到"单个标签换样式"）→ 新增 1 处字号（$font-caption）
+  //    → 文字 240 → 241，总数 242 → 243。
+  //    ⚠️ 该 chip 真实承载文案（月份名），不是死样式；已显式声明 line-height。
+  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 243, 0);
+  expect('  其中文字字号 $font-*', nText, 241, 0);
   expect('  其中图标尺寸 $icon-*', nIcon, 2, 0);
   expect('  其中字面量（必须为 0）', nLiteral, 0, 0);
 }

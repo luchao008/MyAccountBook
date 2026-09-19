@@ -13,6 +13,16 @@
 - 渲染收敛在 `CategoryIcon.vue` 一处：`img:` → `<image>` / 彩色 → ColorIcon / 其余 → SvgIcon（emoji 兜底）；图片图标不触发彩色分包加载。
 - 分类默认图标：54 个二级分类用 `img:`（预置 + 存量迁移 `src/migration/*-CategoryImageIcons.ts`），其余二级/一级仍走 emoji → 单色兜底。
 
+## uCharts / qiun-data-charts 使用约定（踩坑总结，2026-09-19）
+- **opts 里的函数会被丢掉**：组件把 opts 做两次 `JSON.parse(JSON.stringify())` → 自定义格式只能走 vendor
+  `uni_modules/qiun-data-charts/js_sdk/u-charts/config-ucharts.js` 的**命名 formatter 表**，opts 里写 `format: '<名字>'`。
+  本项目已在该表加 `amountWan`（万元压缩）/ `oddMonth`（只显示单数月）/ `trendTooltip`（tooltip 文案）→ **升级 uni_modules 需重新加回**。
+- 工具提示文案用**组件属性** `tooltipFormat="xxx"`（不是 opts 键）；`extra.tooltip.bgColor` 必须是 **hex**（rgba 会让 hexToRgb 抛错、tooltip 整个画不出来）。
+- `yAxis.showTitle` 是轴级总开关（`opts.yAxis.showTitle`，不是 yAxis.data[i] 里的），vendor 的 mix 默认 true → 不关会画出 `undefined`。
+- 点选索引一律用 uCharts 回传的 `currentIndex`（它按"最近分类点"判界）；X 轴标签落点是 `area[3] + eachSpacing*i`。
+- 验证技巧：注入 `CanvasRenderingContext2D.prototype.fillText` 可抓取 canvas 上画过的**每一段文字及其坐标** ——
+  这是断言"有没有 undefined / 数据标签 / chip 是否对齐"的唯一手段（DOM 里查不到）。
+
 ## 分类选择器（记一笔）视觉规格 · 2026-09-19 定版
 - 网格：4 列（25%），图标直接落在卡片上（无背板圆），40px（<360px 视口降 36）；名称 12px / #222226，图标下方居中、允许两行、**无 margin-top**（2026-09-19 luchao 定）。
 - 选中：整格奶油卡片（$v11-gold-soft 底 + 1px rgba(143,83,18,.18) 描边 + 名称 500）；未选中无底无框。

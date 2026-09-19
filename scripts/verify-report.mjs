@@ -57,8 +57,37 @@ const check = (name, ok, extra = '') => {
 };
 
 const browser = await chromium.launch({ executablePath: findChrome(), args: ['--no-proxy-server'] });
-const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
+/*
+ * ⚠️ hasTouch 必须开：趋势图的「点月份 → 高亮 + tooltip」要靠真实触摸事件驱动
+ *    （uCharts 在 H5 走 renderjs 的 touch 通道，纯 mouse 事件不走那条路）。
+ */
+const ctx = await browser.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true });
 const page = await ctx.newPage();
+
+/** 收集页面 JS 报错：趋势图 tooltip 曾因 bgColor 传 rgba 而抛错（画不出来）却没被任何断言发现 */
+const errors = [];
+page.on('pageerror', (e) => errors.push(String(e.message).slice(0, 120)));
+
+/*
+ * 记录 canvas 上画过的**每一段文字**。
+ *
+ * 为什么需要：uCharts 把图例/轴标签/数据标签都画在 canvas 里，DOM 查不到 ——
+ * "轴顶画出一个 undefined"「数据标签糊成一片」这类问题只能靠注入 fillText 抓
+ * （2026-09-19 修趋势图时就是这么定位的）。必须在任何脚本执行前装好。
+ */
+await page.addInitScript(() => {
+  window.__drawnTexts = [];
+  const orig = CanvasRenderingContext2D.prototype.fillText;
+  CanvasRenderingContext2D.prototype.fillText = function (text, x, y, ...rest) {
+    try {
+      // 连坐标一起记：数据标签画在**绘图区里**，轴刻度贴在左边缘 —— 靠 x 就能区分
+      window.__drawnTexts.push({ t: String(text), x: Math.round(x) });
+    } catch {
+      /* 忽略 */
+    }
+    return orig.call(this, text, x, y, ...rest);
+  };
+});
 
 // 登录
 await page.goto(BASE, { waitUntil: 'domcontentloaded' });
@@ -166,7 +195,191 @@ console.log('\n[4] 趋势图渲染（uCharts canvas：收入/支出折线 + 结�
   check('结余折线（蓝 #1d63b8）已渲染', !!pix && pix.balanceLine > 20, pix ? `px=${pix.balanceLine}` : 'n/a');
   // 面积填充 = 蓝与白底的混合色，像素量应远大于折线本身
   check('结余面积填充已渲染（蓝色调像素 > 500）', !!pix && pix.balanceArea > 500, pix ? `px=${pix.balanceArea}` : 'n/a');
+
+  /*
+   * ── 2026-09-19「趋势图混乱」的防回归断言（用户报告 + 修复见 TrendChart.vue）──
+   *  ① opts 层：dataLabel 必须显式 false（uCharts 判据是 `!== false`，不写就是开，
+   *     12 月 × 3 序列 = 36 个数字标签糊满图）；
+   *     yAxis.showTitle 必须显式 false（vendor 的 mix 默认值是 true，不写就在轴顶
+   *     画出来一个字面量 "undefined"）；
+   *     并且**不允许**再出现 formatter 函数 —— qiun 会把 opts 两次 JSON 序列化，
+   *     函数被静默丢掉（曾经有一版「x.x万」的 formatter 从未生效）。
+   *  ② 数据层：结余是浮点减法算的，必须已取整到 2 位小数。
+   *  ③ 渲染层：抓 fillText —— 画布上不允许出现 "undefined"，也不允许出现
+   *     ≥3 位小数的数字（即 12886.999999999991 那类噪声）。
+   */
+  const trendInfo = await page.evaluate(() => {
+    const cv = document.querySelector('canvas');
+    let inst = cv && cv.__vueParentComponent;
+    let trend = null;
+    while (inst) {
+      const nm = String((inst.type && (inst.type.__name || inst.type.name)) || '');
+      if (nm === 'TrendChart') {
+        trend = inst;
+        break;
+      }
+      inst = inst.parent;
+    }
+    if (!trend) return null;
+    const ss = trend.setupState || {};
+    const o = ss.opts || {};
+    const cd = ss.chartData || {};
+    const all = (cd.series || []).flatMap((s) => s.data || []);
+    return {
+      dataLabel: o.dataLabel,
+      showTitle: o.yAxis ? o.yAxis.showTitle : '(无)',
+      hasFormatter: !!(o.yAxis && o.yAxis.data && o.yAxis.data[0] && o.yAxis.data[0].formatter),
+      maxDecimals: all.reduce(
+        (m, v) => Math.max(m, (String(v).split('.')[1] || '').length),
+        0
+      ),
+      count: all.length,
+    };
+  });
+  check(
+    'opts.dataLabel 显式关闭（不关会画 36 个数字标签）',
+    !!trendInfo && trendInfo.dataLabel === false,
+    trendInfo ? String(trendInfo.dataLabel) : 'n/a'
+  );
+  check(
+    'opts.yAxis.showTitle 显式关闭（不关会在轴顶画 undefined）',
+    !!trendInfo && trendInfo.showTitle === false,
+    trendInfo ? String(trendInfo.showTitle) : 'n/a'
+  );
+  check('不再使用会被 JSON 序列化丢掉的 formatter 函数', !!trendInfo && !trendInfo.hasFormatter);
+  check(
+    '序列值均已取整到 2 位小数（无浮点噪声）',
+    !!trendInfo && trendInfo.maxDecimals <= 2,
+    trendInfo ? `最长小数位=${trendInfo.maxDecimals}（${trendInfo.count} 个值）` : 'n/a'
+  );
+
+  const drawn = await page.evaluate(() => window.__drawnTexts || []);
+  const undefCount = drawn.filter((d) => d.t === 'undefined').length;
+  const noisy = drawn.filter((d) => /^-?\d+\.\d{3,}$/.test(d.t));
+  /*
+   * 「数据标签确已关闭」的行为级判据：
+   *   Y 轴刻度贴在画布左边缘（实测 x≈42），而数据标签画在**绘图区里**（x 远大于它）。
+   *   所以「所有数字型文字都出现在左边缘带内」= 图上没有点标签。
+   *   ⚠️ 不用"数字条数/去重数"判：demo 默认账本的趋势多为 0，去重后只有几个值凑巧不超阈值。
+   *   ⚠️ uCharts 入场动画会逐帧重绘，同一段文字会被 fillText 几十次，所以按集合去重。
+   */
+  const numericInPlot = [
+    ...new Set(
+      drawn.filter((d) => /^-?\d+(\.\d+)?$/.test(d.t) && d.x > 60).map((d) => `${d.t}@x=${d.x}`)
+    ),
+  ];
+  check('画布上没有 "undefined" 文字', undefCount === 0, `出现 ${undefCount} 次`);
+  check('画布上没有 ≥3 位小数的数字', noisy.length === 0, noisy.slice(0, 3).join(' / '));
+  check(
+    '绘图区内没有数字文字（数据标签确已关闭）',
+    numericInPlot.length === 0,
+    numericInPlot.slice(0, 4).join(' / ')
+  );
+
+  /*
+   * ── 2026-09-19 按参考图改版：Y 轴 3 条刻度（万为单位）、X 轴只显示单数月、
+   *    点中的月份高亮（DOM chip）、tooltip 显示三条序列 ──
+   */
+  const axisInfo = await page.evaluate(() => {
+    const seen = new Map();
+    for (const d of window.__drawnTexts) if (!seen.has(d.t + '@' + d.x)) seen.set(d.t + '@' + d.x, d);
+    const all = [...seen.values()];
+    return {
+      yTicks: [...new Set(all.filter((d) => /^\d+(\.\d+)?万?$/.test(d.t)).map((d) => d.t))],
+      months: [...new Set(all.filter((d) => /^\d{2}月$/.test(d.t)).map((d) => d.t))],
+    };
+  });
+  check(
+    'Y 轴只有 3 条刻度线',
+    axisInfo.yTicks.length === 3,
+    axisInfo.yTicks.join(' / ')
+  );
+  check(
+    'Y 轴金额按「万」压缩（≥1 万显示 x万）',
+    axisInfo.yTicks.some((t) => t.includes('万')),
+    axisInfo.yTicks.join(' / ')
+  );
+  check(
+    'X 轴默认只显示单数月（01/03/05/07/09/11）',
+    axisInfo.months.length === 6 && axisInfo.months.every((m) => Number(m.slice(0, 2)) % 2 === 1),
+    axisInfo.months.join(' ')
+  );
+
+  /* 触摸一个月 → chip 高亮 + tooltip 三条序列，且 chip 与 canvas 上的标签位置对齐 */
+  // ⚠️ 必须先把图表滚进视口：touchscreen.tap 用的是**视口坐标**，图表在折叠线以下时点不到
+  await page.evaluate(() => {
+    const el = document.querySelector('.trend-chart');
+    if (el) el.scrollIntoView({ block: 'center' });
+  });
+  await page.waitForTimeout(500);
+  const tapInfo = await page.evaluate(() => {
+    const cv = document.querySelector('canvas');
+    const r = cv.getBoundingClientRect();
+    const seen = new Map();
+    for (const d of window.__drawnTexts) if (!seen.has(d.t + '@' + d.x)) seen.set(d.t + '@' + d.x, d);
+    const m05 = [...seen.values()].find((d) => d.t === '05月');
+    /* 画布是 1x（本脚本 deviceScaleFactor=1），fillText 坐标即 CSS px */
+    const dpr = cv.width / r.width;
+    return m05
+      ? { x: r.left + m05.x / dpr, y: r.top + 90, labelX: m05.x / dpr, canvasLeft: r.left }
+      : null;
+  });
+  check('能在图上定位到某个月份（用于点击）', !!tapInfo, tapInfo ? `05月@${Math.round(tapInfo.labelX)}` : 'n/a');
+  if (tapInfo) {
+    await page.evaluate(() => {
+      window.__drawnTexts = [];
+    });
+    await page.touchscreen.tap(tapInfo.x, tapInfo.y);
+    await page.waitForTimeout(900);
+    const tapRes = await page.evaluate(() => {
+      const chip = document.querySelector('.x-chip');
+      const cv = document.querySelector('canvas');
+      const cr = cv ? cv.getBoundingClientRect() : null;
+      const chipRect = chip ? chip.getBoundingClientRect() : null;
+      const texts = window.__drawnTexts.map((d) => d.t);
+      /*
+       * 用「相邻单数月标签」反推 uCharts 的 X 轴布局：
+       *   下标 0（01月）的位置 = area[3]，每月间距 = (11月位置 − 01月位置) / 10。
+       * 于是任意下标的「标签中心」都能算出来，再和 chip 的中心比对 ——
+       * 这样不必假设"点哪个位置就选中哪个月"（uCharts 的判界与直觉差半格）。
+       */
+      const seen = new Map();
+      for (const d of window.__drawnTexts) if (!seen.has(d.t + '@' + d.x)) seen.set(d.t + '@' + d.x, d);
+      const labels = [...seen.values()].filter((d) => /^\d{2}月$/.test(d.t));
+      const first = labels.find((d) => d.t === '01月');
+      const last = labels.find((d) => d.t === '11月');
+      const dpr = cv ? cv.width / cr.width : 1;
+      let expected = null;
+      const m = chip ? /^(\d{2})月$/.exec(chip.textContent.trim()) : null;
+      if (first && last && chip && m) {
+        const x0 = first.x / dpr;
+        const each = (last.x / dpr - x0) / 10;
+        expected = x0 + each * (Number(m[1]) - 1);
+      }
+      return {
+        chipText: chip ? chip.textContent.trim() : '',
+        chipCenter: chipRect && cr ? chipRect.left + chipRect.width / 2 - cr.left : null,
+        expected,
+        tooltipRows: [...new Set(texts.filter((t) => /^(收入|支出|结余) \d/.test(t)))],
+      };
+    });
+    check('点中的月份出现高亮 chip', /^\d{2}月$/.test(tapRes.chipText), tapRes.chipText || '(无)');
+    check(
+      'chip 落在该月份的 X 轴位置上（误差 ≤2px）',
+      tapRes.chipCenter !== null &&
+        tapRes.expected !== null &&
+        Math.abs(tapRes.chipCenter - tapRes.expected) <= 2,
+      `chip 中心=${tapRes.chipCenter === null ? 'n/a' : Math.round(tapRes.chipCenter)} 该月应有位置=${tapRes.expected === null ? 'n/a' : Math.round(tapRes.expected)}`
+    );
+    check(
+      'tooltip 显示收入 / 支出 / 结余 三条',
+      tapRes.tooltipRows.length === 3,
+      tapRes.tooltipRows.join(' | ')
+    );
+  }
+  check('趋势图交互期间没有 JS 报错', errors.length === 0, errors.slice(0, 1).join(''));
 }
+
 
 console.log('\n[5] 顶栏 + Tab 吸顶');
 {
