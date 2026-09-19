@@ -39,9 +39,7 @@
               :class="{ picked: item.id === modelValue }"
               @click="pick(item, item.parentId)"
             >
-              <view class="icon-box" :class="{ 'icon-picked': item.id === modelValue }">
-                <CategoryIcon class="icon" :name="item.icon" :size="24" />
-              </view>
+              <CategoryIcon class="icon" :name="item.icon" :size="iconSize" />
               <text class="name">{{ item.name }}</text>
             </view>
           </view>
@@ -97,9 +95,7 @@
                 :class="{ picked: activeKey === 'recent' && item.id === modelValue }"
                 @click="pick(item, 'recent')"
               >
-                <view class="icon-box" :class="{ 'icon-picked': activeKey === 'recent' && item.id === modelValue }">
-                  <CategoryIcon class="icon" :name="item.icon" :size="24" />
-                </view>
+                <CategoryIcon class="icon" :name="item.icon" :size="iconSize" />
                 <text class="name">{{ item.name }}</text>
               </view>
             </view>
@@ -120,9 +116,7 @@
                 :class="{ picked: activeKey === g.root.id && item.id === modelValue }"
                 @click="pick(item, g.root.id)"
               >
-                <view class="icon-box" :class="{ 'icon-picked': activeKey === g.root.id && item.id === modelValue }">
-                  <CategoryIcon class="icon" :name="item.icon" :size="24" />
-                </view>
+                <CategoryIcon class="icon" :name="item.icon" :size="iconSize" />
                 <text class="name">{{ item.name }}</text>
               </view>
             </view>
@@ -172,6 +166,27 @@ const categoryStore = useCategoryStore();
 const instance = getCurrentInstance();
 
 const activeKey = ref<string>(RECENT_KEY_ANCHOR);
+
+/**
+ * 分类图标的显示尺寸。
+ *
+ * 参考图实测（402px 视口）：图标画布约 40px（用「水果零食」苹果的墨迹 20px 反推，
+ * 自有素材墨迹占比 ~51% → 20/0.51 ≈ 39.8）。旧版 24px 明显偏小。
+ *
+ * 窄屏（<360px）降一档到 36：320px 下每格只有 ~51px，40px 的图标会把格子顶满，
+ * 失去参考图"图标居中留白"的观感。
+ * ⚠️ 图标尺寸与字号**解耦**（设计约定）：不随 font-size 走，200% 字号下仍是 40。
+ */
+const windowWidth = ref(375);
+try {
+  const info = uni.getSystemInfoSync();
+  windowWidth.value = info.windowWidth || 375;
+} catch {
+  windowWidth.value = 375;
+}
+
+const iconSize = computed(() => (windowWidth.value < 360 ? 36 : 40));
+
 const searching = ref(false);
 const keyword = ref('');
 const recentIds = ref<string[]>([]);
@@ -726,55 +741,88 @@ watch(
 .grid {
   display: flex;
   flex-wrap: wrap;
+  /*
+   * ⚠️ 必须 flex-start：默认的 stretch 会把每格拉到"本行最高格"的高度 ——
+   *    一行里只要有一个两行名的分类（如「水电煤气宽带」），同行的单行名格子
+   *    也会被撑到同样高，选中卡片就会在名称下方拖出一块空白。参考图里
+   *    卡片是**贴合自身内容**的（单行名卡片明显比两行名格子矮）。
+   */
+  align-items: flex-start;
 }
 
+/*
+ * 分类格：**图标 + 名称直排，不套背板**（2026-09-19 按参考图改版）。
+ *
+ * 旧版给图标套了一个 46px 灰底圆形：与设计文档 §6.3「圆形只给头像与环形图」相悖，
+ * 也把彩色图标的体量感压没了。参考图的做法是图标直接落在卡片上，
+ * 由**尺寸**（40px，旧版 24px 明显偏小）与**间距**承担体量感。
+ * 选中信号整体上移到"格子本身"（见 .picked）——旧版"灰底圆 + 2px 金圈 + 金字"一并撤掉。
+ */
 .grid-item {
   width: 25%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: 16px;
+  /*
+   * 内边距与行距**拆成两段**：padding 保证选中卡片里图标不贴边，
+   * margin 承担卡片之间的缝（6 + 4 + 6 ≈ 参考图 16px 行距）。
+   */
+  padding: 6px 2px;
+  margin-bottom: 4px;
+  border-radius: 14px;
+  /* 透明描边占位：选中时才上色，避免选中瞬间整格尺寸跳动 */
+  border: 1px solid transparent;
 }
 
-.icon-box {
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: $v11-bg-inset;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
-}
-
-/* 选中图标：与 CategoryGrid 的 .icon-active 同一套处理 ——
-   浅金底（压白卡仅 1.07 可见）+ 2px 金色描边承担选中信号。不要去掉描边。 */
-.icon-picked {
+/*
+ * 选中态：奶油底卡片 + 暖色发丝描边 + 名称加粗（三重信号，不只靠颜色）。
+ *
+ * ⚠️ 描边不能省：$v11-gold-soft 压白卡只有 **1.07** 的亮度差（token 文档原话
+ *    "白卡上等于不存在"）—— 只铺底色等于没标。描边色沿用首页 hero 分隔线的
+ *    同一款金色发丝线（rgba(143,83,18,.18)）；参考图里卡片边缘同样有浅暖描边。
+ */
+.grid-item.picked {
   background: $v11-gold-soft;
-  border: 2px solid $v11-gold;
+  border-color: rgba(143, 83, 18, 0.18);
+}
+
+/*
+ * 窄屏（<360px）：侧栏收窄 + 面板内边距收紧。
+ *
+ * 320px 下 4 列格子只有 ~51px，4 个字的名字（12px = 48px）放不下，
+ * 会断成「日常用 / 品」这种难看的 3+1 —— 收窄侧栏（92→80）与面板内边距后
+ * 单行可容纳 4 字（参考图在 402px 下同样是"4 字一行"）。
+ * ⚠️ 只改布局、**不缩字号**：$font-caption 12px 是中文硬下限（token 文档）。
+ */
+@media (max-width: 359px) {
+  .sidebar {
+    width: 80px;
+  }
+
+  .main {
+    padding: 12px 8px 32px;
+  }
 }
 
 .icon {
-  /* 压 $v11-bg-inset(#EEF1F5) 13.93:1 */
+  /* 单色分类图标压白卡 15.85:1 ✅（无背板后不再需要"选中变金字"那一档） */
   color: $v11-text-primary;
 }
 
-.icon-picked .icon {
-  /* 压 $v11-gold-soft(#FDF6EF) 4.55:1 ✅ */
-  color: $v11-gold;
-}
-
+/* 名称：参考图实测文字色 #222226 —— 即 $v11-text-primary（旧版用次级灰，弱一档） */
 .name {
   font-size: $font-caption;
   line-height: $lh-caption;
-  color: $v11-text-secondary;
-  margin-top: 6px;
+  color: $v11-text-primary;
+  /*
+   * ⚠️ **不要加 margin-top**（luchao 2026-09-19 定）：
+   *    图标是 40px 画布、墨迹只占约一半，视觉间距本来就够；
+   *    再加 6px 会让"图标—名称"之间空掉一截、卡片显得松散。
+   */
   text-align: center;
-  line-height: $lh-caption;
 }
 
 .picked .name {
-  color: $v11-gold;
   font-weight: $weight-medium;
 }
 
