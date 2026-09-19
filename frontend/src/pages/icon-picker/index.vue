@@ -11,7 +11,8 @@
           @click="pick(key)"
         >
           <view class="cell-box">
-            <CategoryIcon :name="key" :size="28" />
+            <!-- image-scale=2：图片图标是位图插画，同尺寸下观感偏小（2026-09-19 luchao 要求翻倍） -->
+            <CategoryIcon :name="key" :size="28" :image-scale="2" />
           </view>
         </view>
       </view>
@@ -144,9 +145,13 @@ function pick(key: string) {
   padding: $space-2 0 $space-4;
 }
 
+/*
+ * 格子高度按最大图标留量：图片图标放大到 28×2 = 56px（见模板的 image-scale），
+ * 盒子 64px 给它四周各 4px 余量 —— 盒子若还停在 52px，放大的图标会顶出来。
+ */
 .cell {
   width: 25%;
-  height: 76px;
+  height: 88px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -154,8 +159,8 @@ function pick(key: string) {
 
 /* 选中态：浅底 + 品牌色描边 + 圆角方块，不依赖单一颜色 */
 .cell-box {
-  width: 52px;
-  height: 52px;
+  width: 64px;
+  height: 64px;
   border-radius: $radius-md;
   border: 1px solid transparent;
   display: flex;

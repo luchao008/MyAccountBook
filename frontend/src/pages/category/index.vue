@@ -108,7 +108,8 @@
               :class="{ 'row-dragging-source': drag.id === child.id }"
               @click="batchMode && togglePick(child.id)"
             >
-              <CategoryIcon :name="child.icon" :size="20" />
+              <!-- image-scale=2：图片图标是位图插画，同尺寸下观感偏小（2026-09-19 luchao 要求翻倍） -->
+              <CategoryIcon :name="child.icon" :size="20" :image-scale="2" />
               <text class="child-name" :class="{ dimmed: child.isHidden }">{{ child.name }}</text>
               <text v-if="child.isHidden" class="hidden-tag">已隐藏</text>
               <view class="row-tail">
@@ -162,7 +163,12 @@
         name="icon-chevron-down"
         :size="14"
       />
-      <CategoryIcon :name="drag.item.icon" :size="drag.parentId === null ? 24 : 20" />
+      <!-- 与列表行一致：二级用 image-scale=2，一级（emoji）保持原样 -->
+      <CategoryIcon
+        :name="drag.item.icon"
+        :size="drag.parentId === null ? 24 : 20"
+        :image-scale="drag.parentId === null ? 1 : 2"
+      />
       <text :class="drag.parentId === null ? 'root-name' : 'child-name'">
         {{ drag.item.name }}
       </text>

@@ -44,14 +44,26 @@ const props = withDefaults(
   defineProps<{
     name?: string | null;
     size?: number;
+    /**
+     * 图片图标（`img:`）的额外倍率，默认 1（即与 `size` 同尺寸）。
+     *
+     * 为什么单独给图片图标一个倍率：图片图标是**位图插画**，细节比 emoji / 单色图标多，
+     * 同样尺寸下观感偏小。图标选择器与分类管理页希望它们更大
+     * （2026-09-19 luchao 要求这两页的图片图标翻倍）。
+     * 不做成"全局放大"，是因为其余页面（首页/流水/日历）的图标尺寸是跟着行高排版的，
+     * 整体变大反而挤。
+     */
+    imageScale?: number;
   }>(),
-  { name: '', size: 24 }
+  { name: '', size: 24, imageScale: 1 }
 );
 
 /** 图片图标（`img:<分类名>`）的静态资源地址；非图片 key 为空串（走后面的分支） */
 const imgSrc = computed(() => (isCatIconKey(props.name) ? catIconSrc(props.name as string) : ''));
+/** 图片图标的实际渲染边长 = size × imageScale（见 imageScale 的说明） */
+const imgSize = computed(() => Math.round(props.size * props.imageScale));
 /** 图片要显式给宽高：uni-app 的 `<image>` 默认 320×240，不给尺寸会被撑开 */
-const imgStyle = computed(() => ({ width: `${props.size}px`, height: `${props.size}px` }));
+const imgStyle = computed(() => ({ width: `${imgSize.value}px`, height: `${imgSize.value}px` }));
 
 onMounted(() => {
   /*
