@@ -1,0 +1,14 @@
+# 后端镜像的构建上下文白名单：只放行下面 4 个条目，其余全部忽略。
+#
+# ⚠️ Docker 24 + BuildKit 会自动读取与 Dockerfile **同名**的
+#    `<dockerfile>.dockerignore`（这里是 deploy/Dockerfile.backend.dockerignore），
+#    所以这份只作用于 `-f deploy/Dockerfile.backend`，
+#    **不影响前端镜像**（它仍用仓库根的 .dockerignore，那里把 node_modules/dist 排除了）。
+#
+# 为什么要放行 node_modules / dist：见 Dockerfile.backend 顶部注释
+# （容器内装不了依赖、也编译不了 —— 网络 + npm 双重问题）。
+*
+!node_modules
+!dist
+!package.json
+!bootstrap.js

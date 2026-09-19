@@ -1,30 +1,26 @@
-# ── 后端镜像（多阶段）──
-FROM node:20-slim AS builder
-# ⚠️ 清空代理：Docker 会把宿主的 HTTP_PROXY(127.0.0.1:xxxx) 注入构建容器，
-#    容器内 127.0.0.1 不是宿主机 → 走死代理会让 npm ci 卡死/崩溃。
-ENV HTTP_PROXY="" HTTPS_PROXY="" http_proxy="" https_proxy=""
-WORKDIR /app
-COPY package.json package-lock.json ./
-COPY patches ./patches
-# 国内镜像源（容器内访问官方源慢/不稳）
-RUN npm ci --no-audit --no-fund --registry https://registry.npmmirror.com
-COPY tsconfig.json tsconfig.build.json ./
-COPY src ./src
-COPY bootstrap.js ./
-# 容器内 npm ci 不生成 node_modules/.bin 符号链接（实测 .bin 为空），
-# 故不用 npm run build，直接调 CLI 入口
-RUN node node_modules/@midwayjs/cli/bin/midway-bin.js build -c --tsConfig tsconfig.build.json
-
-# ── 运行镜像 ──
-# ⚠️ 不在运行阶段再跑 npm ci：该环境里 `npm ci --omit=dev` 会触发
-#    "Exit handler never called" 并留下残缺的 node_modules（@midwayjs/bootstrap
-#    目录为空 → 启动即 MODULE_NOT_FOUND）。直接复用 builder 装好的依赖，
-#    代价是镜像包含 devDependencies（约 200MB），换来可靠。
+# ── 后端镜像 ──
+# ⚠️ **不在容器内安装依赖，也不在容器内编译** —— node_modules 与 dist 都在 Mac 上
+#    准备好后直接拷进来（构建上下文由 deploy/build-and-export.sh 准备）。
+#
+# 为什么改成这样（2026-09-19 部署时连踩两个坑）：
+#  ① **网络**：本机 Clash 处于 TUN 模式时，会重置 Docker 构建容器内的 TLS 连接
+#     （实测容器内 HTTP 通、HTTPS 全部 ECONNRESET），容器内 npm ci 必然失败。
+#     Docker Desktop 的 config.json 里那个 http://127.0.0.1:7897 代理也救不了 ——
+#     容器里的 127.0.0.1 不是宿主机。
+#  ② **npm 自身 bug**：该环境里 npm ci 偶发 "Exit handler never called!"，
+#     而且**退出码是 0** —— Docker 以为成功，留下残缺的 node_modules，
+#     直到编译步骤才报 MODULE_NOT_FOUND，排查成本很高。
+#
+# 宿主机 `npm ci && npm run build` 后拷产物，既绕开网络，又保证镜像里的依赖树
+# 就是本地开发/测试用的那一棵。
+# Node 侧不存在交叉编译问题：整个依赖树里唯一的原生模块是 fsevents，
+# 它是 macOS 专属的可选依赖（chokidar 用），Linux 上根本不会加载（实测）。
 FROM node:20-slim
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
+# 依赖与编译产物来自宿主机（见上）。package.json 是运行时读的（版本号等）。
+COPY node_modules ./node_modules
+COPY dist ./dist
 COPY package.json bootstrap.js ./
 EXPOSE 7001
 CMD ["node", "bootstrap.js"]

@@ -4,6 +4,10 @@
 #   bash deploy/build-and-export.sh
 #
 # 产物：deploy/out/backend.tar、deploy/out/frontend.tar
+#
+# ⚠️ 两个镜像都**不在容器内装依赖**（原因见 deploy/Dockerfile.backend 顶部注释：
+#    本机 Clash TUN 模式会重置构建容器的 TLS 连接，容器内 npm 拉不动包），
+#    依赖与编译产物都在本机准备好后拷进镜像。
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -11,17 +15,23 @@ ROOT="$(pwd)"
 OUT="$ROOT/deploy/out"
 mkdir -p "$OUT"
 
-# ⚠️ --network host：Docker 会把宿主代理 127.0.0.1:xxxx 注入构建容器，
-#    容器内 127.0.0.1 不是宿主 → 不 host 网络会导致 npm ci 卡死/崩溃。
+# ⚠️ --network host：Docker Desktop 会把 config.json 里的代理
+#    （http://127.0.0.1:xxxx）注入构建容器，容器内 127.0.0.1 不是宿主机。
+#    这里虽已不装依赖，但 host 网络仍可避免其它隐性的代理问题。
 BUILD_FLAGS="--network host"
 
-echo "== 1/3 构建前端静态产物（本机）=="
+echo "== 1/4 构建前端静态产物（本机）=="
 ( cd "$ROOT/frontend" && npm run build:h5 )
 
-echo "== 2/3 构建后端镜像 =="
+echo "== 2/4 安装后端依赖并编译（本机）=="
+# npm ci 而不是 install：保证 node_modules 与 package-lock.json 严格一致 ——
+# 这一份 node_modules 会被**原样打进镜像**，必须可复现。
+( cd "$ROOT" && npm ci --no-audit --no-fund && npm run build )
+
+echo "== 3/4 构建后端镜像（只拷 node_modules + dist）=="
 docker build $BUILD_FLAGS -f deploy/Dockerfile.backend -t account-book-backend:latest .
 
-echo "== 3/3 构建前端镜像（只拷静态产物，不跑 npm）=="
+echo "== 4/4 构建前端镜像（只拷静态产物）=="
 docker build $BUILD_FLAGS -f deploy/Dockerfile.frontend -t account-book-frontend:latest .
 
 echo "== 导出为 tar =="
