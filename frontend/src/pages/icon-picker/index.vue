@@ -36,7 +36,8 @@
 /**
  * 图标选择页。
  *
- * 数据来源两处：
+ * 数据来源三处：
+ *   - 图片图标：`constants/cat-icons.ts` 的名字清单（75 张静态 PNG，`img:` key）
  *   - 彩色图标：`utils/colorIcon.ts`（由 `constants/color-icons.ts` 建索引）
  *   - 标准图标：`constants/icons.ts` 的 `CATEGORY_ICONS`（项目原有的单色分类图标）
  *
@@ -48,8 +49,10 @@ import { ref, computed, onMounted } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import CategoryIcon from '@/components/CategoryIcon.vue';
 import { CATEGORY_ICONS } from '@/constants/icons';
+import { CAT_ICON_NAMES } from '@/constants/cat-icons';
 import { COLOR_ICON_SET_META } from '@/constants/color-icon-meta';
 import { colorIconKeysOf, colorIconsReady, loadColorIcons } from '@/utils/colorIcon';
+import { CAT_ICON_SET, catIconKey } from '@/utils/catIcon';
 import { EVENT_ICON_PICKED } from '@/constants/events';
 
 /**
@@ -57,16 +60,23 @@ import { EVENT_ICON_PICKED } from '@/constants/events';
  *
  * ⚠️ 彩色图标集的 Tab **从元数据派生**，不再手写 —— 手写一份就等于埋了
  *    一个"加了新图标集但忘了加 Tab"的坑，而且它不会报错，只会安静地少一个入口。
- *    「标准」是项目自有的单色分类图标（不在彩色图标元数据里），单独补一个。
+ *    「图片」（`img:` 分类图片图标）与「标准」（单色分类图标）不在彩色图标元数据里，
+ *    各自单独补一个。
+ *
+ * 「图片」放第一个并作为默认 Tab（2026-09-19）：它现在承担**分类默认图标**的角色
+ * （预置分类的 icon 就是 `img:` key），进选择器先看到它是最高频的路径。
+ * ⚠️ 默认 Tab 变了不影响"带着已选图标进来"的场景 —— 下面的 onLoad 会按
+ *    `picked` 的集合前缀自动切到对应 Tab。
  */
 const TABS = [
+  { key: CAT_ICON_SET, label: '图片' },
   ...COLOR_ICON_SET_META.map((s) => ({ key: s.key, label: s.label })),
   { key: 'standard', label: '标准' },
 ];
 
 type TabKey = string;
 
-const activeSet = ref<TabKey>('colorful');
+const activeSet = ref<TabKey>(CAT_ICON_SET);
 
 onMounted(() => {
   // 本页要的是"某个集合下的**全部** key"，不能等子组件来触发加载
@@ -77,8 +87,10 @@ onMounted(() => {
  * 当前 Tab 下可选的图标 key。
  * ⚠️ 必须依赖 `colorIconsReady` —— 图标正文是动态 import 分包，
  *    数据到达后要重新铺一遍网格，否则这一页永远是空的。
+ *    （「图片」与「标准」是同步数据，不受此影响。）
  */
 const visibleKeys = computed(() => {
+  if (activeSet.value === CAT_ICON_SET) return CAT_ICON_NAMES.map((n) => catIconKey(n));
   if (activeSet.value === 'standard') return Object.keys(CATEGORY_ICONS);
   if (!colorIconsReady.value) return [];
   return colorIconKeysOf(activeSet.value);
