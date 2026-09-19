@@ -7,9 +7,17 @@
 
 ## 图标与分类体系
 - 分类预置：`src/category/category-preset.ts`，89 个分类（15 一级 + 74 二级），icon 字段存 emoji；前端经 `frontend/src/constants/icons.ts` 的 `EMOJI_TO_ICON` / `resolveCategoryIcon` 解析成图标（三级回退，永不空）。
-- 图标三套：界面单色 `UI_ICONS`（icon-*）+ 分类单色 `CATEGORY_ICONS`（cat-*，15 个，图标选择器「标准」Tab）在 `constants/icons.ts`；彩色两集 `colorful:`(329)/`life:`(141) 由 `scripts/gen-color-icons.mjs` 生成到 `constants/color-icons.ts`（动态 import 分包，勿并入首屏）。
-- 图标选择页 `pages/icon-picker/index.vue`：Tab=多彩/生活/标准，选中经 `EVENT_ICON_PICKED` 回传。
-- 2026-09-19 导入 75 个中文名分类图标（3D 彩色、白底位图）到 `frontend/src/static/cat-icons/`，接入形态未定，见 `docs/分类图标比对与导入报告.md`。
+- 图标四套：界面单色 `UI_ICONS`（icon-*）+ 分类单色 `CATEGORY_ICONS`（cat-*，图标选择器「标准」Tab）在 `constants/icons.ts`；彩色两集 `colorful:`(329)/`life:`(141) 由 `scripts/gen-color-icons.mjs` 生成到 `constants/color-icons.ts`（动态 import 分包）；**分类图片图标 `img:<中文分类名>`**（75 张，`static/cat-icons/<拼音>.png`，映射在 `constants/cat-icons.ts`，解析在 `utils/catIcon.ts`，由 `scripts/gen-cat-icons.mjs` 生成）。
+- ⚠️ 静态资源文件名必须 ASCII：uni-app H5 dev server 静态中间件不解码 URL，中文名文件在 dev 下必然 404（回退 index.html）——图片资源统一用拼音文件名。
+- 图标选择页 `pages/icon-picker/index.vue`：Tab=图片/多彩/生活/标准（图片为默认），选中经 `EVENT_ICON_PICKED` 回传。
+- 渲染收敛在 `CategoryIcon.vue` 一处：`img:` → `<image>` / 彩色 → ColorIcon / 其余 → SvgIcon（emoji 兜底）；图片图标不触发彩色分包加载。
+- 分类默认图标：54 个二级分类用 `img:`（预置 + 存量迁移 `src/migration/*-CategoryImageIcons.ts`），其余二级/一级仍走 emoji → 单色兜底。
+
+## 分类选择器（记一笔）视觉规格 · 2026-09-19 定版
+- 网格：4 列（25%），图标直接落在卡片上（无背板圆），40px（<360px 视口降 36）；名称 12px / #222226，图标下方居中、允许两行、**无 margin-top**（2026-09-19 luchao 定）。
+- 选中：整格奶油卡片（$v11-gold-soft 底 + 1px rgba(143,83,18,.18) 描边 + 名称 500）；未选中无底无框。
+- ⚠️ 网格容器必须 `align-items: flex-start`（否则两行名格子会把同行卡片拉伸出一条空白）。
+- ⚠️ 窄屏 <360px：侧栏 92→80、面板内边距 12→8（否则 320px 下 4 字名断成 3+1）。
 
 ## 前端约定（v1.1 设计体系）
 - 弹层层级：自定义弹层最高 1200（CategoryPicker/DateTimePicker 1200，FlowFilterPanel 等 1000，TabBar 100）；`uni.showModal/showToast/showActionSheet` 等系统弹层统一由 `frontend/src/App.vue` 抬到 **z-index 3000**（H5 专属块内）。
