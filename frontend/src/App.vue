@@ -88,21 +88,37 @@ uni-scroll-view .uni-scroll-view::-webkit-scrollbar {
 }
 
 /*
- * uni.showModal / showToast 的默认 z-index 是 999，低于本项目自定义弹层
- * （如 CategoryPicker 的遮罩是 1200）—— 于是在自定义弹层里调 showModal
+ * uni.showModal / showToast / showActionSheet 的默认 z-index 是 999，低于本项目
+ * 自定义弹层（如 CategoryPicker 的遮罩是 1200）—— 于是在自定义弹层里调 showModal
  * （如「记一笔 → 分类选择器 → 新增二级分类」）时，弹窗会被盖在下面点不到。
  *
  * 必须用标签选择器 uni-modal / uni-toast（外层自定义元素），不是类 .uni-modal
  * （内层 div）：uni-app H5 结构是 <uni-modal style="z-index:999"><div class="uni-modal">
  * </div></uni-modal> —— 真正决定层叠的是外层自定义元素的 z-index，只改内层无效（踩过）。
  * 抬到 3000（高于项目里所有自定义弹层，最高 1200），保证弹窗/提示永远在最上层。
+ *
+ * ⚠️ actionSheet 必须**连遮罩带弹层整层一起抬**，两者缺一不可。
+ *    H5 下 <uni-actionsheet> 的 DOM 是同一父节点下的两个兄弟：
+ *      ① .uni-mask.uni-actionsheet__mask（遮罩，在前）
+ *      ② .uni-actionsheet（弹层本体，在后）
+ *    框架里两者同为 z-index: 999，靠"同值时 DOM 靠后者在上"分层 —— 弹层盖住遮罩，正常。
+ *    2026-09-19 踩过（切账本弹窗整屏变灰、点不动）：只把 .uni-mask 规则套上去之后，
+ *    遮罩变 3000、弹层还是 999 —— 遮罩反过来盖住整个弹层（50% 黑罩在弹窗上面）。
+ *    所以 .uni-actionsheet 要和 .uni-mask 一起进本组；同为 3000 时仍由 DOM 顺序
+ *    保证弹层在上。**不要只抬遮罩不抬弹层。**
+ *
+ * ⚠️ 同款"遮罩是兄弟节点"结构的还有内置 picker（.uni-mask.uni-picker-mask 在前、
+ *    .uni-picker-custom 在后，同为 999）。本项目未用内置 picker（弹层全部自绘），
+ *    暂不处理；将来若引入，记得把 .uni-picker-custom 也一起抬进本组。
  */
 uni-modal,
 uni-toast,
+uni-actionsheet,
 uni-mask,
 .uni-modal,
-.uni-mask,
 .uni-toast,
+.uni-actionsheet,
+.uni-mask,
 .uni-sample-toast,
 .uni-simple-toast {
   z-index: 3000 !important;
