@@ -1,5 +1,5 @@
 <template>
-  <view v-if="visible" class="mask" @click="close">
+  <view v-show="visible" class="mask" @click="close">
     <view class="sheet" @click.stop>
       <!-- 顶部工具条 -->
       <view class="toolbar">
@@ -37,7 +37,7 @@
               :key="item.id"
               class="grid-item"
               :class="{ picked: item.id === modelValue }"
-              @click="pick(item)"
+              @click="pick(item, item.parentId)"
             >
               <view class="icon-box" :class="{ 'icon-picked': item.id === modelValue }">
                 <CategoryIcon class="icon" :name="item.icon" :size="24" />
@@ -57,8 +57,6 @@
         <scroll-view
           class="sidebar"
           scroll-y
-          :scroll-top="sidebarScrollTop"
-          scroll-with-animation
         >
           <view
             id="side-anchor-recent"
@@ -96,10 +94,10 @@
                 v-for="item in recentItems"
                 :key="'r-' + item.id"
                 class="grid-item"
-                :class="{ picked: item.id === modelValue }"
-                @click="pick(item)"
+                :class="{ picked: activeKey === 'recent' && item.id === modelValue }"
+                @click="pick(item, 'recent')"
               >
-                <view class="icon-box" :class="{ 'icon-picked': item.id === modelValue }">
+                <view class="icon-box" :class="{ 'icon-picked': activeKey === 'recent' && item.id === modelValue }">
                   <CategoryIcon class="icon" :name="item.icon" :size="24" />
                 </view>
                 <text class="name">{{ item.name }}</text>
@@ -119,10 +117,10 @@
                 v-for="item in g.children"
                 :key="item.id"
                 class="grid-item"
-                :class="{ picked: item.id === modelValue }"
-                @click="pick(item)"
+                :class="{ picked: activeKey === g.root.id && item.id === modelValue }"
+                @click="pick(item, g.root.id)"
               >
-                <view class="icon-box" :class="{ 'icon-picked': item.id === modelValue }">
+                <view class="icon-box" :class="{ 'icon-picked': activeKey === g.root.id && item.id === modelValue }">
                   <CategoryIcon class="icon" :name="item.icon" :size="24" />
                 </view>
                 <text class="name">{{ item.name }}</text>
@@ -180,14 +178,6 @@ const recentIds = ref<string[]>([]);
 
 /** 点击左侧时用于触发右侧定位 */
 const mainIntoView = ref('');
-/**
- * 左侧边栏的滚动位置（scroll-top）。
- *
- * ⚠️ 用 `scroll-top` 而不是 `scroll-into-view`：后者只保证"可见"（滚到最近边缘），
- *    而这里要让选中的一级分类**尽量滚到竖直中央** —— 滚动时左右两侧的视觉焦点
- *    都在中间那条线，读起来更稳。居中位置需要自己按行高算，见 scrollSidebarTo。
- */
-const sidebarScrollTop = ref(0);
 
 /** 右侧各分组的锚点 key 与相对滚动容器顶部的位置 */
 const anchorKeys = ref<string[]>([]);
@@ -328,6 +318,48 @@ function onMainScroll(e: any) {
   scrollSidebarTo(key);
 }
 
+/** 侧栏滚动动画句柄：新的滚动会取消上一个，避免多个 rAF 打架 */
+let sidebarAnimRAF = 0;
+
+/**
+ * 侧栏平滑滚动（easeOutCubic，约 260ms）。
+ *
+ * 为什么自己写：实测 `scrollTo({ behavior: 'smooth' })` 在这个内层可滚元素上
+ * **不生效**（值纹丝不动），而逐帧设 `scrollTop` 有效。
+ */
+function animateSidebarScroll(scroller: HTMLElement, from: number, to: number) {
+  if (sidebarAnimRAF) cancelAnimationFrame(sidebarAnimRAF);
+  if (Math.abs(to - from) < 0.5) {
+    scroller.scrollTop = to;
+    return;
+  }
+  const DUR = 260;
+  const start = performance.now();
+  const step = (now: number) => {
+    const t = Math.min(1, (now - start) / DUR);
+    // easeOutCubic：起步快、收尾缓，符合"跟随焦点"的手感
+    const eased = 1 - Math.pow(1 - t, 3);
+    scroller.scrollTop = from + (to - from) * eased;
+    sidebarAnimRAF = t < 1 ? requestAnimationFrame(step) : 0;
+  };
+  sidebarAnimRAF = requestAnimationFrame(step);
+}
+
+/**
+ * 找某个 scroll-view 内**真正可滚**的元素。
+ * ⚠️ scroll-view 外层不可滚，真实滚动在内层 div 上（实测）；
+ *    判据用 scrollHeight > clientHeight，而不是 overflow:auto。
+ */
+function getScrollEl(selector: string): HTMLElement | undefined {
+  const root = instance?.proxy?.$el as HTMLElement | undefined;
+  const wrap = root?.querySelector(selector) as HTMLElement | undefined;
+  return wrap
+    ? (Array.from(wrap.querySelectorAll('.uni-scroll-view')).find(
+        (e) => e.scrollHeight > e.clientHeight + 1,
+      ) as HTMLElement | undefined)
+    : undefined;
+}
+
 /**
  * 把左侧第 key 项滚动到侧栏竖直中央（"尽量"，到边界时自然停在顶/底）。
  *
@@ -345,36 +377,36 @@ function scrollSidebarTo(key: string) {
     const q = uni.createSelectorQuery().in(instance);
     q.select('.sidebar').boundingClientRect();
     q.selectAll('.side-item').boundingClientRect();
+    /*
+     * 先找到侧栏内真正可滚的元素（`.sidebar` 内的 .uni-scroll-view 中
+     * scrollHeight > clientHeight 的那个）。
+     * ⚠️ 限定在 `.sidebar` 内：整个组件里右侧主列表也可滚，从 root 找会误选到它。
+     * ⚠️ 直接驱动 DOM 滚动，而不是只靠 `scroll-top` 绑定 —— 实测该绑定在这个
+     *    「底部弹层 + 侧栏」嵌套结构里不生效（内层元素纹丝不动）。
+     */
+    const scroller = getScrollEl('.sidebar');
+
     q.exec((res: any[]) => {
       const container = res?.[0];
       const items = res?.[1] || [];
       const it = items[idx];
       if (!container || !it) return;
       const vh = container.height ?? 0;
-      const cur = sidebarScrollTop.value;
+      /*
+       * 当前滚动量用**实测值** scroller.scrollTop：设定值可能被边界 clamp、
+       * 也滞后于动画，用它会累积偏差（实测 ±70px）。
+       */
+      const cur = scroller ? scroller.scrollTop : 0;
       // 该项相对内容顶部的偏移 = 相对视口 top − 容器 top + 当前滚动量
       const offsetInContent = it.top - container.top + cur;
-      const target = Math.max(0, offsetInContent + it.height / 2 - vh / 2);
-      if (Math.abs(target - cur) < 0.5) return;
-      sidebarScrollTop.value = target;
       /*
-       * ⚠️ 直接驱动 DOM 滚动，而不是只靠 `scroll-top` 绑定。
-       * 实测：给 <scroll-view> 的 `scroll-top` 赋新值，内层可滚元素**纹丝不动**
-       * （在这个「底部弹层 + 侧栏」嵌套结构里 scroll-top 不生效）。
-       * 而直接设内层元素的 scrollTop 是有效的（已实测）。
-       * 结构：<uni-scroll-view class="sidebar"> → div.uni-scroll-view → div.uni-scroll-view(overflow:auto)
+       * ⚠️ 上界必须 clamp 到 maxScroll：只 clamp 下界（Math.max(0,…)）时，
+       *    靠近底部的分类算出的 target 会**超过最大可滚值** —— 动画每帧设一个
+       *    超范围值、浏览器再把它夹回去，表现为"明明到底了却每点一次抖一下"。
        */
-      const root = instance?.proxy?.$el as HTMLElement | undefined;
-      const scroller = root
-        ? (Array.from(root.querySelectorAll('.uni-scroll-view')).find(
-            (e) => e.scrollHeight > e.clientHeight + 1,
-          ) as HTMLElement | undefined)
-        : undefined;
-      if (scroller) {
-        // 直接赋值 scrollTop：实测 `scrollTo({behavior:'smooth'})` 在这个
-        // 内层容器上不生效（值纹丝不动），而直接设 scrollTop 有效。
-        scroller.scrollTop = target;
-      }
+      const maxScroll = scroller ? scroller.scrollHeight - scroller.clientHeight : 0;
+      const target = Math.min(maxScroll, Math.max(0, offsetInContent + it.height / 2 - vh / 2));
+      if (scroller) animateSidebarScroll(scroller, cur, target);
     });
   });
 }
@@ -388,12 +420,28 @@ function selectKey(key: string) {
   nextTick(() => {
     mainIntoView.value = `group-anchor-${key}`;
   });
+  /*
+   * 左侧自身也要滚：把刚点中的项滚到竖直中央。
+   * ⚠️ 不调的话，点靠下的一级分类（如「人情往来」）时它贴着/超出侧栏底边，
+   *    而右侧滚动被上面的抑制窗口挡着 —— 左侧就完全不动（实测反馈）。
+   */
+  scrollSidebarTo(key);
 }
 
-/** 只能选二级分类：一级只用来切换分组 */
-function pick(item: CategoryItem) {
+/**
+ * 选中一个二级分类。
+ *
+ * ⚠️ **左侧高亮跟着"用户从哪个组点的"走**（luchao 确认）——
+ *    从「最近使用」组点的 → 高亮「最近使用」；从某个一级组点的 → 高亮那个一级。
+ *    同一个二级分类（如「手机费」）在最近使用组和一级组里各出现一次，
+ *    用户从哪点，就高亮哪边（而不是永远跳到"所属一级"）。
+ *
+ * @param fromKey 点它的那个组的 key（'recent' 或一级 id）；搜索结果传所属一级
+ */
+function pick(item: CategoryItem, fromKey?: string | null) {
   if (!item.parentId) return;
   saveRecent(item.id);
+  if (fromKey) activeKey.value = fromKey;
   emit('update:modelValue', item.id);
   emit('update:visible', false);
 }
@@ -427,17 +475,35 @@ function close() {
   emit('update:visible', false);
 }
 
-/** 打开时定位到当前已选分类所属的一级 */
+/**
+ * 打开时定位左侧高亮（仅首次打开时调用，见 watch visible）。
+ *
+ * 规则（luchao 确认）：
+ *   · 当前选中的分类**在最近使用里** → 高亮「最近使用」（初次进入的默认态）
+ *   · 否则 → 高亮它所属的一级分类
+ *   · 都没有 → 回退到「最近使用」或第一个一级
+ */
 function syncActiveOnOpen() {
   const picked = categoryStore.byId(props.modelValue);
-  const targetKey =
-    picked?.parentId && roots.value.some((r) => r.id === picked.parentId)
+  const inRecent = !!picked && recentItems.value.some((r) => r.id === picked.id);
+  const targetKey = inRecent
+    ? RECENT_KEY_ANCHOR
+    : picked?.parentId && roots.value.some((r) => r.id === picked.parentId)
       ? picked.parentId
       : recentItems.value.length
         ? RECENT_KEY_ANCHOR
         : (roots.value[0]?.id ?? RECENT_KEY_ANCHOR);
   activeKey.value = targetKey;
 }
+
+/*
+ * 是否已经为本次「记一笔」定位过。
+ *
+ * ⚠️ 只在**首次打开**时定位（syncActiveOnOpen + 滚动）；此后再点开/关闭
+ *    都**保持用户浏览到的位置**，不重新定位（luchao 要求）。
+ *    组件随 record 页重建（重进记一笔）或切换收支类型时复位。
+ */
+let positioned = false;
 
 watch(
   () => props.visible,
@@ -446,6 +512,14 @@ watch(
     loadRecent();
     searching.value = false;
     keyword.value = '';
+
+    /*
+     * 已定位过：保持用户浏览到的位置。
+     * 弹窗用 v-show（不是 v-if），DOM 与滚动位置在关闭时都保留 ——
+     * 所以这里直接 return 即可，无需手动恢复 scrollTop。
+     */
+    if (positioned) return;
+    positioned = true;
     syncActiveOnOpen();
 
     // 等弹窗与列表渲染完再测量，并把右侧滚到当前一级、左栏选中项居中
@@ -460,6 +534,14 @@ watch(
     }, 120);
   },
   { immediate: true },
+);
+
+// 切换收支类型：分类完全变了，定位复位（下次打开重新定位到「最近使用」/一级）
+watch(
+  () => props.type,
+  () => {
+    positioned = false;
+  },
 );
 
 // 分类结构变化（如新建二级后）重新测量。

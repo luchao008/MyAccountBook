@@ -103,6 +103,9 @@ const isEdit = computed(() => !!editId.value);
  */
 const isCopy = ref(false);
 
+/** 上次记账成功用的分类 id（新增时默认选中它） */
+const LAST_CATEGORY_KEY = 'lastTxnCategoryId';
+
 const type = ref<'income' | 'expense'>('expense');
 const amount = ref('');
 /** 只能选二级分类，所以这里必然是一个二级分类的 id */
@@ -181,6 +184,16 @@ onLoad(async (options?: { id?: string; copyFrom?: string }) => {
       title: type.value === 'income' ? '复制收入' : '复制支出',
     });
     return;
+  }
+
+  /*
+   * 新增态：默认选中**上次记账成功用的分类**（luchao 要求）。
+   * 分类可能已被删/隐藏 —— 用 categoryStore.byId 校验，无效则留空。
+   * 仅新增生效；编辑/复制各自载入原单分类，不覆盖。
+   */
+  const lastId = (uni.getStorageSync(LAST_CATEGORY_KEY) || '') as string;
+  if (lastId && categoryStore.byId(lastId)) {
+    categoryId.value = lastId;
   }
 
   uni.setNavigationBarTitle({ title: `记一笔 · ${accountStore.currentName}` });
@@ -308,6 +321,11 @@ async function save() {
       uni.showToast({ title: '已更新', icon: 'success' });
     } else {
       await createTransaction(payload);
+      /*
+       * 记下这次成功的分类，供**下次新增**默认选中（luchao 要求）。
+       * 只在这里写（编辑不改）：编辑是"改旧账"，不该影响新增的默认值。
+       */
+      if (categoryId.value) uni.setStorageSync(LAST_CATEGORY_KEY, categoryId.value);
       // 复制态与新增共用这一支：都是 POST 新建（见 onLoad 的 copyFrom 注释）
       uni.showToast({ title: isCopy.value ? '已复制' : '已记录', icon: 'success' });
     }
