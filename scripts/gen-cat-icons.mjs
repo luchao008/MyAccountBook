@@ -4,10 +4,15 @@
  *   node scripts/gen-cat-icons.mjs
  *
  * 产物：
- *   frontend/src/static/cat-icons/<拼音>.png   75 张 256×256 透明 PNG（按需 HTTP 加载，不进 bundle）
+ *   frontend/src/static/cat-icons/<拼音>.png   94 张 256×256 透明 PNG（按需 HTTP 加载，不进 bundle）
  *   frontend/src/constants/cat-icons.ts        名字清单 + 名字→文件名映射
  *
- * 源文件：`assets/cat-icons-original/*.svg`（75 个，文件名 = 分类名）
+ * 源文件：`assets/cat-icons-original/*.svg`（94 个，文件名 = 分类名）
+ *
+ * ⚠️ 源图有**两批、形态不同**（脚本按四角 alpha 自动判别，无需改代码）：
+ *    · 支出 75 个：2048²、**不透明白底** → 泛洪清理成透明；
+ *    · 收入 19 个：1024²、**本来就是透明背景**（四角 alpha=0）→ 清理数天然为 0，
+ *      此时不报错（旧版"清不到就报错"的断言会把它们全拒掉）。
  *
  * ⚠️ 源文件**不是矢量图**：每个 SVG 是「2048×2048 位图 base64 内嵌」的包装
  *    （单个 ~400KB，合计 39MB），且外层标注的 `data:image/png` 是错的、真实数据是 JPEG
@@ -83,7 +88,13 @@ function slugOf(name) {
   return pinyin(name, { toneType: 'none', type: 'array' })
     .join('')
     /* ü 不是 ASCII（旅游 → lüyou），按拼音输入法通行写法转成 v —— 文件名必须全 ASCII */
-    .replace(/ü/g, 'v');
+    .replace(/ü/g, 'v')
+    /*
+     * 拼音库对**拉丁字母原样保留**（如「AA还款」→ `AAhaikuan`），而文件名要求全小写
+     * （下面正则只放行 [a-z0-9]）。转小写即可 —— 不会与别的名字撞车
+     * （中文转写本身不会产出连续相同的 slug）。
+     */
+    .toLowerCase();
 }
 
 /**
@@ -107,9 +118,14 @@ function clearWhiteBackground(image) {
     push(0, y);
     push(w - 1, y);
   }
+  /*
+   * ⚠️ 同时要求**不透明**：透明像素的 RGB 可能是任意值（本批收入图四角是 0,0,0,0，
+   *    但也可能有 255,255,255,0 的实现）——不判 alpha 会把"本来就透明的区域"
+   *    当成白底去清理，虽然结果无害，但"cleared"计数会失真。
+   */
   const nearWhite = (i) => {
     const p = i * 4;
-    return data[p] > WHITE && data[p + 1] > WHITE && data[p + 2] > WHITE;
+    return data[p + 3] > 250 && data[p] > WHITE && data[p + 1] > WHITE && data[p + 2] > WHITE;
   };
   while (stack.length) {
     const i = stack.pop();
@@ -152,8 +168,23 @@ for (const file of files) {
   if (!m) throw new Error(`${file}: 没有找到内嵌 base64 数据`);
   const image = await Jimp.read(Buffer.from(m[1], 'base64'));
   image.resize(SIZE, SIZE);
+
+  /*
+   * 两批源图的背景形态不同，断言要分开看：
+   *   · 支出图（2048²）：**不透明白底** —— 必须清掉，清不到说明阈值失效；
+   *   · 收入图（1024²）：**已经是透明背景**（四角 alpha=0）—— 清理数天然是 0。
+   * 判据用"四角是否已经透明"，而不是"清到多少像素"。
+   */
+  const cornerAlpha = () => {
+    const { width: w, height: h, data } = image.bitmap;
+    const at = (x, y) => data[(y * w + x) * 4 + 3];
+    return at(0, 0) + at(w - 1, 0) + at(0, h - 1) + at(w - 1, h - 1);
+  };
+  const alreadyTransparent = cornerAlpha() < 40; // 四个角几乎全透明
   const cleared = clearWhiteBackground(image);
-  if (!cleared) throw new Error(`${file}: 去白底没有清理到任何像素，阈值 ${WHITE} 可能失效`);
+  if (!cleared && !alreadyTransparent) {
+    throw new Error(`${file}: 去白底没有清理到任何像素，阈值 ${WHITE} 可能失效`);
+  }
   await image.writeAsync(path.join(OUT_DIR, `${slug}.png`));
   totalBytes += fs.statSync(path.join(OUT_DIR, `${slug}.png`)).size;
   mapping[name] = `${slug}.png`;

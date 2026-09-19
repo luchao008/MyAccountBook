@@ -3,17 +3,17 @@
  *
  *   node scripts/verify-cat-icons.mjs
  *
- * 背景（2026-09-19）：75 张分类图片图标（`img:<分类名>`）接入 ——
- *   预置分类默认图标替换（54 个）+ 存量数据迁移（见
- *   src/migration/*-CategoryImageIcons.ts）。
+ * 背景（2026-09-19）：分类图片图标（`img:<分类名>`）接入 ——
+ *   预置分类默认图标替换 + 存量数据迁移（见 src/migration/*-CategoryImageIcons.ts）。
+ *   同日补做收入侧 19 张（原先只有支出 75 张），总数 75 → 94。
  *
  * 覆盖：
  *   ① 静态资源：抽样请求 `/static/cat-icons/*.png` —— 必须 200 **且 Content-Type 是 image/png**
  *      （⚠️ 这条是回归守卫：文件名一度用中文，dev server 静态中间件不解码 URL，
  *        请求会回退成 index.html —— HTTP 200 但类型是 text/html，图片整片空白）
  *   ② 分类管理页：二级分类渲染出图片图标（uni-image 的 background-image 指向 cat-icons）
- *   ③ 接口数据：分类 icon 已是 `img:`（迁移生效，54 个）
- *   ④ 图标选择器：默认「图片」Tab、75 个格子、图片真实加载、切 Tab 正常
+ *   ③ 接口数据：分类 icon 已是 `img:`（迁移生效，数量与预置文件一致）
+ *   ④ 图标选择器：默认「图片」Tab、格子数 = 图标总数、图片真实加载、切 Tab 正常
  *   ⑤ 端到端：新建分类页 → 图标选择器 → 选一个图片图标 → 回填到表单
  *      （**全程不保存**，不产生任何数据写入）
  *
@@ -22,6 +22,26 @@
  *    点击一律走 evaluate（项目已验证过的做法）。
  */
 import fs from 'node:fs';
+import path from 'node:path';
+
+/**
+ * 图标总数从**生成物**里读，不写死 —— 这批图标会随分类增减而变
+ * （2026-09-19 就从 75 涨到 94），硬编码会让脚本在每次加图标后假失败。
+ */
+const META_TS = path.join(import.meta.dirname, '../frontend/src/constants/cat-icons.ts');
+const ICON_TOTAL = Number(
+  fs.readFileSync(META_TS, 'utf8').match(/CAT_ICON_TOTAL\s*=\s*(\d+)/)[1],
+);
+
+/**
+ * 预置分类里 icon 已经是 `img:` 的**二级分类**数（迁移后每个账本应达到这个数）。
+ * 同样从源文件数出来：2026-09-19 从 54（仅支出）涨到 73（支出 54 + 收入 19）。
+ */
+const PRESET_IMG_COUNT = (
+  fs.readFileSync(path.join(import.meta.dirname, '../src/category/category-preset.ts'), 'utf8')
+    .match(/icon: 'img:/g) || []
+).length;
+
 const PW = '/Users/luchao/.workbuddy/binaries/node/workspace/node_modules/playwright-core/index.js';
 const pw = await import(PW);
 const { chromium } = pw.default ?? pw;
@@ -134,11 +154,15 @@ const apiData = await page.evaluate(async () => {
     sample: list.filter((c) => String(c.icon).startsWith('img:')).slice(0, 3).map((c) => c.name + '=' + c.icon),
   };
 });
-check('当前账本存在 img: 图标分类', apiData.imgCount === 54, `${apiData.account}: ${apiData.imgCount}/54（共 ${apiData.total} 个分类）`);
+check(
+  '当前账本的 img: 图标分类数与预置一致（迁移已生效）',
+  apiData.imgCount === PRESET_IMG_COUNT,
+  `${apiData.account}: ${apiData.imgCount}/${PRESET_IMG_COUNT}（共 ${apiData.total} 个分类）`,
+);
 console.log('     样例:', apiData.sample.join(' '));
 
 /* ============================================================
- * ④ 图标选择器：默认「图片」Tab + 75 个 + 图片可加载
+ * ④ 图标选择器：默认「图片」Tab + 全部图标 + 图片可加载
  * ============================================================ */
 console.log('[4] 图标选择器（图片 Tab）');
 await page.goto('http://127.0.0.1:5173/#/pages/icon-picker/index?current=' + encodeURIComponent('img:午餐'), {
@@ -158,8 +182,12 @@ const picker = await page.evaluate(() => {
 });
 check('Tab 列表含「图片」', picker.tabTexts.indexOf('图片') >= 0, picker.tabTexts.join('/'));
 check('默认选中「图片」Tab（按 current=img:午餐 自动定位）', picker.activeText === '图片', '当前=' + picker.activeText);
-check('图片集共 75 个格子', picker.cellCount === 75, String(picker.cellCount));
-check('格子里用的是图片渲染器', picker.cellsWithImage === 75, String(picker.cellsWithImage));
+check(`图片集共 ${ICON_TOTAL} 个格子`, picker.cellCount === ICON_TOTAL, String(picker.cellCount));
+check(
+  '格子里用的是图片渲染器',
+  picker.cellsWithImage === ICON_TOTAL,
+  String(picker.cellsWithImage),
+);
 await page.waitForTimeout(1200);
 const pickerImgs = await page.evaluate(() => {
   const cells = Array.from(document.querySelectorAll('.cell'));

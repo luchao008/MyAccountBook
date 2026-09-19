@@ -37,7 +37,7 @@
  * 图标选择页。
  *
  * 数据来源三处：
- *   - 图片图标：`constants/cat-icons.ts` 的名字清单（75 张静态 PNG，`img:` key）
+ *   - 图片图标：`constants/cat-icons.ts` 的名字清单（94 张静态 PNG，`img:` key）
  *   - 彩色图标：`utils/colorIcon.ts`（由 `constants/color-icons.ts` 建索引）
  *   - 标准图标：`constants/icons.ts` 的 `CATEGORY_ICONS`（项目原有的单色分类图标）
  *

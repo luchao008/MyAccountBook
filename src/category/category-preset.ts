@@ -5,8 +5,9 @@
  * （2026-09-15 补了「衣服饰品 / 🧦」—— 随手记导出文件里用户把二级分类直接命名成 emoji）
  *
  * icon 字段**存图标标识**，取值两类：
- *   · `img:<分类名>` —— 专属图片图标（54 个）。PNG 在 frontend/src/static/cat-icons/，
- *     由 scripts/gen-cat-icons.mjs 生成；「腐败聚会」借用「朋友聚会」的图（两者同义）。
+ *   · `img:<分类名>` —— 专属图片图标（支出 54 + 收入 19 = 73 个）。
+ *     PNG 在 frontend/src/static/cat-icons/，由 scripts/gen-cat-icons.mjs 生成；
+ *     「腐败聚会」借用「朋友聚会」的图（两者同义）。
  *   · 其余仍是 emoji —— 前端 EMOJI_TO_ICON 会把 emoji 兜底成单色分类图标，永不留白
  *     （见 frontend/src/constants/icons.ts）。
  * 前端按值形态自动选渲染器，收敛在 CategoryIcon.vue 一处（img → 图片 / 彩色 / 单色）。
@@ -175,32 +176,32 @@ export const INCOME_CATEGORY_PRESET: PresetRoot[] = [
     name: '职业收入',
     icon: '💼',
     children: [
-      { name: '工资收入', icon: '💰' },
-      { name: '利息收入', icon: '🏦' },
-      { name: '加班收入', icon: '⏰' },
-      { name: '奖金收入', icon: '🏆' },
-      { name: '投资收入', icon: '📈' },
-      { name: '兼职收入', icon: '💵' },
-      { name: '公积金提款', icon: '🏛️' },
-      { name: '顺风车', icon: '🚙' },
+      { name: '工资收入', icon: 'img:工资收入' },
+      { name: '利息收入', icon: 'img:利息收入' },
+      { name: '加班收入', icon: 'img:加班收入' },
+      { name: '奖金收入', icon: 'img:奖金收入' },
+      { name: '投资收入', icon: 'img:投资收入' },
+      { name: '兼职收入', icon: 'img:兼职收入' },
+      { name: '公积金提款', icon: 'img:公积金提款' },
+      { name: '顺风车', icon: 'img:顺风车' },
     ],
   },
   {
     name: '其他收入',
     icon: '💰',
     children: [
-      { name: '礼金收入', icon: '🧧' },
-      { name: '中奖收入', icon: '🎁' },
-      { name: '意外来钱', icon: '💫' },
-      { name: '经营所得', icon: '🏪' },
-      { name: '信用卡还款', icon: '💳' },
-      { name: 'AA还款', icon: '🍸' },
-      { name: '物品回收', icon: '♻️' },
-      { name: '房租收入', icon: '🏠' },
-      { name: '共享带宽收入', icon: '🌐' },
-      { name: '保险报销', icon: '🛡️' },
+      { name: '礼金收入', icon: 'img:礼金收入' },
+      { name: '中奖收入', icon: 'img:中奖收入' },
+      { name: '意外来钱', icon: 'img:意外来钱' },
+      { name: '经营所得', icon: 'img:经营所得' },
+      { name: '信用卡还款', icon: 'img:信用卡还款' },
+      { name: 'AA还款', icon: 'img:AA还款' },
+      { name: '物品回收', icon: 'img:物品回收' },
+      { name: '房租收入', icon: 'img:房租收入' },
+      { name: '共享带宽收入', icon: 'img:共享带宽收入' },
+      { name: '保险报销', icon: 'img:保险报销' },
       // 收入侧的回退分类：见 FALLBACK_INCOME_CATEGORY
-      { name: '其他', icon: '📦' },
+      { name: '其他', icon: 'img:其他' },
     ],
   },
 ];
