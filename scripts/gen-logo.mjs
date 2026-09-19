@@ -1,11 +1,13 @@
 /**
- * 由 `frontend/src/static/logo.svg` 生成 favicon / 登录页用的 PNG。
+ * 由 `frontend/src/static/logo.svg` 生成 favicon 用的 PNG。
  *
  *   node scripts/gen-logo.mjs
  *
  * 产出：
- *   frontend/src/static/logo.png      192×192  （favicon + 登录页共用）
+ *   frontend/src/static/logo.png      192×192  （favicon，见 frontend/index.html）
  *   frontend/src/static/logo-512.png  512×512
+ * ⚠️ apple-touch-icon.png **不由本脚本生成**（那是登录页 App 图标，
+ *    由 scripts/gen-app-icon.mjs 从位图原图产出）。这里只管 favicon 用的金色方块。
  *
  * ⚠️ **改完 logo.svg 必须重跑本脚本。**
  *    只改 SVG 不重跑，页面显示的还是旧颜色 PNG，而源文件已经是新的 ——
@@ -73,6 +75,7 @@ try {
       { waitUntil: 'load' }
     );
     const out = path.join(STATIC, file);
+    // omitBackground：SVG 圆角之外的区域必须透明，否则 favicon 是一块白底方块
     await page.screenshot({ path: out, omitBackground: true });
     await page.close();
     const quote = (n) => Math.round((n / 1024) * 10) / 10;
@@ -82,4 +85,5 @@ try {
   await browser.close();
 }
 
-console.log('\n完成。favicon（index.html）与登录页共用 logo.png，无需额外改动。');
+console.log('\n完成。favicon（index.html）用 logo.png。');
+console.log('（登录页的 App 图标另跑 scripts/gen-app-icon.mjs，与本脚本无关。）');

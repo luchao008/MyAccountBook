@@ -1,5 +1,7 @@
 {
-    "name" : "",
+    /* 应用名。⚠️ uni-app H5 构建会用它**覆盖** index.html 里的 <title>
+       （见 @dcloudio/uni-h5-vite 的 transformIndexHtml），所以这里空着 = 浏览器标签页没标题。 */
+    "name" : "记账本",
     "appid" : "",
     "description" : "",
     "versionName" : "1.0.0",

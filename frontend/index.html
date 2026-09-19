@@ -9,9 +9,18 @@
         '<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0' +
         (coverSupport ? ', viewport-fit=cover' : '') + '" />')
     </script>
-    <title></title>
-    <!-- 不加这行浏览器会自动请求 /favicon.ico 并 404，控制台长期挂一条红色报错 -->
+    <title>记账本</title>
+    <!-- 不加这行浏览器会自动请求 /favicon.ico 并 404，控制台长期挂一条红色报错。
+         ⚠️ favicon 用 logo.png（金色方块），不是登录页那张 app-icon.png ——
+            后者细节多，缩到 16px 会糊成一团。 -->
     <link rel="icon" href="/static/logo.png" />
+    <!-- iOS「添加到主屏幕」的图标。必须不透明（iOS 不处理 alpha，透明区会变黑），
+         且不带圆角（iOS 自己会加）—— 见 scripts/gen-app-icon.mjs 的说明。 -->
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
+    <!-- 全屏打开（去掉 Safari 地址栏）时，状态栏用浅色文字 -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="记账本" />
     <!--preload-links-->
     <!--app-context-->
   </head>

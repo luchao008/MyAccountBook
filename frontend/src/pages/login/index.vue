@@ -1,10 +1,11 @@
 <template>
   <view class="page">
     <view class="header">
-      <!-- 与 favicon 同一套视觉（v1.1 主色金圆角方块 #A85F12 + 白 ¥），源文件 static/logo.svg
-           ⚠️ 这里用的是生成产物 logo.png，不是 SVG。改 logo.svg 后必须重跑
-              `node scripts/gen-logo.mjs`，否则页面显示的仍是旧颜色。 -->
-      <image class="logo" src="/static/logo.png" mode="widthFix" />
+      <!-- App 图标：米色圆角卡片 + 记账本/铅笔。源文件 assets/app-icon-source.png，
+           产物 static/app-icon.png 由 `node scripts/gen-app-icon.mjs` 生成（自动裁切 + 圆角）。
+           ⚠️ 与 favicon（/static/logo.png，仍是 logo.svg 出的金色方块）**不是同一份** ——
+              那张图细节多，缩到 16px 会糊，所以 favicon 保持简洁的金色方块。 -->
+      <image class="logo" src="/static/app-icon.png" mode="widthFix" />
       <text class="title">记账本</text>
       <text class="subtitle">简单记录每一笔收支</text>
     </view>
@@ -100,10 +101,11 @@ async function submit() {
 }
 
 /*
- * 用图片而不是 SvgIcon —— 与 favicon（/static/logo.png）同一份资源，
- * 避免"标签页一个图形、登录页另一个图形"的割裂。
+ * 用图片而不是 SvgIcon。尺寸 64px 与原来 SvgIcon 的 :size="64" 保持一致。
  *
- * 尺寸 64px 与原来 SvgIcon 的 :size="64" 保持一致，登录页布局不受影响。
+ * ⚠️ 这里用的是 **app-icon.png**（米色圆角卡片），与 favicon（logo.png，金色方块）
+ *    是两份资源 —— 2026-09-19 换 logo 时按需求拆开：登录页要好看，favicon 要 16px 下清楚。
+ *    改任一张图后记得重跑对应的生成脚本（gen-app-icon.mjs / gen-logo.mjs）。
  */
 .logo {
   width: 64px;

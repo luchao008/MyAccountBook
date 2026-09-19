@@ -4,6 +4,7 @@
  *   node scripts/verify-logo.mjs
  *
  * 覆盖：favicon（/static/logo.png）被请求且 200 / 无 favicon.ico 404 /
+ *       apple-touch-icon 声明正确且不透明 /
  *       <link rel="icon"> 指向正确 / logo 实际尺寸（192×192）。
  *
  * ⚠️ 只读不写。
@@ -67,7 +68,50 @@ const size = await page.evaluate(async () => {
 });
 check('logo 尺寸为 192x192', !!size && size.w === 192 && size.h === 192, JSON.stringify(size));
 
-console.log('[4] 登录页也使用同一份 logo（不再用 SvgIcon）');
+console.log('[3b] apple-touch-icon（iOS 添加到主屏）');
+const appleLink = await page.evaluate(() => {
+  const el = document.querySelector('link[rel="apple-touch-icon"]');
+  return el ? el.getAttribute('href') : null;
+});
+check('声明了 apple-touch-icon', !!appleLink, 'href=' + appleLink);
+
+// 关键：iOS 不处理 alpha，透明区会被填成黑 —— 必须验证产物四角是不透明的米色
+const applePx = await page.evaluate(async () => {
+  return await new Promise((resolve) => {
+    const img = document.createElement('img');
+    img.onload = () => {
+      const cv = document.createElement('canvas');
+      cv.width = img.naturalWidth;
+      cv.height = img.naturalHeight;
+      const cx = cv.getContext('2d');
+      cx.drawImage(img, 0, 0);
+      const px = (x, y) => Array.from(cx.getImageData(x, y, 1, 1).data);
+      resolve({
+        w: img.naturalWidth,
+        h: img.naturalHeight,
+        tl: px(0, 0),
+        tr: px(img.naturalWidth - 1, 0),
+        bl: px(0, img.naturalHeight - 1),
+        br: px(img.naturalWidth - 1, img.naturalHeight - 1),
+      });
+    };
+    img.onerror = () => resolve(null);
+    img.src = '/static/apple-touch-icon.png?t=' + Date.now();
+  });
+});
+check('apple-touch-icon 尺寸 180×180', !!applePx && applePx.w === 180 && applePx.h === 180, applePx && applePx.w + 'x' + applePx.h);
+check(
+  'apple-touch-icon 四角不透明（iOS 透明区会变黑）',
+  !!applePx && [applePx.tl, applePx.tr, applePx.bl, applePx.br].every((p) => p[3] === 255),
+  applePx && 'tl alpha=' + applePx.tl[3]
+);
+check(
+  'apple-touch-icon 四角是卡片米色（不是白、不是黑）',
+  !!applePx && [applePx.tl, applePx.tr, applePx.bl, applePx.br].every((p) => p[0] > 240 && p[0] - p[2] > 10),
+  applePx && 'tl=' + applePx.tl.join(',')
+);
+
+console.log('[4] 登录页用 app-icon.png（与 favicon 是两份资源，2026-09-19 拆开）');
 // 清 token 强制走登录页
 await page.evaluate(() => { localStorage.clear(); });
 await page.goto('http://127.0.0.1:5173/#/pages/login/index', { waitUntil: 'domcontentloaded' });
@@ -92,8 +136,8 @@ const loginLogo = await page.evaluate(() => {
 check('登录页 logo 存在', !!loginLogo, JSON.stringify(loginLogo));
 check('登录页 logo 不再是 svg', !!loginLogo && !loginLogo.isSvg, loginLogo && 'tag=' + loginLogo.tag);
 check(
-  '登录页 logo 指向 /static/logo.png',
-  !!loginLogo && (loginLogo.src || '').indexOf('logo.png') >= 0,
+  '登录页 logo 指向 /static/app-icon.png',
+  !!loginLogo && (loginLogo.src || '').indexOf('app-icon.png') >= 0,
   loginLogo && loginLogo.src
 );
 check(
