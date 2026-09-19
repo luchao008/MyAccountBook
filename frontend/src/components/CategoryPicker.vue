@@ -57,7 +57,7 @@
         <scroll-view
           class="sidebar"
           scroll-y
-          :scroll-into-view="sideIntoView"
+          :scroll-top="sidebarScrollTop"
           scroll-with-animation
         >
           <view
@@ -180,8 +180,14 @@ const recentIds = ref<string[]>([]);
 
 /** 点击左侧时用于触发右侧定位 */
 const mainIntoView = ref('');
-/** 滚动反推时用于触发左侧定位（让左栏跟随高亮项滚动） */
-const sideIntoView = ref('');
+/**
+ * 左侧边栏的滚动位置（scroll-top）。
+ *
+ * ⚠️ 用 `scroll-top` 而不是 `scroll-into-view`：后者只保证"可见"（滚到最近边缘），
+ *    而这里要让选中的一级分类**尽量滚到竖直中央** —— 滚动时左右两侧的视觉焦点
+ *    都在中间那条线，读起来更稳。居中位置需要自己按行高算，见 scrollSidebarTo。
+ */
+const sidebarScrollTop = ref(0);
 
 /** 右侧各分组的锚点 key 与相对滚动容器顶部的位置 */
 const anchorKeys = ref<string[]>([]);
@@ -286,11 +292,24 @@ async function measureAnchors() {
   });
 }
 
+/**
+ * 程序化滚动（点左侧 → 右侧定位）的抑制窗口截止时间戳。
+ *
+ * 为什么需要：点左侧某项后，右侧用 `scroll-into-view` **平滑滚动**到目标分组，
+ * 滚动途中会连续触发 onMainScroll —— 若照常"按当前 scrollTop 反推高亮"，
+ * 滚过"最近使用"时就会把 activeKey 改回去（表现为"点了食品酒水却跳回最近使用"）。
+ * 因此在这段窗口内只更新滚动条位置，**不反推 activeKey**。
+ */
+let suppressScrollSyncUntil = 0;
+
 /** 滚动右侧 → 反推当前应当高亮的左侧项 + 更新自绘滚动条位置 */
 function onMainScroll(e: any) {
   const detail = e?.detail ?? {};
   mainScrollTop.value = detail.scrollTop ?? 0;
   if (detail.scrollHeight) mainContentH.value = detail.scrollHeight;
+
+  // 程序化滚动中：不反推高亮（否则会被滚动路径上的中间分组带偏）
+  if (Date.now() < suppressScrollSyncUntil) return;
 
   if (!anchorTops.value.length) return;
 
@@ -305,16 +324,66 @@ function onMainScroll(e: any) {
   if (!key || key === activeKey.value) return;
 
   activeKey.value = key;
-  // 左栏跟随滚动，保证高亮项始终可见
-  sideIntoView.value = '';
+  // 左栏跟随滚动，把高亮项滚到**竖直中央**
+  scrollSidebarTo(key);
+}
+
+/**
+ * 把左侧第 key 项滚动到侧栏竖直中央（"尽量"，到边界时自然停在顶/底）。
+ *
+ * 为什么不用 `scroll-into-view`：它只保证"可见"（滚到最近边缘），
+ * 选中项会贴在顶部或底部 —— 滚动右侧列表时左栏一直在跳边。居中后
+ * 左右两侧的焦点都落在中间那条线上，视觉更稳。
+ *
+ * 位置靠**实测**（selectAll 拿每项相对内容顶部的偏移）而不是按行高硬算：
+ * 一级分类名可能换行，行高不固定。
+ */
+function scrollSidebarTo(key: string) {
+  const idx = key === 'recent' ? 0 : groups.value.findIndex((g) => g.root.id === key) + 1;
+  if (idx < 0) return;
   nextTick(() => {
-    sideIntoView.value = `side-anchor-${key}`;
+    const q = uni.createSelectorQuery().in(instance);
+    q.select('.sidebar').boundingClientRect();
+    q.selectAll('.side-item').boundingClientRect();
+    q.exec((res: any[]) => {
+      const container = res?.[0];
+      const items = res?.[1] || [];
+      const it = items[idx];
+      if (!container || !it) return;
+      const vh = container.height ?? 0;
+      const cur = sidebarScrollTop.value;
+      // 该项相对内容顶部的偏移 = 相对视口 top − 容器 top + 当前滚动量
+      const offsetInContent = it.top - container.top + cur;
+      const target = Math.max(0, offsetInContent + it.height / 2 - vh / 2);
+      if (Math.abs(target - cur) < 0.5) return;
+      sidebarScrollTop.value = target;
+      /*
+       * ⚠️ 直接驱动 DOM 滚动，而不是只靠 `scroll-top` 绑定。
+       * 实测：给 <scroll-view> 的 `scroll-top` 赋新值，内层可滚元素**纹丝不动**
+       * （在这个「底部弹层 + 侧栏」嵌套结构里 scroll-top 不生效）。
+       * 而直接设内层元素的 scrollTop 是有效的（已实测）。
+       * 结构：<uni-scroll-view class="sidebar"> → div.uni-scroll-view → div.uni-scroll-view(overflow:auto)
+       */
+      const root = instance?.proxy?.$el as HTMLElement | undefined;
+      const scroller = root
+        ? (Array.from(root.querySelectorAll('.uni-scroll-view')).find(
+            (e) => e.scrollHeight > e.clientHeight + 1,
+          ) as HTMLElement | undefined)
+        : undefined;
+      if (scroller) {
+        // 直接赋值 scrollTop：实测 `scrollTo({behavior:'smooth'})` 在这个
+        // 内层容器上不生效（值纹丝不动），而直接设 scrollTop 有效。
+        scroller.scrollTop = target;
+      }
+    });
   });
 }
 
 /** 点击左侧 → 右侧定位到该分组 */
 function selectKey(key: string) {
   activeKey.value = key;
+  // 抑制窗口：右侧平滑滚动的这几百毫秒内不反推高亮（见 onMainScroll 注释）
+  suppressScrollSyncUntil = Date.now() + 600;
   mainIntoView.value = '';
   nextTick(() => {
     mainIntoView.value = `group-anchor-${key}`;
@@ -379,7 +448,7 @@ watch(
     keyword.value = '';
     syncActiveOnOpen();
 
-    // 等弹窗与列表渲染完再测量，并用 scroll-into-view 把右侧滚到当前一级
+    // 等弹窗与列表渲染完再测量，并把右侧滚到当前一级、左栏选中项居中
     await nextTick();
     setTimeout(async () => {
       await measureAnchors();
@@ -387,6 +456,7 @@ watch(
       nextTick(() => {
         mainIntoView.value = `group-anchor-${activeKey.value}`;
       });
+      scrollSidebarTo(activeKey.value);
     }, 120);
   },
   { immediate: true },
