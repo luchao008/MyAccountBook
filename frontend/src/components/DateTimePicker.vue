@@ -6,88 +6,98 @@
         <text class="done" @click="confirm">完成</text>
       </view>
 
-      <!-- 日期摘要行（开关 ON 时显示；点击切回日期面板） -->
-      <view v-if="timeEnabled" class="row" @click="onDateRowClick">
-        <text class="row-label">日期</text>
-        <view class="row-right">
-          <text class="row-value">{{ dateText }}</text>
-          <SvgIcon class="row-arrow" name="icon-chevron-right" :size="16" />
-        </view>
-      </view>
-
-      <!-- 时刻行：点击展开时分滚轮；开关控制是否记录时刻 -->
-      <view class="row" @click="onTimeRowClick">
-        <text class="row-label">时刻</text>
-        <view class="row-right">
-          <text v-if="timeEnabled" class="row-value">{{ timeText }}</text>
-          <view class="switch-wrap" @click.stop>
-            <switch :checked="timeEnabled" color="#CF4A12" @change="onTimeSwitch" />
-          </view>
-        </view>
-      </view>
-
-      <!-- 展开区：日期面板（日历 / 年月滚轮）与时刻面板（时分滚轮）互斥 -->
-      <view v-if="panel === 'date'" class="cal">
-        <view class="cal-header">
-          <view class="cal-nav" @click="shiftMonth(-1)"><SvgIcon name="icon-chevron-left" :size="20" /></view>
-          <view class="cal-title" @click="toggleMonthPicker">
-            <text class="cal-title-text">{{ viewYear }} 年 {{ viewMonth + 1 }} 月</text>
-            <SvgIcon
-              class="cal-title-caret"
-              :name="showMonthPicker ? 'icon-chevron-up' : 'icon-chevron-down'"
-              :size="16"
-            />
-          </view>
-          <view class="cal-nav" @click="shiftMonth(1)"><SvgIcon name="icon-chevron-right" :size="20" /></view>
-        </view>
-
-        <!-- 年月快速选择（展开时替换日历网格，底部橙色「确定」） -->
-        <view v-if="showMonthPicker" class="month-picker">
-          <picker-view class="wheel" :value="monthWheelValue" @change="onMonthWheelChange">
-            <picker-view-column>
-              <view v-for="y in years" :key="'y' + y" class="wheel-item">{{ y }} 年</view>
-            </picker-view-column>
-            <picker-view-column>
-              <view v-for="m in 12" :key="'m' + m" class="wheel-item">{{ m }} 月</view>
-            </picker-view-column>
-          </picker-view>
-          <view class="confirm" @click="confirmMonthPicker">
-            <text class="confirm-text">确定</text>
-          </view>
-        </view>
-
-        <template v-else>
-          <view class="week-row">
-            <text v-for="w in weekLabels" :key="w" class="week-label">{{ w }}</text>
+      <!-- ===== 日期面板：日历在上，「时刻」行在下 ===== -->
+      <template v-if="panel === 'date'">
+        <view class="cal">
+          <view class="cal-header">
+            <view class="cal-nav" @click="shiftMonth(-1)"><SvgIcon name="icon-chevron-left" :size="20" /></view>
+            <view class="cal-title" @click="toggleMonthPicker">
+              <text class="cal-title-text">{{ viewYear }} 年 {{ viewMonth + 1 }} 月</text>
+              <SvgIcon
+                class="cal-title-caret"
+                :name="showMonthPicker ? 'icon-chevron-up' : 'icon-chevron-down'"
+                :size="16"
+              />
+            </view>
+            <view class="cal-nav" @click="shiftMonth(1)"><SvgIcon name="icon-chevron-right" :size="20" /></view>
           </view>
 
-          <view class="day-grid">
-            <view v-for="(d, i) in cells" :key="i" class="day-cell">
-              <view
-                v-if="d"
-                class="day"
-                :class="{
-                  today: isToday(d) && !isSelected(d),
-                  selected: isSelected(d),
-                }"
-                @click="select(d)"
-              >
-                <text class="day-text">{{ isToday(d) && !isSelected(d) ? '今' : d }}</text>
-              </view>
+          <!-- 年月快速选择（展开时替换日历网格，底部橙色「确定」） -->
+          <view v-if="showMonthPicker" class="month-picker">
+            <picker-view class="wheel" :value="monthWheelValue" @change="onMonthWheelChange">
+              <picker-view-column>
+                <view v-for="y in years" :key="'y' + y" class="wheel-item">{{ y }} 年</view>
+              </picker-view-column>
+              <picker-view-column>
+                <view v-for="m in 12" :key="'m' + m" class="wheel-item">{{ m }} 月</view>
+              </picker-view-column>
+            </picker-view>
+            <view class="confirm" @click="confirmMonthPicker">
+              <text class="confirm-text">确定</text>
             </view>
           </view>
-        </template>
-      </view>
 
-      <!-- 时刻面板：时分滚轮 -->
-      <picker-view v-else class="wheel" :value="wheelValue" @change="onWheelChange">
-        <picker-view-column>
-          <view v-for="h in 24" :key="'h' + h" class="wheel-item">{{ pad(h - 1) }}</view>
-        </picker-view-column>
-        <picker-view-column>
-          <view v-for="m in 60" :key="'m' + m" class="wheel-item">{{ pad(m - 1) }}</view>
-        </picker-view-column>
-      </picker-view>
+          <template v-else>
+            <view class="week-row">
+              <text v-for="w in weekLabels" :key="w" class="week-label">{{ w }}</text>
+            </view>
+            <view class="day-grid">
+              <view v-for="(d, i) in cells" :key="i" class="day-cell">
+                <view
+                  v-if="d"
+                  class="day"
+                  :class="{
+                    today: isToday(d) && !isSelected(d),
+                    selected: isSelected(d),
+                  }"
+                  @click="select(d)"
+                >
+                  <text class="day-text">{{ isToday(d) && !isSelected(d) ? '今' : d }}</text>
+                </view>
+              </view>
+            </view>
+          </template>
+        </view>
+
+        <!-- 时刻行（在日历下方） -->
+        <view class="row" @click="onTimeRowClick">
+          <text class="row-label">时刻</text>
+          <view class="row-right">
+            <text v-if="timeEnabled" class="row-value">{{ timeText }}</text>
+            <view class="switch-wrap" @click.stop>
+              <switch :checked="timeEnabled" color="#CF4A12" @change="onTimeSwitch" />
+            </view>
+          </view>
+        </view>
+      </template>
+
+      <!-- ===== 时刻面板：日期行 + 时刻行 + 时分滚轮在下 ===== -->
+      <template v-else>
+        <view class="row" @click="onDateRowClick">
+          <text class="row-label">日期</text>
+          <view class="row-right">
+            <text class="row-value">{{ dateText }}</text>
+            <SvgIcon class="row-arrow" name="icon-chevron-right" :size="16" />
+          </view>
+        </view>
+        <view class="row" @click="onTimeRowClick">
+          <text class="row-label">时刻</text>
+          <view class="row-right">
+            <text class="row-value">{{ timeText }}</text>
+            <view class="switch-wrap" @click.stop>
+              <switch :checked="timeEnabled" color="#CF4A12" @change="onTimeSwitch" />
+            </view>
+          </view>
+        </view>
+        <picker-view class="wheel" :value="wheelValue" @change="onWheelChange">
+          <picker-view-column>
+            <view v-for="h in 24" :key="'h' + h" class="wheel-item">{{ pad(h - 1) }}</view>
+          </picker-view-column>
+          <picker-view-column>
+            <view v-for="m in 60" :key="'m' + m" class="wheel-item">{{ pad(m - 1) }}</view>
+          </picker-view-column>
+        </picker-view>
+      </template>
     </view>
   </view>
 </template>
@@ -125,20 +135,17 @@ const minute = ref(0);
 /** picker-view 的受控值 [时下标, 分下标] */
 const wheelValue = ref([0, 0]);
 
-/** 展开区当前面板：'date'（日历）| 'time'（时分滚轮），互斥 */
+/** 展开面板：'date'（日历在上 + 时刻行）| 'time'（日期行 + 时刻行 + 滚轮） */
 const panel = ref<'date' | 'time'>('date');
 
 /* ===== 年月快速选择 ===== */
-/** 是否展开「年 + 月」滚轮（展开时替换日历网格） */
 const showMonthPicker = ref(false);
 /** 可选年份：2000 ~ 当前年 + 5（记账常要补录历史） */
 const MIN_YEAR = 2000;
 const MAX_YEAR = new Date().getFullYear() + 5;
 const years = Array.from({ length: MAX_YEAR - MIN_YEAR + 1 }, (_, i) => MIN_YEAR + i);
-/** 滚轮下标：年 / 月 */
 const yearIndex = ref(0);
 const monthIndex = ref(0);
-/** 两列 → [年下标, 月下标] */
 const monthWheelValue = computed(() => [yearIndex.value, monthIndex.value]);
 
 /** 日期摘要（如「2026年9月20日 星期日」） */
@@ -166,7 +173,6 @@ function dateStr(y: number, m: number, d: number): string {
   return y + '-' + pad(m + 1) + '-' + pad(d);
 }
 
-/** 日历格子：前置空白补齐到周日起始，再排当月天数 */
 const cells = computed<(number | null)[]>(() => {
   const first = new Date(viewYear.value, viewMonth.value, 1);
   const startWeek = first.getDay();
@@ -194,7 +200,7 @@ function shiftMonth(delta: number) {
   viewMonth.value = next.getMonth();
 }
 
-/** 点「日期」行 → 切到日期面板（收起年月滚轮） */
+/** 点「日期」行 → 切到日期面板（日期行消失、日历展示在上方） */
 function onDateRowClick() {
   panel.value = 'date';
   showMonthPicker.value = false;
@@ -240,7 +246,7 @@ function confirmMonthPicker() {
   showMonthPicker.value = false;
 }
 
-/** 时刻开关：开 → 默认展开时分滚轮；关 → 回到日期面板 */
+/** 时刻开关：开 → 切到时刻面板；关 → 切回日期面板 */
 function onTimeSwitch(e: any) {
   timeEnabled.value = !!e.detail.value;
   if (timeEnabled.value) {
@@ -272,7 +278,6 @@ function close() {
   emit('update:visible', false);
 }
 
-/** 打开时用外部值初始化日历与时刻 */
 watch(
   () => props.visible,
   (v) => {
@@ -324,10 +329,11 @@ watch(
   background: $v11-bg-card;
   border-radius: 16px 16px 0 0;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
-  /* 固定高度：切面板（日历/时分滚轮/年月滚轮）时弹窗高度不跳动 */
+  /* 固定高度：切面板（日历/年月滚轮/时分滚轮）时弹窗高度不跳动 */
   height: 560px;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .header {
@@ -384,8 +390,8 @@ watch(
 
 /* ===== 日历 ===== */
 .cal {
+  flex: 1;
   padding: 0 12px;
-  /* 展开区可滚动，配合固定高度的 sheet */
   overflow-y: auto;
 }
 
