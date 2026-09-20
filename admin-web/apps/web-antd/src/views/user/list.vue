@@ -5,7 +5,7 @@ import type { UserAdminItem, UserStatus } from '#/api';
 
 import { Page } from '@vben/common-ui';
 
-import { message, Modal, Tag } from 'ant-design-vue';
+import { Button, message, Modal, Space, Tag } from 'ant-design-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
@@ -165,39 +165,36 @@ async function onDelete(row: UserAdminItem) {
         </Tag>
       </template>
       <template #action="{ row }">
-        <a-space :size="8">
+        <Space :size="8">
           <template v-if="row.status === 'pending'">
-            <a-button ghost size="small" type="primary" @click="onApprove(row)">
+            <Button size="small" type="primary" @click="onApprove(row)">
               通过
-            </a-button>
-            <a-button danger ghost size="small" @click="onReject(row)">
+            </Button>
+            <Button danger size="small" type="primary" @click="onReject(row)">
               驳回
-            </a-button>
+            </Button>
           </template>
           <template v-else>
-            <a-button
+            <Button
               v-if="row.status === 'active'"
-              danger
-              ghost
               size="small"
+              style="
+                background-color: hsl(42, 84%, 61%);
+                border-color: hsl(42, 84%, 61%);
+                color: #fff;
+              "
               @click="onDisable(row)"
             >
               停用
-            </a-button>
-            <a-button
-              v-else
-              ghost
-              size="small"
-              type="primary"
-              @click="onEnable(row)"
-            >
+            </Button>
+            <Button v-else size="small" type="primary" @click="onEnable(row)">
               启用
-            </a-button>
-            <a-button danger ghost size="small" @click="onDelete(row)">
+            </Button>
+            <Button danger size="small" type="primary" @click="onDelete(row)">
               删除
-            </a-button>
+            </Button>
           </template>
-        </a-space>
+        </Space>
       </template>
     </Grid>
   </Page>
