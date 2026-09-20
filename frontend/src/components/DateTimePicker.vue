@@ -6,130 +6,111 @@
         <text class="done" @click="confirm">完成</text>
       </view>
 
-      <!-- 日期面板 ↔ 时刻面板：手风琴（高度展开/收起） -->
-      <transition
-        name="accordion"
-        mode="out-in"
-        @enter="onAccEnter"
-        @after-enter="onAccAfterEnter"
-        @leave="onAccLeave"
-        @after-leave="onAccAfterLeave"
-      >
-        <!-- ===== 日期面板：日历在上，「时刻」行在下 ===== -->
-        <view v-if="panel === 'date'" key="date" class="panel">
-          <view class="cal">
-            <view class="cal-header">
-              <view class="cal-nav" @click="shiftMonth(-1)"><SvgIcon name="icon-chevron-left" :size="20" /></view>
-              <view class="cal-title" @click="toggleMonthPicker">
-                <text class="cal-title-text">{{ viewYear }} 年 {{ viewMonth + 1 }} 月</text>
-                <SvgIcon
-                  class="cal-title-caret"
-                  :name="showMonthPicker ? 'icon-chevron-up' : 'icon-chevron-down'"
-                  :size="16"
-                />
-              </view>
-              <view class="cal-nav" @click="shiftMonth(1)"><SvgIcon name="icon-chevron-right" :size="20" /></view>
+      <!-- ===== 日期面板：日历在上，「时刻」行在下 ===== -->
+      <view v-if="panel === 'date'" class="panel">
+        <view class="cal">
+          <view class="cal-header">
+            <view class="cal-nav" @click="shiftMonth(-1)"><SvgIcon name="icon-chevron-left" :size="20" /></view>
+            <view class="cal-title" @click="toggleMonthPicker">
+              <text class="cal-title-text">{{ viewYear }} 年 {{ viewMonth + 1 }} 月</text>
+              <SvgIcon
+                class="cal-title-caret"
+                :name="showMonthPicker ? 'icon-chevron-up' : 'icon-chevron-down'"
+                :size="16"
+              />
             </view>
+            <view class="cal-nav" @click="shiftMonth(1)"><SvgIcon name="icon-chevron-right" :size="20" /></view>
+          </view>
 
-            <!-- 日历网格 ↔ 年月滚轮：手风琴 -->
-            <transition
-              name="accordion"
-              mode="out-in"
-              @enter="onAccEnter"
-              @after-enter="onAccAfterEnter"
-              @leave="onAccLeave"
-              @after-leave="onAccAfterLeave"
+          <!-- 年月快速选择 -->
+          <view v-if="showMonthPicker" class="month-picker">
+            <picker-view class="wheel" :value="monthWheelValue" @change="onMonthWheelChange">
+              <picker-view-column>
+                <view v-for="y in years" :key="'y' + y" class="wheel-item">{{ y }} 年</view>
+              </picker-view-column>
+              <picker-view-column>
+                <view v-for="m in 12" :key="'m' + m" class="wheel-item">{{ m }} 月</view>
+              </picker-view-column>
+            </picker-view>
+            <view class="confirm" @click="confirmMonthPicker">
+              <text class="confirm-text">确定</text>
+            </view>
+          </view>
+
+          <!-- 日历网格：swiper 支持手指左右滑动切月 -->
+          <view v-else class="cal-grid">
+            <view class="week-row">
+              <text v-for="w in weekLabels" :key="w" class="week-label">{{ w }}</text>
+            </view>
+            <swiper
+              class="month-swiper"
+              :current="swiperIndex"
+              :duration="swiperDuration"
+              @change="onSwipe"
+              @animationfinish="onSwipeFinish"
             >
-              <!-- 年月快速选择 -->
-              <view v-if="showMonthPicker" key="wheel" class="month-picker">
-                <picker-view class="wheel" :value="monthWheelValue" @change="onMonthWheelChange">
-                  <picker-view-column>
-                    <view v-for="y in years" :key="'y' + y" class="wheel-item">{{ y }} 年</view>
-                  </picker-view-column>
-                  <picker-view-column>
-                    <view v-for="m in 12" :key="'m' + m" class="wheel-item">{{ m }} 月</view>
-                  </picker-view-column>
-                </picker-view>
-                <view class="confirm" @click="confirmMonthPicker">
-                  <text class="confirm-text">确定</text>
-                </view>
-              </view>
-
-              <!-- 日历网格：swiper 支持手指左右滑动切月 -->
-              <view v-else key="grid" class="cal-grid">
-                <view class="week-row">
-                  <text v-for="w in weekLabels" :key="w" class="week-label">{{ w }}</text>
-                </view>
-                <swiper
-                  class="month-swiper"
-                  :current="swiperIndex"
-                  :duration="SWIPE_MS"
-                  @change="onSwipe"
-                >
-                  <swiper-item v-for="(m, i) in swiperMonths" :key="i">
-                    <view v-if="m" class="day-grid">
-                      <view v-for="(d, j) in monthCells(m.year, m.month)" :key="j" class="day-cell">
-                        <view
-                          v-if="d"
-                          class="day"
-                          :class="{
-                            today: isTodayOf(m.year, m.month, d) && !isSelectedOf(m.year, m.month, d),
-                            selected: isSelectedOf(m.year, m.month, d),
-                          }"
-                          @click="selectOf(m.year, m.month, d)"
-                        >
-                          <text class="day-text">{{
-                            isTodayOf(m.year, m.month, d) && !isSelectedOf(m.year, m.month, d) ? '今' : d
-                          }}</text>
-                        </view>
-                      </view>
+              <swiper-item v-for="(m, i) in swiperMonths" :key="i">
+                <view v-if="m" class="day-grid">
+                  <view v-for="(d, j) in monthCells(m.year, m.month)" :key="j" class="day-cell">
+                    <view
+                      v-if="d"
+                      class="day"
+                      :class="{
+                        today: isTodayOf(m.year, m.month, d) && !isSelectedOf(m.year, m.month, d),
+                        selected: isSelectedOf(m.year, m.month, d),
+                      }"
+                      @click="selectOf(m.year, m.month, d)"
+                    >
+                      <text class="day-text">{{
+                        isTodayOf(m.year, m.month, d) && !isSelectedOf(m.year, m.month, d) ? '今' : d
+                      }}</text>
                     </view>
-                  </swiper-item>
-                </swiper>
-              </view>
-            </transition>
-          </view>
-
-          <!-- 时刻行（在日历下方；年月滚轮展开时隐藏） -->
-          <view v-if="!showMonthPicker" class="row" @click="onTimeRowClick">
-            <text class="row-label">时刻</text>
-            <view class="row-right">
-              <text v-if="timeEnabled" class="row-value">{{ timeText }}</text>
-              <view class="switch-wrap" @click.stop>
-                <switch :checked="timeEnabled" color="#CF4A12" @change="onTimeSwitch" />
-              </view>
-            </view>
+                  </view>
+                </view>
+              </swiper-item>
+            </swiper>
           </view>
         </view>
 
-        <!-- ===== 时刻面板：日期行 + 时刻行 + 时分滚轮在下 ===== -->
-        <view v-else key="time" class="panel">
-          <view class="row" @click="onDateRowClick">
-            <text class="row-label">日期</text>
-            <view class="row-right">
-              <text class="row-value">{{ dateText }}</text>
-              <SvgIcon class="row-arrow" name="icon-chevron-right" :size="16" />
+        <!-- 时刻行（在日历下方；年月滚轮展开时隐藏） -->
+        <view v-if="!showMonthPicker" class="row" @click="onTimeRowClick">
+          <text class="row-label">时刻</text>
+          <view class="row-right">
+            <text v-if="timeEnabled" class="row-value">{{ timeText }}</text>
+            <view class="switch-wrap" @click.stop>
+              <switch :checked="timeEnabled" color="#CF4A12" @change="onTimeSwitch" />
             </view>
           </view>
-          <view class="row" @click="onTimeRowClick">
-            <text class="row-label">时刻</text>
-            <view class="row-right">
-              <text class="row-value">{{ timeText }}</text>
-              <view class="switch-wrap" @click.stop>
-                <switch :checked="timeEnabled" color="#CF4A12" @change="onTimeSwitch" />
-              </view>
-            </view>
-          </view>
-          <picker-view class="wheel" :value="wheelValue" @change="onWheelChange">
-            <picker-view-column>
-              <view v-for="h in 24" :key="'h' + h" class="wheel-item">{{ pad(h - 1) }}</view>
-            </picker-view-column>
-            <picker-view-column>
-              <view v-for="m in 60" :key="'m' + m" class="wheel-item">{{ pad(m - 1) }}</view>
-            </picker-view-column>
-          </picker-view>
         </view>
-      </transition>
+      </view>
+
+      <!-- ===== 时刻面板：日期行 + 时刻行 + 时分滚轮在下 ===== -->
+      <view v-else class="panel">
+        <view class="row" @click="onDateRowClick">
+          <text class="row-label">日期</text>
+          <view class="row-right">
+            <text class="row-value">{{ dateText }}</text>
+            <SvgIcon class="row-arrow" name="icon-chevron-right" :size="16" />
+          </view>
+        </view>
+        <view class="row" @click="onTimeRowClick">
+          <text class="row-label">时刻</text>
+          <view class="row-right">
+            <text class="row-value">{{ timeText }}</text>
+            <view class="switch-wrap" @click.stop>
+              <switch :checked="timeEnabled" color="#CF4A12" @change="onTimeSwitch" />
+            </view>
+          </view>
+        </view>
+        <picker-view class="wheel" :value="wheelValue" @change="onWheelChange">
+          <picker-view-column>
+            <view v-for="h in 24" :key="'h' + h" class="wheel-item">{{ pad(h - 1) }}</view>
+          </picker-view-column>
+          <picker-view-column>
+            <view v-for="m in 60" :key="'m' + m" class="wheel-item">{{ pad(m - 1) }}</view>
+          </picker-view-column>
+        </picker-view>
+      </view>
     </view>
   </view>
 </template>
@@ -141,7 +122,7 @@ import { ref, computed, watch, nextTick } from 'vue';
 const weekLabels = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 const dowNames = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
 
-/** swiper 切月动画时长（ms），也用于手风琴 */
+/** swiper 切月动画时长（ms） */
 const SWIPE_MS = 240;
 
 /** 可选年份：2000 ~ 当前年 + 5（记账常要补录历史） */
@@ -174,13 +155,19 @@ const minute = ref(0);
 /** picker-view 的受控值 [时下标, 分下标] */
 const wheelValue = ref([0, 0]);
 
-/** 展开面板：'date'（日历在上 + 时刻行）| 'time'（日期行 + 时刻行 + 滚轮） */
+/** 展开面板：date（日历在上 + 时刻行）| time（日期行 + 时刻行 + 滚轮） */
 const panel = ref<'date' | 'time'>('date');
 
-/* ===== 月份 swiper（3 item，滑完复位到中间）===== */
+/* ===== 月份 swiper（3 item，动画结束后静默复位到中间）===== */
 const swiperIndex = ref(1);
-/** 是否正在复位/动画中（防连点） */
+/** swiper 动画时长；静默复位时临时置 0（不动画） */
+const swiperDuration = ref(SWIPE_MS);
+/** 动画期间忽略连点 */
 const animating = ref(false);
+/** 本次滑动方向（+1=下一月，-1=上一月），动画结束后据此提交年月 */
+const swipeDelta = ref(0);
+/** 复位过程中，避免 animationfinish 重入 */
+let resetting = false;
 
 /** 三个 item 对应的 {year, month}；越界（<2000-01 / >MAX_YEAR-12）为 null */
 const swiperMonths = computed<({ year: number; month: number } | null)[]>(() => {
@@ -198,32 +185,6 @@ const years = Array.from({ length: MAX_YEAR - MIN_YEAR + 1 }, (_, i) => MIN_YEAR
 const yearIndex = ref(0);
 const monthIndex = ref(0);
 const monthWheelValue = computed(() => [yearIndex.value, monthIndex.value]);
-
-/* ===== 手风琴过渡（高度展开/收起）===== */
-function onAccEnter(el: Element) {
-  const h = el as HTMLElement;
-  h.style.height = '0px';
-  h.style.overflow = 'hidden';
-  void h.offsetHeight;
-  h.style.height = h.scrollHeight + 'px';
-}
-function onAccAfterEnter(el: Element) {
-  const h = el as HTMLElement;
-  h.style.height = '';
-  h.style.overflow = '';
-}
-function onAccLeave(el: Element) {
-  const h = el as HTMLElement;
-  h.style.height = h.scrollHeight + 'px';
-  h.style.overflow = 'hidden';
-  void h.offsetHeight;
-  h.style.height = '0px';
-}
-function onAccAfterLeave(el: Element) {
-  const h = el as HTMLElement;
-  h.style.height = '';
-  h.style.overflow = '';
-}
 
 /** 日期摘要（如「2026年9月20日 星期日」） */
 const dateText = computed(() => {
@@ -273,46 +234,73 @@ function selectOf(y: number, m: number, d: number) {
 }
 
 /**
- * 点箭头翻月：改 swiperIndex 触发 swiper 的滑动动画（与手指滑动同一套），
- * 越界时忽略。
+ * 点箭头翻月：改 swiperIndex 触发 swiper 自身的滑动动画（与手指滑动同一套）。
+ * 年月数据不在此刻提交，等动画结束后在 onSwipeFinish 里提交，
+ * 否则中途改数据会让滑入的那一屏内容错位。
  */
 function shiftMonth(delta: number) {
   if (animating.value) return;
   const base = viewYear.value * 12 + viewMonth.value + delta;
   if (base < MIN_YEAR * 12 || base > MAX_YEAR * 12 + 11) return;
+  swipeDelta.value = delta;
+  animating.value = true;
   swiperIndex.value = delta > 0 ? 2 : 0;
 }
 
 /**
- * swiper 切换：手指滑动或点箭头都会走到这里。
- * 中间项（i===1）是复位后的状态，忽略；否则更新年月并复位到中间。
+ * swiper change：动画开始时触发。
+ * 手指滑动走这里记录方向；点箭头时已在 shiftMonth 里记过，忽略。
  */
 function onSwipe(e: any) {
+  const i = e.detail.current;
+  if (i === 1) return;
+  if (animating.value) return;
+  swipeDelta.value = i === 0 ? -1 : 1;
+  animating.value = true;
+}
+
+/**
+ * swiper animationfinish：动画结束时触发。
+ * 在这里提交年月，并把 swiper 静默复位到中间 item（duration=0，视觉不动）。
+ */
+async function onSwipeFinish(e: any) {
+  if (resetting) return;
   const i = e.detail.current;
   if (i === 1) {
     animating.value = false;
     return;
   }
-  const delta = i === 0 ? -1 : 1;
-  const base = viewYear.value * 12 + viewMonth.value + delta;
-  // 越界：仅复位，不更新年月（swiper 自己滑回去）
+  const d = swipeDelta.value;
+  if (!d) {
+    animating.value = false;
+    return;
+  }
+  resetting = true;
+
+  // 关键：duration=0 + 更新年月 + index 回中间，必须在同一 tick 完成 ——
+  // 否则 swiper 会先按旧数据渲染一帧（滑入的月错位），再复位时闪一下。
+  swiperDuration.value = 0;
+  const base = viewYear.value * 12 + viewMonth.value + d;
   if (base >= MIN_YEAR * 12 && base <= MAX_YEAR * 12 + 11) {
     viewYear.value = Math.floor(base / 12);
     viewMonth.value = ((base % 12) + 12) % 12;
   }
-  animating.value = true;
-  nextTick(() => {
-    swiperIndex.value = 1;
-  });
+  swiperIndex.value = 1;
+
+  await nextTick();
+  swiperDuration.value = SWIPE_MS;
+  swipeDelta.value = 0;
+  animating.value = false;
+  resetting = false;
 }
 
-/** 点「日期」行 → 切到日期面板（日期行消失、日历展示在上方） */
+/** 点日期行 → 切到日期面板（日期行消失、日历展示在上方） */
 function onDateRowClick() {
   panel.value = 'date';
   showMonthPicker.value = false;
 }
 
-/** 点「时刻」行 → 切到时刻面板；开关未开时顺带打开 */
+/** 点时刻行 → 切到时刻面板；开关未开时顺带打开 */
 function onTimeRowClick() {
   if (!timeEnabled.value) {
     timeEnabled.value = true;
@@ -343,8 +331,8 @@ function onMonthWheelChange(e: any) {
 }
 
 /**
- * 确认年月：只把日历翻到该年月，**不选中任何日期** ——
- * 具体选哪天仍由用户点日历决定（年月选择只负责「翻页」）。
+ * 确认年月：只把日历翻到该年月，不选中任何日期，
+ * 具体选哪天仍由用户点日历决定（年月选择只负责翻页）。
  */
 function confirmMonthPicker() {
   viewYear.value = years[yearIndex.value];
@@ -392,6 +380,9 @@ watch(
     showMonthPicker.value = false;
     panel.value = 'date';
     animating.value = false;
+    swipeDelta.value = 0;
+    resetting = false;
+    swiperDuration.value = SWIPE_MS;
     swiperIndex.value = 1;
 
     const parts = (props.date || '').split('-').map(Number);
@@ -438,7 +429,6 @@ watch(
   background: $v11-bg-card;
   border-radius: 16px 16px 0 0;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
-  /* 固定高度：切面板（日历/年月滚轮/时分滚轮）时弹窗高度不跳动 */
   height: 500px;
   display: flex;
   flex-direction: column;
@@ -457,14 +447,8 @@ watch(
   line-height: $lh-body;
   color: $v11-gold;
   font-weight: $weight-medium;
-  /* 24px 行盒 + 上下各 10px = 44（原 padding: 4px 8px 只有 32） */
+  /* 24px 行盒 + 上下各 10px = 44 */
   padding: 10px 12px;
-}
-
-/* ===== 手风琴过渡（高度展开/收起，JS 钩子设 height）===== */
-.accordion-enter-active,
-.accordion-leave-active {
-  transition: height 0.24s ease;
 }
 
 .panel {
@@ -478,7 +462,6 @@ watch(
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  /* 44px 行盒：可点切换面板 */
   min-height: $touch-target-min;
 }
 
@@ -521,8 +504,6 @@ watch(
 }
 
 .cal-nav {
-  /* 44×44：翻月是日历里唯一的高频点击目标。改用 flex 居中而不是 text-align，
-     因为图标是 svg 不是字，text-align 对它无效 */
   width: $touch-target-min;
   min-height: $touch-target-min;
   display: flex;
@@ -533,7 +514,6 @@ watch(
 
 .cal-title {
   min-width: 130px;
-  /* 标题可点（展开年月滚轮），44px 行盒保证触控目标 */
   min-height: $touch-target-min;
   display: flex;
   align-items: center;
@@ -634,11 +614,8 @@ watch(
 
 /*
  * 今天（未选中态）：浅金底 + 深金字 + 1.5px 金色内描边。
- *
- * ⚠️ 内描边是必需的，不是装饰 —— $v11-gold-soft 压白卡只有 1.07 可见度，
- *    没有它就完全看不出这里是个圆。（这是 v1.1 调色板的已知缺口，见 tokens.scss §10）
  * 文字 #8F5312 压 #FDF6EF = 5.74:1 ✅
- * 选中态由后面的 .selected 覆盖（实心金 + 白字 4.87:1），两者可同时存在，靠源码顺序决胜。
+ * 选中态由后面的 .selected 覆盖（实心金 + 白字 4.87:1）。
  */
 .today {
   background: $v11-gold-soft;
