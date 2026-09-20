@@ -158,8 +158,10 @@ const wheelValue = ref([0, 0]);
 /** 展开面板：date（日历在上 + 时刻行）| time（日期行 + 时刻行 + 滚轮） */
 const panel = ref<'date' | 'time'>('date');
 
-/* ===== 月份 swiper（3 item，动画结束后静默复位到中间）===== */
-const swiperIndex = ref(1);
+/* ===== 月份 swiper（5 item，动画结束后静默复位到中间）===== */
+/** 中间 item 的下标：前后各预渲染 2 个月，共 5 屏 */
+const SWIPER_CENTER = 2;
+const swiperIndex = ref(SWIPER_CENTER);
 /** swiper 动画时长；静默复位时临时置 0（不动画） */
 const swiperDuration = ref(SWIPE_MS);
 /** 动画期间忽略连点 */
@@ -169,10 +171,10 @@ const swipeDelta = ref(0);
 /** 复位过程中，避免 animationfinish 重入 */
 let resetting = false;
 
-/** 三个 item 对应的 {year, month}；越界（<2000-01 / >MAX_YEAR-12）为 null */
+/** 五个 item 对应的 {year, month}；越界（<2000-01 / >MAX_YEAR-12）为 null */
 const swiperMonths = computed<({ year: number; month: number } | null)[]>(() => {
   const base = viewYear.value * 12 + viewMonth.value;
-  return [-1, 0, 1].map((d) => {
+  return [-2, -1, 0, 1, 2].map((d) => {
     const idx = base + d;
     if (idx < MIN_YEAR * 12 || idx > MAX_YEAR * 12 + 11) return null;
     return { year: Math.floor(idx / 12), month: ((idx % 12) + 12) % 12 };
@@ -244,7 +246,7 @@ function shiftMonth(delta: number) {
   if (base < MIN_YEAR * 12 || base > MAX_YEAR * 12 + 11) return;
   swipeDelta.value = delta;
   animating.value = true;
-  swiperIndex.value = delta > 0 ? 2 : 0;
+  swiperIndex.value = SWIPER_CENTER + delta;
 }
 
 /**
@@ -253,9 +255,12 @@ function shiftMonth(delta: number) {
  */
 function onSwipe(e: any) {
   const i = e.detail.current;
-  if (i === 1) return;
-  if (animating.value) return;
-  swipeDelta.value = i === 0 ? -1 : 1;
+  if (i === SWIPER_CENTER) return;
+  // 复位期间（duration=0 的静默跳转）会触发一次 change，需忽略
+  if (resetting) return;
+  // 记录方向（支持快速滑动一次跨多屏）；不因 animating 提前 return，
+  // 否则快滑时 delta 会丢，导致复位到错误月份
+  swipeDelta.value = i - SWIPER_CENTER;
   animating.value = true;
 }
 
@@ -266,11 +271,12 @@ function onSwipe(e: any) {
 async function onSwipeFinish(e: any) {
   if (resetting) return;
   const i = e.detail.current;
-  if (i === 1) {
+  if (i === SWIPER_CENTER) {
     animating.value = false;
     return;
   }
-  const d = swipeDelta.value;
+  // 直接由 current 算 delta，比依赖 swipeDelta 更可靠（防快滑时状态错乱）
+  const d = i - SWIPER_CENTER;
   if (!d) {
     animating.value = false;
     return;
@@ -281,11 +287,13 @@ async function onSwipeFinish(e: any) {
   // 否则 swiper 会先按旧数据渲染一帧（滑入的月错位），再复位时闪一下。
   swiperDuration.value = 0;
   const base = viewYear.value * 12 + viewMonth.value + d;
-  if (base >= MIN_YEAR * 12 && base <= MAX_YEAR * 12 + 11) {
-    viewYear.value = Math.floor(base / 12);
-    viewMonth.value = ((base % 12) + 12) % 12;
-  }
-  swiperIndex.value = 1;
+  const clamped = Math.min(
+    Math.max(base, MIN_YEAR * 12),
+    MAX_YEAR * 12 + 11,
+  );
+  viewYear.value = Math.floor(clamped / 12);
+  viewMonth.value = ((clamped % 12) + 12) % 12;
+  swiperIndex.value = SWIPER_CENTER;
 
   await nextTick();
   swiperDuration.value = SWIPE_MS;
@@ -338,7 +346,7 @@ function confirmMonthPicker() {
   viewYear.value = years[yearIndex.value];
   viewMonth.value = monthIndex.value;
   showMonthPicker.value = false;
-  swiperIndex.value = 1;
+  swiperIndex.value = SWIPER_CENTER;
 }
 
 /** 时刻开关：开 → 切到时刻面板；关 → 切回日期面板 */
@@ -383,7 +391,7 @@ watch(
     swipeDelta.value = 0;
     resetting = false;
     swiperDuration.value = SWIPE_MS;
-    swiperIndex.value = 1;
+    swiperIndex.value = SWIPER_CENTER;
 
     const parts = (props.date || '').split('-').map(Number);
     if (parts.length === 3 && parts.every((n) => Number.isFinite(n))) {
