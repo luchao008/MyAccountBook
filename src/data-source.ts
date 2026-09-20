@@ -5,6 +5,7 @@ import { User } from './entity/user.entity';
 import { Category } from './entity/category.entity';
 import { Transaction } from './entity/transaction.entity';
 import { Account } from './entity/account.entity';
+import { Admin } from './entity/admin.entity';
 
 /**
  * TypeORM CLI 专用数据源
@@ -23,6 +24,6 @@ export default new DataSource({
   timezone: '+08:00',
   synchronize: false,
   logging: false,
-  entities: [User, Category, Transaction, Account],
+  entities: [User, Category, Transaction, Account, Admin],
   migrations: [join(__dirname, 'migration/*{.ts,.js}')],
 });

@@ -12,7 +12,15 @@ import prettierConfig from 'eslint-config-prettier';
 export default tseslint.config(
   {
     // frontend/ 是独立的 uni-app 项目，有自己的依赖与工具链，交给它自己管
-    ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'frontend/**', '*.js'],
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      'coverage/**',
+      // 两个独立前端项目，各有自己的依赖与工具链，交给它们自己管
+      'frontend/**',
+      'admin-web/**',
+      '*.js',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

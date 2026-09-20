@@ -8,6 +8,7 @@ import * as crossDomain from '@midwayjs/cross-domain';
 import { join } from 'path';
 import { DefaultErrorFilter } from './filter/default.filter';
 import { JwtGuardMiddleware } from './middleware/jwt.guard';
+import { AdminGuardMiddleware } from './middleware/admin.guard';
 import { ResponseMiddleware } from './middleware/response.middleware';
 
 @Configuration({
@@ -27,7 +28,7 @@ export class MainConfiguration implements ILifeCycle {
     // Midway v4 不再读取 config.middleware，
     // 全局中间件与过滤器都必须在 onReady 中显式注册。
     // 顺序：JWT 守卫 -> 响应包装
-    this.app.useMiddleware([JwtGuardMiddleware, ResponseMiddleware]);
+    this.app.useMiddleware([JwtGuardMiddleware, AdminGuardMiddleware, ResponseMiddleware]);
     this.app.useFilter([DefaultErrorFilter]);
   }
 }

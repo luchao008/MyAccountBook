@@ -3,6 +3,7 @@ import { User } from '../entity/user.entity';
 import { Category } from '../entity/category.entity';
 import { Transaction } from '../entity/transaction.entity';
 import { Account } from '../entity/account.entity';
+import { Admin } from '../entity/admin.entity';
 
 /**
  * 实体列表。
@@ -17,7 +18,7 @@ import { Account } from '../entity/account.entity';
  * 改为显式 import 实体类（与 `src/data-source.ts` 一致）：
  * 不依赖任何运行时路径，dev / prod 都稳。
  */
-const entities = [User, Category, Transaction, Account];
+const entities = [User, Category, Transaction, Account, Admin];
 
 export default {
   keys: process.env.APP_KEYS || 'my-account-book-secret-key',

@@ -100,7 +100,9 @@ async function seed() {
       console.log(`[seed] 用户已存在，跳过：${SEED_USER.username}`);
     } else {
       const passwordHash = await bcrypt.hash(SEED_USER.password, 10);
-      user = await userRepo.save(userRepo.create({ username: SEED_USER.username, passwordHash }));
+      user = await userRepo.save(
+        userRepo.create({ username: SEED_USER.username, passwordHash, status: 'active' as const }),
+      );
       console.log(`[seed] 已创建用户：${SEED_USER.username} / ${SEED_USER.password}`);
     }
 

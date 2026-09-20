@@ -19,15 +19,25 @@ export enum ErrorCode {
   // 认证
   UNAUTHORIZED = 40100,
   LOGIN_FAILED = 40101,
+  /** 登录时：账号审核中（中台审批制，D18） */
+  USER_PENDING = 40102,
+  /** 登录时：账号已被停用 */
+  USER_DISABLED = 40103,
 
   // 权限
   FORBIDDEN = 40300,
+  /** 管理员登录失败（不暴露账号是否存在，D17） */
+  ADMIN_LOGIN_FAILED = 40301,
+  /** 管理员账号已被停用 */
+  ADMIN_DISABLED = 40302,
 
   // 资源不存在
   NOT_FOUND = 40400,
   CATEGORY_NOT_FOUND = 40401,
   TRANSACTION_NOT_FOUND = 40402,
   ACCOUNT_NOT_FOUND = 40403,
+  /** 中台管理接口的目标用户不存在 */
+  USER_NOT_FOUND = 40404,
 
   // 冲突
   CONFLICT = 40900,
@@ -70,6 +80,10 @@ export enum ErrorCode {
   CATEGORY_REORDER_LEVEL_MISMATCH = 40012,
   /** 排序列表不是该层级的全集 —— 归一化会漏掉未列出的分类 */
   CATEGORY_REORDER_INCOMPLETE = 40013,
+
+  // 用户状态管理（中台，400xx 段）
+  /** approve/reject 只对 pending 用户生效 */
+  USER_NOT_PENDING = 40014,
 
   // 服务端
   INTERNAL = 50000,
