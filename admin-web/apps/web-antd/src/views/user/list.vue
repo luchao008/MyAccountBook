@@ -69,7 +69,12 @@ const gridOptions: VxeTableGridOptions<UserAdminItem> = {
     },
     { field: 'accountCount', title: '账本数', width: 90 },
     { field: 'transactionCount', title: '流水数', width: 90 },
-    { field: 'createdAt', title: '注册时间', width: 170 },
+    {
+      field: 'createdAt',
+      formatter: 'formatDateTime',
+      title: '注册时间',
+      width: 170,
+    },
     { field: 'action', slots: { default: 'action' }, title: '操作', width: 260 },
   ],
   height: 'auto',
@@ -160,36 +165,39 @@ async function onDelete(row: UserAdminItem) {
         </Tag>
       </template>
       <template #action="{ row }">
-        <template v-if="row.status === 'pending'">
-          <a-button size="small" type="link" @click="onApprove(row)">
-            通过
-          </a-button>
-          <a-button danger size="small" type="link" @click="onReject(row)">
-            驳回
-          </a-button>
-        </template>
-        <template v-else>
-          <a-button
-            v-if="row.status === 'active'"
-            danger
-            size="small"
-            type="link"
-            @click="onDisable(row)"
-          >
-            停用
-          </a-button>
-          <a-button
-            v-else
-            size="small"
-            type="link"
-            @click="onEnable(row)"
-          >
-            启用
-          </a-button>
-          <a-button danger size="small" type="link" @click="onDelete(row)">
-            删除
-          </a-button>
-        </template>
+        <a-space :size="8">
+          <template v-if="row.status === 'pending'">
+            <a-button ghost size="small" type="primary" @click="onApprove(row)">
+              通过
+            </a-button>
+            <a-button danger ghost size="small" @click="onReject(row)">
+              驳回
+            </a-button>
+          </template>
+          <template v-else>
+            <a-button
+              v-if="row.status === 'active'"
+              danger
+              ghost
+              size="small"
+              @click="onDisable(row)"
+            >
+              停用
+            </a-button>
+            <a-button
+              v-else
+              ghost
+              size="small"
+              type="primary"
+              @click="onEnable(row)"
+            >
+              启用
+            </a-button>
+            <a-button danger ghost size="small" @click="onDelete(row)">
+              删除
+            </a-button>
+          </template>
+        </a-space>
       </template>
     </Grid>
   </Page>

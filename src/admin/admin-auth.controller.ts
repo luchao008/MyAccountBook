@@ -10,6 +10,16 @@ export class AdminAuthController {
   @Inject()
   adminAuthService: AdminAuthService;
 
+  /**
+   * 请求上下文。
+   *
+   * 注意：必须用**属性注入**（@Inject() ctx），不能写成方法参数 @Inject() ctx。
+   * Midway v4 没有 @Ctx 装饰器，方法参数位置的 @Inject() 会被当作"按名字注入依赖"，
+   * 触发 MidwayDefinitionNotFoundError（Definition for "[object Object"）。
+   */
+  @Inject()
+  ctx: Context;
+
   @ApiOperation({
     summary: '管理员登录',
     description: '校验账号密码，返回带 admin scope 的 JWT（有效期 7 天）。',
@@ -26,8 +36,8 @@ export class AdminAuthController {
    */
   @ApiOperation({ summary: '当前管理员信息' })
   @Get('/me')
-  async me(@Inject() ctx: Context) {
-    const admin = await this.adminAuthService.findAdminInfo(ctx.admin.adminId);
+  async me() {
+    const admin = await this.adminAuthService.findAdminInfo(this.ctx.admin.adminId);
     // 字段对齐 Vben 的 UserInfo：avatar/desc 中台 v1 不用，占位空串
     return {
       userId: String(admin.id),

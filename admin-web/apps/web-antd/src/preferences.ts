@@ -10,4 +10,9 @@ export const overridesPreferences = defineOverridesPreferences({
   app: {
     name: import.meta.env.VITE_APP_TITLE,
   },
+  widget: {
+    // 中台 v1 无通知体系与锁屏体系，关闭对应部件
+    notification: false,
+    lockScreen: false,
+  },
 });
