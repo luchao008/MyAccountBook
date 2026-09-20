@@ -6,8 +6,15 @@
         <text class="done" @click="confirm">完成</text>
       </view>
 
-      <!-- 日期面板 ↔ 时刻面板：淡入淡出 + 轻微上下位移 -->
-      <transition name="panel-fade" mode="out-in">
+      <!-- 日期面板 ↔ 时刻面板：手风琴（高度展开/收起） -->
+      <transition
+        name="accordion"
+        mode="out-in"
+        @enter="onAccEnter"
+        @after-enter="onAccAfterEnter"
+        @leave="onAccLeave"
+        @after-leave="onAccAfterLeave"
+      >
         <!-- ===== 日期面板：日历在上，「时刻」行在下 ===== -->
         <view v-if="panel === 'date'" key="date" class="panel">
           <view class="cal">
@@ -24,8 +31,15 @@
               <view class="cal-nav" @click="shiftMonth(1)"><SvgIcon name="icon-chevron-right" :size="20" /></view>
             </view>
 
-            <!-- 日历网格 ↔ 年月滚轮：淡入淡出 -->
-            <transition name="panel-fade" mode="out-in">
+            <!-- 日历网格 ↔ 年月滚轮：手风琴 -->
+            <transition
+              name="accordion"
+              mode="out-in"
+              @enter="onAccEnter"
+              @after-enter="onAccAfterEnter"
+              @leave="onAccLeave"
+              @after-leave="onAccAfterLeave"
+            >
               <!-- 年月快速选择 -->
               <view v-if="showMonthPicker" key="wheel" class="month-picker">
                 <picker-view class="wheel" :value="monthWheelValue" @change="onMonthWheelChange">
@@ -127,8 +141,8 @@ import { ref, computed, watch, nextTick } from 'vue';
 const weekLabels = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 const dowNames = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
 
-/** swiper 切月动画时长（ms） */
-const SWIPE_MS = 220;
+/** swiper 切月动画时长（ms），也用于手风琴 */
+const SWIPE_MS = 240;
 
 /** 可选年份：2000 ~ 当前年 + 5（记账常要补录历史） */
 const MIN_YEAR = 2000;
@@ -185,6 +199,32 @@ const yearIndex = ref(0);
 const monthIndex = ref(0);
 const monthWheelValue = computed(() => [yearIndex.value, monthIndex.value]);
 
+/* ===== 手风琴过渡（高度展开/收起）===== */
+function onAccEnter(el: Element) {
+  const h = el as HTMLElement;
+  h.style.height = '0px';
+  h.style.overflow = 'hidden';
+  void h.offsetHeight;
+  h.style.height = h.scrollHeight + 'px';
+}
+function onAccAfterEnter(el: Element) {
+  const h = el as HTMLElement;
+  h.style.height = '';
+  h.style.overflow = '';
+}
+function onAccLeave(el: Element) {
+  const h = el as HTMLElement;
+  h.style.height = h.scrollHeight + 'px';
+  h.style.overflow = 'hidden';
+  void h.offsetHeight;
+  h.style.height = '0px';
+}
+function onAccAfterLeave(el: Element) {
+  const h = el as HTMLElement;
+  h.style.height = '';
+  h.style.overflow = '';
+}
+
 /** 日期摘要（如「2026年9月20日 星期日」） */
 const dateText = computed(() => {
   const parts = selectedDate.value.split('-').map(Number);
@@ -233,7 +273,7 @@ function selectOf(y: number, m: number, d: number) {
 }
 
 /**
- * 点箭头翻月：把 swiper 切到前/后 item，由 onSwipe 统一处理。
+ * 点箭头翻月：改 swiperIndex 触发 swiper 的滑动动画（与手指滑动同一套），
  * 越界时忽略。
  */
 function shiftMonth(delta: number) {
@@ -421,25 +461,15 @@ watch(
   padding: 10px 12px;
 }
 
-/* ===== 面板切换过渡（淡入淡出 + 轻微上下位移）===== */
+/* ===== 手风琴过渡（高度展开/收起，JS 钩子设 height）===== */
+.accordion-enter-active,
+.accordion-leave-active {
+  transition: height 0.24s ease;
+}
+
 .panel {
   display: flex;
   flex-direction: column;
-}
-
-.panel-fade-enter-active,
-.panel-fade-leave-active {
-  transition: opacity 0.22s ease, transform 0.22s ease;
-}
-
-.panel-fade-enter-from {
-  opacity: 0;
-  transform: translateY(8px);
-}
-
-.panel-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
 }
 
 /* ===== 摘要行（日期 / 时刻）===== */
