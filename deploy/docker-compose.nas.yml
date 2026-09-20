@@ -43,7 +43,12 @@ services:
     depends_on:
       - backend
     ports:
-      - "8080:80"
+      # IPv4 与 IPv6 分开显式绑定：
+      # - 默认的 "8080:80" 只监听 IPv4，纯 IPv6 外网访问会连不上；
+      # - 只写 "[::]:8080:80" 在群晖上（bindv6only=1）会丢掉 IPv4。
+      # 两条并存才两边都通。
+      - "0.0.0.0:8080:80"
+      - "[::]:8080:80"
 
   admin:
     image: account-book-admin:latest
@@ -52,4 +57,6 @@ services:
     depends_on:
       - backend
     ports:
-      - "8081:80"
+      # 同上，IPv4 + IPv6 双绑
+      - "0.0.0.0:8081:80"
+      - "[::]:8081:80"
