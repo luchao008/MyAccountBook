@@ -37,6 +37,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       PORT: 7001
       NODE_ENV: production
+      # 与 DB 连接串 timezone:'+08:00' 一致，避免 DATE 列读取偏移一天
+      TZ: Asia/Shanghai
     # 先跑迁移（幂等：已执行的会跳过）再启动服务，首次部署一条命令即可
     command: sh -c "node ./node_modules/typeorm/cli.js migration:run -d dist/data-source.js && node bootstrap.js"
 

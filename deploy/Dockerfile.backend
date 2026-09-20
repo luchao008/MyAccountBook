@@ -18,6 +18,11 @@
 FROM node:20-slim
 WORKDIR /app
 ENV NODE_ENV=production
+# ⚠️ 时区必须与 DB 连接串的 timezone:'+08:00' 一致，否则 DATE 列读出来偏移一天：
+#    后端 config 里 timezone='+08:00'，驱动把 DATE 解析成 UTC 瞬间值，
+#    TypeORM 再用**进程本地时区**取年月日 —— 本机 +08 恰好抵消（正确），
+#    容器默认 UTC 就会把 2026-09-20 读成 2026-09-19（开发全绿、生产才暴露）。
+ENV TZ=Asia/Shanghai
 # 依赖与编译产物来自宿主机（见上）。package.json 是运行时读的（版本号等）。
 COPY node_modules ./node_modules
 COPY dist ./dist

@@ -32,6 +32,8 @@ services:
       JWT_SECRET: "ChangeMeJwtSecret_abcdef123456"
       PORT: "7001"
       NODE_ENV: production
+      # 与 DB 连接串 timezone:'+08:00' 一致，避免 DATE 列读取偏移一天
+      TZ: Asia/Shanghai
     command: sh -c "node ./node_modules/typeorm/cli.js migration:run -d dist/data-source.js && node bootstrap.js"
 
   web:
