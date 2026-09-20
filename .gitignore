@@ -6,6 +6,11 @@ coverage/
 .env
 .env.*
 !.env.example
+# admin-web 构建配置（不含密码，入库保证构建可复现）
+!admin-web/apps/web-antd/.env
+!admin-web/apps/web-antd/.env.production
+!admin-web/apps/web-antd/.env.development
+!admin-web/apps/web-antd/.env.analyze
 .DS_Store
 .idea/
 *.tsbuildinfo

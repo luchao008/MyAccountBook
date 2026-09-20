@@ -1,0 +1,9 @@
+# ── 中台（admin-web）前端镜像 ──
+# 与 Dockerfile.frontend 同理：不在容器内构建，Mac 上先构建好
+# admin-web/apps/web-antd/dist，镜像只负责拷进 nginx。
+# 构建前请先跑：cd admin-web && pnpm build:antd
+# （deploy/build-and-export.sh 已自动包含这一步）
+FROM nginx:alpine
+COPY deploy/nginx.admin.conf /etc/nginx/conf.d/default.conf
+COPY admin-web/apps/web-antd/dist /usr/share/nginx/html
+EXPOSE 80
