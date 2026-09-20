@@ -42,3 +42,12 @@ services:
       - backend
     ports:
       - "8080:80"
+
+  admin:
+    image: account-book-admin:latest
+    container_name: account-book-admin
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8081:80"
