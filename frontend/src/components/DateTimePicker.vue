@@ -10,51 +10,83 @@
       <view class="cal">
         <view class="cal-header">
           <view class="cal-nav" @click="shiftMonth(-1)"><SvgIcon name="icon-chevron-left" :size="20" /></view>
-          <text class="cal-title">{{ viewYear }} 年 {{ viewMonth + 1 }} 月</text>
+          <!-- 点标题展开/收起「年 + 月」快速选择 -->
+          <view class="cal-title" @click="toggleMonthPicker">
+            <text class="cal-title-text">{{ viewYear }} 年 {{ viewMonth + 1 }} 月</text>
+            <SvgIcon
+              class="cal-title-caret"
+              :name="showMonthPicker ? 'icon-chevron-up' : 'icon-chevron-down'"
+              :size="16"
+            />
+          </view>
           <view class="cal-nav" @click="shiftMonth(1)"><SvgIcon name="icon-chevron-right" :size="20" /></view>
         </view>
 
-        <view class="week-row">
-          <text v-for="w in weekLabels" :key="w" class="week-label">{{ w }}</text>
-        </view>
-
-        <view class="day-grid">
-          <view v-for="(d, i) in cells" :key="i" class="day-cell">
-            <view
-              v-if="d"
-              class="day"
-              :class="{
-                today: isToday(d) && !isSelected(d),
-                selected: isSelected(d),
-              }"
-              @click="select(d)"
-            >
-              <text class="day-text">{{ isToday(d) && !isSelected(d) ? '今' : d }}</text>
-            </view>
+        <!-- 年月快速选择：展开时替换日历网格，底部橙色「确定」 -->
+        <view v-if="showMonthPicker" class="month-picker">
+          <picker-view
+            class="wheel"
+            :value="monthWheelValue"
+            @change="onMonthWheelChange"
+          >
+            <picker-view-column>
+              <view v-for="y in years" :key="'y' + y" class="wheel-item">{{ y }} 年</view>
+            </picker-view-column>
+            <picker-view-column>
+              <view v-for="m in 12" :key="'m' + m" class="wheel-item">{{ m }} 月</view>
+            </picker-view-column>
+          </picker-view>
+          <view class="confirm" @click="confirmMonthPicker">
+            <text class="confirm-text">确定</text>
           </view>
         </view>
+
+        <!-- 日历网格（年月选择展开时隐藏） -->
+        <template v-else>
+          <view class="week-row">
+            <text v-for="w in weekLabels" :key="w" class="week-label">{{ w }}</text>
+          </view>
+
+          <view class="day-grid">
+            <view v-for="(d, i) in cells" :key="i" class="day-cell">
+              <view
+                v-if="d"
+                class="day"
+                :class="{
+                  today: isToday(d) && !isSelected(d),
+                  selected: isSelected(d),
+                }"
+                @click="select(d)"
+              >
+                <text class="day-text">{{ isToday(d) && !isSelected(d) ? '今' : d }}</text>
+              </view>
+            </view>
+          </view>
+        </template>
       </view>
 
-      <!-- 时刻开关 -->
-      <view class="time-row">
-        <text class="time-label">时刻</text>
-        <switch :checked="timeEnabled" color="#CF4A12" @change="onTimeSwitch" />
-      </view>
+      <!-- 时刻（年月选择展开时隐藏） -->
+      <template v-if="!showMonthPicker">
+        <view class="time-row">
+          <text class="time-label">时刻</text>
+          <switch :checked="timeEnabled" color="#CF4A12" @change="onTimeSwitch" />
+        </view>
 
-      <!-- 时分滚轮 -->
-      <picker-view
-        v-if="timeEnabled"
-        class="wheel"
-        :value="wheelValue"
-        @change="onWheelChange"
-      >
-        <picker-view-column>
-          <view v-for="h in 24" :key="'h' + h" class="wheel-item">{{ pad(h - 1) }}</view>
-        </picker-view-column>
-        <picker-view-column>
-          <view v-for="m in 60" :key="'m' + m" class="wheel-item">{{ pad(m - 1) }}</view>
-        </picker-view-column>
-      </picker-view>
+        <!-- 时分滚轮 -->
+        <picker-view
+          v-if="timeEnabled"
+          class="wheel"
+          :value="wheelValue"
+          @change="onWheelChange"
+        >
+          <picker-view-column>
+            <view v-for="h in 24" :key="'h' + h" class="wheel-item">{{ pad(h - 1) }}</view>
+          </picker-view-column>
+          <picker-view-column>
+            <view v-for="m in 60" :key="'m' + m" class="wheel-item">{{ pad(m - 1) }}</view>
+          </picker-view-column>
+        </picker-view>
+      </template>
     </view>
   </view>
 </template>
@@ -90,17 +122,30 @@ const minute = ref(0);
 /** picker-view 的受控值 [时下标, 分下标] */
 const wheelValue = ref([0, 0]);
 
+/* ===== 年月快速选择 ===== */
+/** 是否展开「年 + 月」滚轮（展开时替换日历网格） */
+const showMonthPicker = ref(false);
+/** 可选年份：2000 ~ 当前年 + 5（记账常要补录历史） */
+const MIN_YEAR = 2000;
+const MAX_YEAR = new Date().getFullYear() + 5;
+const years = Array.from({ length: MAX_YEAR - MIN_YEAR + 1 }, (_, i) => MIN_YEAR + i);
+/** 滚轮下标：年 / 月 */
+const yearIndex = ref(0);
+const monthIndex = ref(0);
+/** 两列 → [年下标, 月下标] */
+const monthWheelValue = computed(() => [yearIndex.value, monthIndex.value]);
+
 function pad(n: number): string {
   return String(n).padStart(2, '0');
 }
 
 function todayStr(): string {
   const d = new Date();
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
 }
 
 function dateStr(y: number, m: number, d: number): string {
-  return `${y}-${pad(m + 1)}-${pad(d)}`;
+  return y + '-' + pad(m + 1) + '-' + pad(d);
 }
 
 /** 日历格子：前置空白补齐到周日起始，再排当月天数 */
@@ -131,6 +176,33 @@ function shiftMonth(delta: number) {
   viewMonth.value = next.getMonth();
 }
 
+/** 展开/收起年月滚轮；展开时对齐当前日历正在显示的年月 */
+function toggleMonthPicker() {
+  if (showMonthPicker.value) {
+    showMonthPicker.value = false;
+    return;
+  }
+  const yi = years.indexOf(viewYear.value);
+  yearIndex.value = yi >= 0 ? yi : years.indexOf(new Date().getFullYear());
+  monthIndex.value = viewMonth.value;
+  showMonthPicker.value = true;
+}
+
+function onMonthWheelChange(e: any) {
+  yearIndex.value = e.detail.value[0];
+  monthIndex.value = e.detail.value[1];
+}
+
+/**
+ * 确认年月：只把日历翻到该年月，**不选中任何日期** ——
+ * 具体选哪天仍由用户点日历决定（年月选择只负责「翻页」）。
+ */
+function confirmMonthPicker() {
+  viewYear.value = years[yearIndex.value];
+  viewMonth.value = monthIndex.value;
+  showMonthPicker.value = false;
+}
+
 function onTimeSwitch(e: any) {
   timeEnabled.value = !!e.detail.value;
   // 打开时默认落在当前时间，少滚一下
@@ -149,10 +221,9 @@ function onWheelChange(e: any) {
 }
 
 function confirm() {
-  emit('confirm', {
-    date: selectedDate.value,
-    time: timeEnabled.value ? `${pad(hour.value)}:${pad(minute.value)}` : null,
-  });
+  let t: string | null = null;
+  if (timeEnabled.value) t = pad(hour.value) + ':' + pad(minute.value);
+  emit('confirm', { date: selectedDate.value, time: t });
   emit('update:visible', false);
 }
 
@@ -165,6 +236,7 @@ watch(
   () => props.visible,
   (v) => {
     if (!v) return;
+    showMonthPicker.value = false;
 
     const parts = (props.date || '').split('-').map(Number);
     if (parts.length === 3 && parts.every((n) => Number.isFinite(n))) {
@@ -193,6 +265,7 @@ watch(
   { immediate: true },
 );
 </script>
+
 
 <style scoped lang="scss">
 .mask {
@@ -252,11 +325,45 @@ watch(
 
 .cal-title {
   min-width: 130px;
-  text-align: center;
+  /* 标题可点（展开年月滚轮），44px 行盒保证触控目标 */
+  min-height: $touch-target-min;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.cal-title-text {
   font-size: $font-body-lg;
   line-height: $lh-body-lg;
   font-weight: $weight-semibold;
   color: $v11-text-primary;
+}
+
+.cal-title-caret {
+  color: $v11-text-secondary;
+}
+
+/* ===== 年月快速选择 ===== */
+.month-picker {
+  padding-bottom: 4px;
+}
+
+.confirm {
+  margin: 12px 12px 4px;
+  min-height: $touch-target-min;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $v11-gold;
+  border-radius: $v11-radius-btn;
+}
+
+.confirm-text {
+  font-size: $font-body-lg;
+  line-height: $lh-body-lg;
+  font-weight: $weight-medium;
+  color: $text-inverse;
 }
 
 .week-row {

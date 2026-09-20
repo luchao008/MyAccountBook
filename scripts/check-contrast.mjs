@@ -787,8 +787,12 @@ section('13. 字号阶梯自洽（文档 §3.2 ↔ tokens.scss ↔ 各 .vue）')
   //    文字做不到"单个标签换样式"）→ 新增 1 处字号（$font-caption）
   //    → 文字 240 → 241，总数 242 → 243。
   //    ⚠️ 该 chip 真实承载文案（月份名），不是死样式；已显式声明 line-height。
-  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 243, 0);
-  expect('  其中文字字号 $font-*', nText, 241, 0);
+  //    2026-09-20 更新二十八：DateTimePicker 新增「年月快速选择」（点日历标题展开
+  //    年/月两列滚轮 + 底部橙色「确定」按钮，.confirm-text/$font-body-lg）
+  //    → 新增 1 处字号 → 文字 241 → 242，总数 243 → 244。
+  //    ⚠️ 该按钮真实承载文案（"确定"），不是死样式；已显式声明 line-height。
+  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 244, 0);
+  expect('  其中文字字号 $font-*', nText, 242, 0);
   expect('  其中图标尺寸 $icon-*', nIcon, 2, 0);
   expect('  其中字面量（必须为 0）', nLiteral, 0, 0);
 }
