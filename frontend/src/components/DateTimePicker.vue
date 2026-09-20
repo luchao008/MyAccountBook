@@ -59,8 +59,8 @@
           </template>
         </view>
 
-        <!-- 时刻行（在日历下方） -->
-        <view class="row" @click="onTimeRowClick">
+        <!-- 时刻行（在日历下方；年月滚轮展开时隐藏） -->
+        <view v-if="!showMonthPicker" class="row" @click="onTimeRowClick">
           <text class="row-label">时刻</text>
           <view class="row-right">
             <text v-if="timeEnabled" class="row-value">{{ timeText }}</text>
@@ -330,7 +330,7 @@ watch(
   border-radius: 16px 16px 0 0;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
   /* 固定高度：切面板（日历/年月滚轮/时分滚轮）时弹窗高度不跳动 */
-  height: 560px;
+  height: 500px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -390,9 +390,7 @@ watch(
 
 /* ===== 日历 ===== */
 .cal {
-  flex: 1;
   padding: 0 12px;
-  overflow-y: auto;
 }
 
 .cal-header {
