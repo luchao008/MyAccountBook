@@ -10,6 +10,16 @@ export function login(data: { username: string; password: string }): Promise<Log
   return http.post('/auth/login', data) as any;
 }
 
-export function register(data: { username: string; password: string }): Promise<LoginResult> {
+/** 注册返回：申请制，不含 token（中台审批，D18） */
+export interface RegisterResult {
+  status: 'pending';
+  message: string;
+  user: { id: string; username: string };
+}
+
+export function register(data: {
+  username: string;
+  password: string;
+}): Promise<RegisterResult> {
   return http.post('/auth/register', data) as any;
 }

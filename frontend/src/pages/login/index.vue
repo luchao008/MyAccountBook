@@ -71,10 +71,13 @@ async function submit() {
   loading.value = true;
   try {
     if (isRegister.value) {
-      await userStore.register(form.username.trim(), form.password);
-    } else {
-      await userStore.login(form.username.trim(), form.password);
+      // 申请制：注册只提交申请，不签发 token，需管理员审批后登录
+      const res = await userStore.register(form.username.trim(), form.password);
+      uni.showToast({ title: res.message, icon: 'none', duration: 2500 });
+      isRegister.value = false;
+      return;
     }
+    await userStore.login(form.username.trim(), form.password);
     uni.reLaunch({ url: '/pages/main/index' });
   } catch (err: any) {
     // 错误提示已在 request 拦截器里统一 toast

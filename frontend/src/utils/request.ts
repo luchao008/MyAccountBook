@@ -59,8 +59,10 @@ http.interceptors.response.use(
     const status = error?.statusCode;
     const body = error?.data;
 
-    // 未认证：清登录态并跳登录页
-    if (status === 401 || body?.code === 40100) {
+    // token 失效（40100）或未知 401：清登录态并跳登录页。
+    // 注意：登录失败码 40101/40102/40103 的 HTTP 状态也是 401，
+    // 但它们属于"本次操作失败"，应弹提示而非跳转，故按业务码判断。
+    if (body?.code === 40100 || (status === 401 && !body?.code)) {
       uni.removeStorageSync('token');
       uni.removeStorageSync('userInfo');
       uni.reLaunch({ url: '/pages/login/index' });

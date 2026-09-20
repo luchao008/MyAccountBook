@@ -1,5 +1,9 @@
 import { defineStore } from 'pinia';
-import { login as apiLogin, register as apiRegister } from '@/api/auth';
+import {
+  login as apiLogin,
+  register as apiRegister,
+  type RegisterResult,
+} from '@/api/auth';
 
 interface UserInfo {
   id: string;
@@ -25,10 +29,12 @@ export const useUserStore = defineStore('user', {
       return res;
     },
 
-    async register(username: string, password: string) {
-      const res = await apiRegister({ username, password });
-      this.setSession(res);
-      return res;
+    /**
+     * 注册（申请制）：仅提交申请，不签发 token、不写登录态。
+     * 新用户处于 pending，需管理员在中台审批后才能登录。
+     */
+    async register(username: string, password: string): Promise<RegisterResult> {
+      return apiRegister({ username, password });
     },
 
     setSession(res: { token: string; user: UserInfo }) {
