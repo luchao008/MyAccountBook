@@ -28,10 +28,13 @@ export class AdminAuthController {
   @Get('/me')
   async me(@Inject() ctx: Context) {
     const admin = await this.adminAuthService.findAdminInfo(ctx.admin.adminId);
+    // 字段对齐 Vben 的 UserInfo：avatar/desc 中台 v1 不用，占位空串
     return {
       userId: String(admin.id),
       username: admin.username,
       realName: admin.nickname || admin.username,
+      avatar: '',
+      desc: '',
       roles: ['super'],
       homePath: '/analytics',
     };

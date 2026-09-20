@@ -10,5 +10,9 @@
     "title": "Dashboard",
     "analytics": "Analytics",
     "workspace": "Workspace"
+  },
+  "user": {
+    "title": "User Management",
+    "list": "User List"
   }
 }

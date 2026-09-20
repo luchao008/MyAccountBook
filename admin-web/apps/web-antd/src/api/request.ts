@@ -16,8 +16,6 @@ import { message } from 'ant-design-vue';
 
 import { useAuthStore } from '#/store';
 
-import { refreshTokenApi } from './core';
-
 const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
 
 function createRequestClient(baseURL: string) {
@@ -44,14 +42,13 @@ function createRequestClient(baseURL: string) {
   }
 
   /**
-   * 刷新token逻辑
+   * 刷新token逻辑。
+   *
+   * 中台后端无 refresh 接口（JWT 无状态，7 天有效），
+   * enableRefreshToken 保持 false 时此函数不会被调用。
    */
-  async function doRefreshToken() {
-    const accessStore = useAccessStore();
-    const resp = await refreshTokenApi();
-    const newToken = resp.data;
-    accessStore.setAccessToken(newToken);
-    return newToken;
+  async function doRefreshToken(): Promise<string> {
+    throw new Error('refresh token is not supported');
   }
 
   function formatToken(token: null | string) {
