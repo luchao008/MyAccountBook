@@ -37,20 +37,23 @@
             </view>
           </view>
 
-          <!-- 日历网格：swiper 支持手指左右滑动切月 -->
+          <!--
+            日历网格：swiper 全量渲染所有月份，但只绘制当前 ±2 屏的内容
+            （其余为空占位，同样高度）。current 直接由 year/month 推导，
+            不做「复位到中间」的骚操作 —— 手指滑动与箭头翻月都只改 year/month。
+          -->
           <view v-else class="cal-grid">
             <view class="week-row">
               <text v-for="w in weekLabels" :key="w" class="week-label">{{ w }}</text>
             </view>
             <swiper
               class="month-swiper"
-              :current="swiperIndex"
-              :duration="swiperDuration"
+              :current="currentIndex"
+              :duration="SWIPE_MS"
               @change="onSwipe"
-              @animationfinish="onSwipeFinish"
             >
-              <swiper-item v-for="(m, i) in swiperMonths" :key="i">
-                <view v-if="m" class="day-grid">
+              <swiper-item v-for="(m, i) in allMonths" :key="i">
+                <view v-if="Math.abs(i - currentIndex) <= 2" class="day-grid">
                   <view v-for="(d, j) in monthCells(m.year, m.month)" :key="j" class="day-cell">
                     <view
                       v-if="d"
@@ -117,7 +120,7 @@
 
 <script setup lang="ts">
 import SvgIcon from '@/components/SvgIcon.vue';
-import { ref, computed, watch, nextTick } from 'vue';
+import { ref, computed, watch } from 'vue';
 
 const weekLabels = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 const dowNames = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
@@ -128,6 +131,18 @@ const SWIPE_MS = 240;
 /** 可选年份：2000 ~ 当前年 + 5（记账常要补录历史） */
 const MIN_YEAR = 2000;
 const MAX_YEAR = new Date().getFullYear() + 5;
+
+/**
+ * 全量月份表（2000-01 ~ MAX_YEAR-12），静态不变。
+ * swiper 需要稳定的 item 列表，所以一次性算好；内容按需绘制（见模板 v-if）。
+ */
+const allMonths: { year: number; month: number }[] = (() => {
+  const arr: { year: number; month: number }[] = [];
+  for (let idx = MIN_YEAR * 12; idx <= MAX_YEAR * 12 + 11; idx++) {
+    arr.push({ year: Math.floor(idx / 12), month: idx % 12 });
+  }
+  return arr;
+})();
 
 const props = defineProps<{
   visible: boolean;
@@ -148,6 +163,11 @@ const viewYear = ref(2026);
 const viewMonth = ref(0);
 const selectedDate = ref('');
 
+/** swiper 当前下标，由 year/month 直接推导（不做复位） */
+const currentIndex = computed(
+  () => viewYear.value * 12 + viewMonth.value - MIN_YEAR * 12,
+);
+
 /** 时刻开关：是否记录时刻 */
 const timeEnabled = ref(false);
 const hour = ref(0);
@@ -157,29 +177,6 @@ const wheelValue = ref([0, 0]);
 
 /** 展开面板：date（日历在上 + 时刻行）| time（日期行 + 时刻行 + 滚轮） */
 const panel = ref<'date' | 'time'>('date');
-
-/* ===== 月份 swiper（5 item，动画结束后静默复位到中间）===== */
-/** 中间 item 的下标：前后各预渲染 2 个月，共 5 屏 */
-const SWIPER_CENTER = 2;
-const swiperIndex = ref(SWIPER_CENTER);
-/** swiper 动画时长；静默复位时临时置 0（不动画） */
-const swiperDuration = ref(SWIPE_MS);
-/** 动画期间忽略连点 */
-const animating = ref(false);
-/** 本次滑动方向（+1=下一月，-1=上一月），动画结束后据此提交年月 */
-const swipeDelta = ref(0);
-/** 复位过程中，避免 animationfinish 重入 */
-let resetting = false;
-
-/** 五个 item 对应的 {year, month}；越界（<2000-01 / >MAX_YEAR-12）为 null */
-const swiperMonths = computed<({ year: number; month: number } | null)[]>(() => {
-  const base = viewYear.value * 12 + viewMonth.value;
-  return [-2, -1, 0, 1, 2].map((d) => {
-    const idx = base + d;
-    if (idx < MIN_YEAR * 12 || idx > MAX_YEAR * 12 + 11) return null;
-    return { year: Math.floor(idx / 12), month: ((idx % 12) + 12) % 12 };
-  });
-});
 
 /* ===== 年月快速选择 ===== */
 const showMonthPicker = ref(false);
@@ -235,71 +232,31 @@ function selectOf(y: number, m: number, d: number) {
   selectedDate.value = dateStr(y, m, d);
 }
 
-/**
- * 点箭头翻月：改 swiperIndex 触发 swiper 自身的滑动动画（与手指滑动同一套）。
- * 年月数据不在此刻提交，等动画结束后在 onSwipeFinish 里提交，
- * 否则中途改数据会让滑入的那一屏内容错位。
- */
-function shiftMonth(delta: number) {
-  if (animating.value) return;
-  const base = viewYear.value * 12 + viewMonth.value + delta;
-  if (base < MIN_YEAR * 12 || base > MAX_YEAR * 12 + 11) return;
-  swipeDelta.value = delta;
-  animating.value = true;
-  swiperIndex.value = SWIPER_CENTER + delta;
-}
-
-/**
- * swiper change：动画开始时触发。
- * 手指滑动走这里记录方向；点箭头时已在 shiftMonth 里记过，忽略。
- */
-function onSwipe(e: any) {
-  const i = e.detail.current;
-  if (i === SWIPER_CENTER) return;
-  // 复位期间（duration=0 的静默跳转）会触发一次 change，需忽略
-  if (resetting) return;
-  // 记录方向（支持快速滑动一次跨多屏）；不因 animating 提前 return，
-  // 否则快滑时 delta 会丢，导致复位到错误月份
-  swipeDelta.value = i - SWIPER_CENTER;
-  animating.value = true;
-}
-
-/**
- * swiper animationfinish：动画结束时触发。
- * 在这里提交年月，并把 swiper 静默复位到中间 item（duration=0，视觉不动）。
- */
-async function onSwipeFinish(e: any) {
-  if (resetting) return;
-  const i = e.detail.current;
-  if (i === SWIPER_CENTER) {
-    animating.value = false;
-    return;
-  }
-  // 直接由 current 算 delta，比依赖 swipeDelta 更可靠（防快滑时状态错乱）
-  const d = i - SWIPER_CENTER;
-  if (!d) {
-    animating.value = false;
-    return;
-  }
-  resetting = true;
-
-  // 关键：duration=0 + 更新年月 + index 回中间，必须在同一 tick 完成 ——
-  // 否则 swiper 会先按旧数据渲染一帧（滑入的月错位），再复位时闪一下。
-  swiperDuration.value = 0;
-  const base = viewYear.value * 12 + viewMonth.value + d;
-  const clamped = Math.min(
-    Math.max(base, MIN_YEAR * 12),
+/** 由下标反推年月（下标越界时收敛到边界） */
+function setByIndex(i: number) {
+  const idx = Math.min(
+    Math.max(i + MIN_YEAR * 12, MIN_YEAR * 12),
     MAX_YEAR * 12 + 11,
   );
-  viewYear.value = Math.floor(clamped / 12);
-  viewMonth.value = ((clamped % 12) + 12) % 12;
-  swiperIndex.value = SWIPER_CENTER;
+  viewYear.value = Math.floor(idx / 12);
+  viewMonth.value = idx % 12;
+}
 
-  await nextTick();
-  swiperDuration.value = SWIPE_MS;
-  swipeDelta.value = 0;
-  animating.value = false;
-  resetting = false;
+/**
+ * 点箭头翻月：改 year/month，currentIndex 随之变化 → swiper 平滑滑动。
+ */
+function shiftMonth(delta: number) {
+  const idx = viewYear.value * 12 + viewMonth.value + delta;
+  if (idx < MIN_YEAR * 12 || idx > MAX_YEAR * 12 + 11) return;
+  viewYear.value = Math.floor(idx / 12);
+  viewMonth.value = idx % 12;
+}
+
+/** 手指滑动：swiper 停在新的下标上，把它翻译成年月 */
+function onSwipe(e: any) {
+  const i = e.detail.current;
+  if (i === currentIndex.value) return;
+  setByIndex(i);
 }
 
 /** 点日期行 → 切到日期面板（日期行消失、日历展示在上方） */
@@ -346,7 +303,6 @@ function confirmMonthPicker() {
   viewYear.value = years[yearIndex.value];
   viewMonth.value = monthIndex.value;
   showMonthPicker.value = false;
-  swiperIndex.value = SWIPER_CENTER;
 }
 
 /** 时刻开关：开 → 切到时刻面板；关 → 切回日期面板 */
@@ -387,11 +343,6 @@ watch(
     if (!v) return;
     showMonthPicker.value = false;
     panel.value = 'date';
-    animating.value = false;
-    swipeDelta.value = 0;
-    resetting = false;
-    swiperDuration.value = SWIPE_MS;
-    swiperIndex.value = SWIPER_CENTER;
 
     const parts = (props.date || '').split('-').map(Number);
     if (parts.length === 3 && parts.every((n) => Number.isFinite(n))) {
@@ -420,7 +371,6 @@ watch(
   { immediate: true },
 );
 </script>
-
 
 <style scoped lang="scss">
 .mask {
