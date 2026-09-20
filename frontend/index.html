@@ -23,9 +23,103 @@
     <meta name="apple-mobile-web-app-title" content="记账本" />
     <!--preload-links-->
     <!--app-context-->
+    <!--
+      「添加到主屏幕」后的启动图（boot splash）。
+      iOS 全屏模式没有地址栏和进度条，从点图标到 Vue 挂载这段是纯白，很扎眼。
+
+      ⚠️ 样式必须**内联在这里**，不能放 src/styles/：后者要等 JS 拉完 CSS 才生效，
+         而这段窗口的整个意义就是"在 JS 到达前就把内容画出来"。
+      ⚠️ 视觉照抄登录页 header（背景渐变 / 图标 64 / 标题 28px 600 / 副标题 14px），
+         这样启动图 → 登录页是**无缝**的；若两处不一致，过渡时会跳一下。
+         改登录页头部样式时记得同步这里。
+    -->
+    <style>
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-top: 120px;
+        background: linear-gradient(180deg, #fdf6ef 0%, #f8f8f8 40%);
+        /* 移除时淡出，避免"啪"地一下消失 */
+        transition: opacity 0.2s ease;
+        font-family: -apple-system, system-ui, 'PingFang SC', 'HarmonyOS Sans SC', MiSans,
+          'Source Han Sans SC', 'Noto Sans CJK SC', 'Microsoft YaHei', 'Helvetica Neue', Arial,
+          sans-serif;
+      }
+      #boot-splash img {
+        width: 64px;
+        height: 64px;
+        display: block;
+      }
+      #boot-splash .boot-title {
+        margin-top: 12px;
+        font-size: 28px;
+        line-height: 36px;
+        font-weight: 600;
+        color: #222226;
+      }
+      #boot-splash .boot-subtitle {
+        margin-top: 8px;
+        font-size: 14px;
+        line-height: 22px;
+        color: #6b6b72;
+      }
+    </style>
   </head>
   <body>
+    <!--
+      启动图放在 #app **外面**（不是里面）。
+      放在里面看着更简单（Vue 挂载时 container.innerHTML="" 会顺手清掉它），
+      但实测那样会漏出一段空白：Vue 挂载 → 插入 <uni-app> 是同步的，可**页面组件
+      本身是懒加载 chunk** —— 实测 200KB/s 下，splash 在 2118ms 被清掉、而登录页
+      真正渲染出来是 2841ms，中间 723ms 是空的。
+      所以改成：放外面 + 由下面的脚本等**真实内容**出现后再移除。
+    -->
+    <div id="boot-splash">
+      <img src="/static/app-icon.png" alt="" />
+      <div class="boot-title">记账本</div>
+      <div class="boot-subtitle">简单记录每一笔收支</div>
+    </div>
+
     <div id="app"><!--app-html--></div>
     <script type="module" src="/src/main.ts"></script>
+    <script>
+      /*
+       * 启动图移除时机：等**第一个页面真的渲染出内容**，而不是 Vue 一挂载就撤。
+       *
+       * 判据用「uni-page-body 里有实际文本」：uni-app 的页面外壳（uni-page）先出现、
+       * 页面组件（懒加载 chunk）后填充，只看 uni-page 存在会撤得太早（实测 723ms 空窗）。
+       *
+       * 兜底：最多等 6 秒必须撤掉 —— 否则一旦某天页面渲染失败，启动图会永远糊在屏幕上，
+       * 比白屏更糟（用户连报错都看不到）。
+       */
+      (function () {
+        var splash = document.getElementById('boot-splash');
+        if (!splash) return;
+        var done = false;
+        function remove() {
+          if (done) return;
+          done = true;
+          splash.style.opacity = '0';
+          setTimeout(function () {
+            if (splash.parentNode) splash.parentNode.removeChild(splash);
+          }, 220);
+        }
+        function contentReady() {
+          var body = document.querySelector('uni-page-body');
+          return !!(body && body.innerText && body.innerText.trim().length > 0);
+        }
+        function poll() {
+          if (done) return;
+          if (contentReady()) return remove();
+          requestAnimationFrame(poll);
+        }
+        requestAnimationFrame(poll);
+        setTimeout(remove, 6000);
+      })();
+    </script>
   </body>
 </html>
