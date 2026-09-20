@@ -6,11 +6,30 @@
         <text class="done" @click="confirm">完成</text>
       </view>
 
-      <!-- 日历 -->
-      <view class="cal">
+      <!-- 日期摘要行（开关 ON 时显示；点击切回日期面板） -->
+      <view v-if="timeEnabled" class="row" @click="onDateRowClick">
+        <text class="row-label">日期</text>
+        <view class="row-right">
+          <text class="row-value">{{ dateText }}</text>
+          <SvgIcon class="row-arrow" name="icon-chevron-right" :size="16" />
+        </view>
+      </view>
+
+      <!-- 时刻行：点击展开时分滚轮；开关控制是否记录时刻 -->
+      <view class="row" @click="onTimeRowClick">
+        <text class="row-label">时刻</text>
+        <view class="row-right">
+          <text v-if="timeEnabled" class="row-value">{{ timeText }}</text>
+          <view class="switch-wrap" @click.stop>
+            <switch :checked="timeEnabled" color="#CF4A12" @change="onTimeSwitch" />
+          </view>
+        </view>
+      </view>
+
+      <!-- 展开区：日期面板（日历 / 年月滚轮）与时刻面板（时分滚轮）互斥 -->
+      <view v-if="panel === 'date'" class="cal">
         <view class="cal-header">
           <view class="cal-nav" @click="shiftMonth(-1)"><SvgIcon name="icon-chevron-left" :size="20" /></view>
-          <!-- 点标题展开/收起「年 + 月」快速选择 -->
           <view class="cal-title" @click="toggleMonthPicker">
             <text class="cal-title-text">{{ viewYear }} 年 {{ viewMonth + 1 }} 月</text>
             <SvgIcon
@@ -22,13 +41,9 @@
           <view class="cal-nav" @click="shiftMonth(1)"><SvgIcon name="icon-chevron-right" :size="20" /></view>
         </view>
 
-        <!-- 年月快速选择：展开时替换日历网格，底部橙色「确定」 -->
+        <!-- 年月快速选择（展开时替换日历网格，底部橙色「确定」） -->
         <view v-if="showMonthPicker" class="month-picker">
-          <picker-view
-            class="wheel"
-            :value="monthWheelValue"
-            @change="onMonthWheelChange"
-          >
+          <picker-view class="wheel" :value="monthWheelValue" @change="onMonthWheelChange">
             <picker-view-column>
               <view v-for="y in years" :key="'y' + y" class="wheel-item">{{ y }} 年</view>
             </picker-view-column>
@@ -41,7 +56,6 @@
           </view>
         </view>
 
-        <!-- 日历网格（年月选择展开时隐藏） -->
         <template v-else>
           <view class="week-row">
             <text v-for="w in weekLabels" :key="w" class="week-label">{{ w }}</text>
@@ -65,28 +79,15 @@
         </template>
       </view>
 
-      <!-- 时刻（年月选择展开时隐藏） -->
-      <template v-if="!showMonthPicker">
-        <view class="time-row">
-          <text class="time-label">时刻</text>
-          <switch :checked="timeEnabled" color="#CF4A12" @change="onTimeSwitch" />
-        </view>
-
-        <!-- 时分滚轮 -->
-        <picker-view
-          v-if="timeEnabled"
-          class="wheel"
-          :value="wheelValue"
-          @change="onWheelChange"
-        >
-          <picker-view-column>
-            <view v-for="h in 24" :key="'h' + h" class="wheel-item">{{ pad(h - 1) }}</view>
-          </picker-view-column>
-          <picker-view-column>
-            <view v-for="m in 60" :key="'m' + m" class="wheel-item">{{ pad(m - 1) }}</view>
-          </picker-view-column>
-        </picker-view>
-      </template>
+      <!-- 时刻面板：时分滚轮 -->
+      <picker-view v-else class="wheel" :value="wheelValue" @change="onWheelChange">
+        <picker-view-column>
+          <view v-for="h in 24" :key="'h' + h" class="wheel-item">{{ pad(h - 1) }}</view>
+        </picker-view-column>
+        <picker-view-column>
+          <view v-for="m in 60" :key="'m' + m" class="wheel-item">{{ pad(m - 1) }}</view>
+        </picker-view-column>
+      </picker-view>
     </view>
   </view>
 </template>
@@ -96,6 +97,7 @@ import SvgIcon from '@/components/SvgIcon.vue';
 import { ref, computed, watch } from 'vue';
 
 const weekLabels = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+const dowNames = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
 
 const props = defineProps<{
   visible: boolean;
@@ -116,11 +118,15 @@ const viewYear = ref(2026);
 const viewMonth = ref(0);
 const selectedDate = ref('');
 
+/** 时刻开关：是否记录时刻 */
 const timeEnabled = ref(false);
 const hour = ref(0);
 const minute = ref(0);
 /** picker-view 的受控值 [时下标, 分下标] */
 const wheelValue = ref([0, 0]);
+
+/** 展开区当前面板：'date'（日历）| 'time'（时分滚轮），互斥 */
+const panel = ref<'date' | 'time'>('date');
 
 /* ===== 年月快速选择 ===== */
 /** 是否展开「年 + 月」滚轮（展开时替换日历网格） */
@@ -134,6 +140,18 @@ const yearIndex = ref(0);
 const monthIndex = ref(0);
 /** 两列 → [年下标, 月下标] */
 const monthWheelValue = computed(() => [yearIndex.value, monthIndex.value]);
+
+/** 日期摘要（如「2026年9月20日 星期日」） */
+const dateText = computed(() => {
+  const parts = selectedDate.value.split('-').map(Number);
+  if (parts.length !== 3 || !parts.every((n) => Number.isFinite(n))) return '';
+  const [y, m, d] = parts;
+  const dow = new Date(y, m - 1, d).getDay();
+  return y + '年' + m + '月' + d + '日 ' + dowNames[dow];
+});
+
+/** 时刻摘要（如「20:40」） */
+const timeText = computed(() => pad(hour.value) + ':' + pad(minute.value));
 
 function pad(n: number): string {
   return String(n).padStart(2, '0');
@@ -176,6 +194,25 @@ function shiftMonth(delta: number) {
   viewMonth.value = next.getMonth();
 }
 
+/** 点「日期」行 → 切到日期面板（收起年月滚轮） */
+function onDateRowClick() {
+  panel.value = 'date';
+  showMonthPicker.value = false;
+}
+
+/** 点「时刻」行 → 切到时刻面板；开关未开时顺带打开 */
+function onTimeRowClick() {
+  if (!timeEnabled.value) {
+    timeEnabled.value = true;
+    const now = new Date();
+    hour.value = now.getHours();
+    minute.value = now.getMinutes();
+    wheelValue.value = [hour.value, minute.value];
+  }
+  panel.value = 'time';
+  showMonthPicker.value = false;
+}
+
 /** 展开/收起年月滚轮；展开时对齐当前日历正在显示的年月 */
 function toggleMonthPicker() {
   if (showMonthPicker.value) {
@@ -203,15 +240,19 @@ function confirmMonthPicker() {
   showMonthPicker.value = false;
 }
 
+/** 时刻开关：开 → 默认展开时分滚轮；关 → 回到日期面板 */
 function onTimeSwitch(e: any) {
   timeEnabled.value = !!e.detail.value;
-  // 打开时默认落在当前时间，少滚一下
   if (timeEnabled.value) {
     const now = new Date();
     hour.value = now.getHours();
     minute.value = now.getMinutes();
     wheelValue.value = [hour.value, minute.value];
+    panel.value = 'time';
+  } else {
+    panel.value = 'date';
   }
+  showMonthPicker.value = false;
 }
 
 function onWheelChange(e: any) {
@@ -237,6 +278,7 @@ watch(
   (v) => {
     if (!v) return;
     showMonthPicker.value = false;
+    panel.value = 'date';
 
     const parts = (props.date || '').split('-').map(Number);
     if (parts.length === 3 && parts.every((n) => Number.isFinite(n))) {
@@ -282,6 +324,10 @@ watch(
   background: $v11-bg-card;
   border-radius: 16px 16px 0 0;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  /* 固定高度：切面板（日历/时分滚轮/年月滚轮）时弹窗高度不跳动 */
+  height: 560px;
+  display: flex;
+  flex-direction: column;
 }
 
 .header {
@@ -300,9 +346,47 @@ watch(
   padding: 10px 12px;
 }
 
+/* ===== 摘要行（日期 / 时刻）===== */
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  /* 44px 行盒：可点切换面板 */
+  min-height: $touch-target-min;
+}
+
+.row-label {
+  font-size: $font-body;
+  line-height: $lh-body;
+  color: $v11-text-secondary;
+}
+
+.row-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.row-value {
+  font-size: $font-body;
+  line-height: $lh-body;
+  color: $v11-text-primary;
+}
+
+.row-arrow {
+  color: $v11-text-secondary;
+}
+
+.switch-wrap {
+  margin-left: 8px;
+}
+
 /* ===== 日历 ===== */
 .cal {
   padding: 0 12px;
+  /* 展开区可滚动，配合固定高度的 sheet */
+  overflow-y: auto;
 }
 
 .cal-header {
@@ -439,22 +523,7 @@ watch(
   font-weight: $weight-semibold;
 }
 
-/* ===== 时刻 ===== */
-.time-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
-  border-top: 1px solid $v11-line;
-  margin-top: 8px;
-}
-
-.time-label {
-  font-size: $font-body;
-  line-height: $lh-body;
-  color: $v11-text-primary;
-}
-
+/* ===== 时分 / 年月滚轮 ===== */
 .wheel {
   height: 180px;
 }

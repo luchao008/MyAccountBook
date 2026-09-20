@@ -791,8 +791,11 @@ section('13. 字号阶梯自洽（文档 §3.2 ↔ tokens.scss ↔ 各 .vue）')
   //    年/月两列滚轮 + 底部橙色「确定」按钮，.confirm-text/$font-body-lg）
   //    → 新增 1 处字号 → 文字 241 → 242，总数 243 → 244。
   //    ⚠️ 该按钮真实承载文案（"确定"），不是死样式；已显式声明 line-height。
-  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 244, 0);
-  expect('  其中文字字号 $font-*', nText, 242, 0);
+  //    2026-09-20 更新二十九：DateTimePicker 重构为「日期行 / 时刻行」两段式 +
+  //    互斥展开区（日历 ↔ 时分滚轮）。新增 .row-label/.row-value（各 $font-body），
+  //    删除原 .time-label（$font-body）→ 净增 1 处 → 文字 242 → 243，总数 244 → 245。
+  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 245, 0);
+  expect('  其中文字字号 $font-*', nText, 243, 0);
   expect('  其中图标尺寸 $icon-*', nIcon, 2, 0);
   expect('  其中字面量（必须为 0）', nLiteral, 0, 0);
 }
