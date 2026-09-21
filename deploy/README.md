@@ -7,7 +7,7 @@ MariaDB 10.11（与开发一致），数据持久化到群晖共享文件夹。
 
 ```
 群晖 Container Manager（docker compose，**全部 host 网络**）
-├── web      nginx:alpine   托管 App 前端静态产物，/api 反代到 backend  ← 对外 :8080
+├── web      nginx:alpine   托管 App 前端静态产物，/api 反代到 backend  ← 对外 :8082
 ├── admin    nginx:alpine   托管中台静态产物，/api 反代到 backend      ← 对外 :8081
 ├── backend  node:20-slim   Midway 后端（dist + 生产依赖）             ← 仅回环 7001
 └── db       mariadb:10.11  数据卷 → 群晖文件夹                        ← 仅回环 3306
@@ -15,13 +15,13 @@ MariaDB 10.11（与开发一致），数据持久化到群晖共享文件夹。
 
 **host 网络**：容器直接共享宿主网络栈，群晖的 IPv6 地址/防火墙直接生效
 （bridge 模式下 `[::]` 映射能否通 IPv6 取决于 Docker daemon 是否开 IPv6，
-群晖默认常没开）。对外只开 web(8080)/admin(8081)；
+群晖默认常没开）。对外只开 web(8082)/admin(8081)；
 backend(7001) 与 db(3306) 用回环绑定，外网碰不到。
 
 App 前端与中台各自请求同域 `/api`，由各自的 nginx 反代到 `127.0.0.1:7001` →
 浏览器无跨域，**不依赖 CORS**。
 
-- App 前端：`http://NAS_IP:8080`
+- App 前端：`http://NAS_IP:8082`
 - 中台：`http://NAS_IP:8081`
 
 ## 一、在 Mac 上构建并导出镜像
@@ -108,6 +108,6 @@ docker compose up -d
 ## 注意
 
 - `DATA_DIR` 必须是**绝对路径**且**已存在、可写**（README §三 的 mkdir 步骤）。
-- 群晖若用了别的端口占用 8080/8081，改 `.env` 的 `WEB_PORT` / `ADMIN_PORT`。
+- 群晖若用了别的端口占用 8082/8081，改 `.env` 的 `WEB_PORT` / `ADMIN_PORT`（并同步镜像内 nginx 的 listen）。
 - 首次构建镜像较大（含 node），耐心等。
 - 后端镜像只含 `node_modules` + `dist`，**中台后端与前端的改动都需要重新构建并导入对应镜像**。
