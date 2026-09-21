@@ -1,8 +1,19 @@
+# 群晖 NAS 部署（x86_64）。镜像在 Mac 上构建后用 docker load 导入。
+# 起服务：docker compose -f docker-compose.nas.yml up -d
+# 首次会自动建表（backend 的 command 先跑 migration 再启动）。
+#
+# ⚠️ 全部服务用 host 网络（network_mode: host）：
+#    容器直接共享宿主网络栈，群晖的 IPv6 地址/防火墙规则直接生效 ——
+#    bridge 模式下 [::] 端口映射能否通 IPv6，取决于 Docker daemon 是否开了
+#    IPv6（群晖默认常没开）。host 模式下 IPv4/IPv6 由宿主机统一决定。
+#    代价：端口即宿主端口，无映射；对外只开 web(8080) / admin(8081)，
+#    backend(7001) 与 db(3306) 都用回环绑定，外网碰不到。
 services:
   db:
     image: mariadb:10.11
     container_name: account-book-db
     restart: unless-stopped
+    network_mode: host
     environment:
       MARIADB_ROOT_PASSWORD: "ChangeMe_123456"
       MARIADB_DATABASE: account_book
@@ -10,6 +21,8 @@ services:
       MARIADB_COLLATE: utf8mb4_general_ci
     volumes:
       - /volume1/docker/account-book/data:/var/lib/mysql
+    # 只监听回环：backend 用 127.0.0.1 连，外网碰不到数据库
+    command: --bind-address=127.0.0.1
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -20,17 +33,21 @@ services:
     image: account-book-backend:latest
     container_name: account-book-backend
     restart: unless-stopped
+    network_mode: host
     depends_on:
       db:
         condition: service_healthy
     environment:
-      DB_HOST: db
+      # host 网络：用回环连 db（不再是 compose 服务名 db）
+      DB_HOST: 127.0.0.1
       DB_PORT: "3306"
       DB_USER: root
       DB_PASSWORD: "ChangeMe_123456"
       DB_NAME: account_book
       JWT_SECRET: "ChangeMeJwtSecret_abcdef123456"
       PORT: "7001"
+      # 只监听回环：只有同宿主的 nginx 能反代，外网碰不到 7001
+      HOST: 127.0.0.1
       NODE_ENV: production
       # 与 DB 连接串 timezone:'+08:00' 一致，避免 DATE 列读取偏移一天
       TZ: Asia/Shanghai
@@ -40,23 +57,14 @@ services:
     image: account-book-frontend:latest
     container_name: account-book-web
     restart: unless-stopped
+    network_mode: host
     depends_on:
       - backend
-    ports:
-      # IPv4 与 IPv6 分开显式绑定：
-      # - 默认的 "8080:80" 只监听 IPv4，纯 IPv6 外网访问会连不上；
-      # - 只写 "[::]:8080:80" 在群晖上（bindv6only=1）会丢掉 IPv4。
-      # 两条并存才两边都通。
-      - "0.0.0.0:8080:80"
-      - "[::]:8080:80"
 
   admin:
     image: account-book-admin:latest
     container_name: account-book-admin
     restart: unless-stopped
+    network_mode: host
     depends_on:
       - backend
-    ports:
-      # 同上，IPv4 + IPv6 双绑
-      - "0.0.0.0:8081:80"
-      - "[::]:8081:80"
