@@ -25,13 +25,6 @@ export default {
 
   koa: {
     port: Number(process.env.PORT) || 7001,
-    /*
-     * 监听地址。
-     *
-     * 默认 0.0.0.0（本机 dev 不变）；生产走 host 网络时用 HOST=127.0.0.1
-     * 让后端**只监听回环** —— 外网碰不到 7001，只有同宿主的 nginx 能反代。
-     */
-    hostname: process.env.HOST || '0.0.0.0',
   },
 
   // JWT 配置

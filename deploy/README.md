@@ -6,19 +6,14 @@ MariaDB 10.11（与开发一致），数据持久化到群晖共享文件夹。
 ## 架构
 
 ```
-群晖 Container Manager（docker compose，**全部 host 网络**）
+群晖 Container Manager（docker compose）
 ├── web      nginx:alpine   托管 App 前端静态产物，/api 反代到 backend  ← 对外 :8082
 ├── admin    nginx:alpine   托管中台静态产物，/api 反代到 backend      ← 对外 :8081
-├── backend  node:20-slim   Midway 后端（dist + 生产依赖）             ← 仅回环 7001
-└── db       mariadb:10.11  数据卷 → 群晖文件夹                        ← 仅回环 3306
+├── backend  node:20-slim   Midway 后端（dist + 生产依赖）             ← 仅内网 7001
+└── db       mariadb:10.11  数据卷 → 群晖文件夹                        ← 仅内网 3306
 ```
 
-**host 网络**：容器直接共享宿主网络栈，群晖的 IPv6 地址/防火墙直接生效
-（bridge 模式下 `[::]` 映射能否通 IPv6 取决于 Docker daemon 是否开 IPv6，
-群晖默认常没开）。对外只开 web(8082)/admin(8081)；
-backend(7001) 与 db(3306) 用回环绑定，外网碰不到。
-
-App 前端与中台各自请求同域 `/api`，由各自的 nginx 反代到 `127.0.0.1:7001` →
+App 前端与中台各自请求同域 `/api`，由各自的 nginx 反代到 backend →
 浏览器无跨域，**不依赖 CORS**。
 
 - App 前端：`http://NAS_IP:8082`
