@@ -84,6 +84,11 @@ export default tseslint.config(
         localStorage: 'readonly',
         getComputedStyle: 'readonly',
         getCurrentPages: 'readonly',
+        // verify-datetime-picker.mjs 里量弹出耗时 / 逐帧采样用的浏览器计时与动画接口
+        performance: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        requestAnimationFrame: 'readonly',
       },
     },
     rules: {

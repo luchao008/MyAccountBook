@@ -21,12 +21,14 @@
       收起态用 swiper 实现左右滑动切月：原生手势与惯性，不用自己处理边界回弹。
       固定 3 个 item（前/当前/后），滑完把 current 复位到中间 —— 这样"无限滑动"
       只需要换数据，不需要真的渲染无限个 item。
+      ⚠️ 复位不是改个 ref 就完事（uni 的 swiper 内部 current 不会回写），
+         整套时序与坑都写在 `onSwipeSettle` 的注释里，动之前先读。
     -->
     <swiper
       class="month-swiper"
       :current="swiperIndex"
-      :duration="220"
-      @change="onSwipe"
+      :duration="swipeDuration"
+      @animationfinish="onSwipeSettle"
     >
       <swiper-item v-for="(m, i) in swiperMonths" :key="i">
         <view class="swiper-month">
@@ -62,7 +64,7 @@
       />
       <template v-else>
         <uni-swipe-action v-for="t in dayItems" :key="t.id">
-          <uni-swipe-action-item :right-options="SWIPE_OPTIONS" @click="onTxnSwipe($event, t)">
+          <uni-swipe-action-item :right-options="SWIPE_OPTIONS" @click="onSwipe($event, t)">
             <view class="txn" @click="editTransaction(t.id)">
               <CategoryIcon class="txn-icon" :name="t.category?.icon || 'cat-misc'" :size="28" />
               <view class="txn-main">
@@ -219,34 +221,75 @@ const dayAgg = ref<Record<string, { income: number; expense: number }>>({});
 /** 已拉取过的月份（避免重复请求） */
 const loadedMonths = new Set<string>();
 
-/* ── 收起态 swiper ── */
+/* ── 收起态 swiper：固定 3 项（前 / 当前 / 后），滑完复位到中线再换数据 ── */
+/** 切月动画时长（ms） */
+const SWIPE_MS = 220;
+/** swiper 下标：0/1/2 = 前 / 当前 / 后。平时恒为 1（中线），只在滑动动画期间短暂偏离 */
 const swiperIndex = ref(1);
-const swiperMonths = computed(() => {
-  const base = selectedYear.value * 12 + selectedMonth.value;
-  return [-1, 0, 1].map((d) => {
-    const idx = base + d;
-    return { year: Math.floor(idx / 12), month: ((idx % 12) + 12) % 12 };
-  });
-});
+/** swiper 动画时长；复位那一帧临时置 0 → 瞬移（见 onSwipeSettle） */
+const swipeDuration = ref(SWIPE_MS);
 
-function onSwipe(e: any) {
-  const i = e.detail.current;
-  if (i === 1) return;
-  // 0 = 前一个月，2 = 后一个月
-  const delta = i === 0 ? -1 : 1;
+/**
+ * 三格各自 = 选中月 + swiperOffsets[i]，平时 [-1, 0, 1]（前 / 当前 / 后月）。
+ * （本页另有一个 `offsets`（展开态虚拟列表的前缀和），故这里加 `swiper` 前缀区分。）
+ *
+ * ⚠️ 滑动落定后会**临时**把落点那一格也拉回基准月（[-1,0,0] / [0,0,1]）：
+ *    复位要隔一帧才落到 DOM 上，那一帧视口还停在落点上，让落点与中线显示同一个月，
+ *    这一帧里用户看到的就是正确的月份。
+ */
+const swiperOffsets = ref([-1, 0, 1]);
+const swiperMonths = computed(() =>
+  swiperOffsets.value.map((d) => {
+    const idx = selectedYear.value * 12 + selectedMonth.value + d;
+    return { year: Math.floor(idx / 12), month: ((idx % 12) + 12) % 12 };
+  })
+);
+
+/** 换月：改年月、把「日」收敛到新月的月末、补齐相邻月数据、刷新当日明细 */
+function shiftMonthBy(delta: number) {
   const idx = selectedYear.value * 12 + selectedMonth.value + delta;
   selectedYear.value = Math.floor(idx / 12);
   selectedMonth.value = ((idx % 12) + 12) % 12;
   // 选中的"日"在新月份可能不存在（如 31 日 → 2 月），收敛到月末
   const daysInNew = new Date(selectedYear.value, selectedMonth.value + 1, 0).getDate();
   if (selectedDay.value > daysInNew) selectedDay.value = daysInNew;
-
-  // 复位到中间，并把相邻月份数据补齐
-  nextTick(() => {
-    swiperIndex.value = 1;
-  });
   ensureMonthsAround(selectedYear.value, selectedMonth.value);
   loadDetail();
+}
+
+/**
+ * 手指滑动落定（惯性动画结束）→ 换月 + 把 swiper 复位回中线。
+ *
+ * ⚠️ 挂 `animationfinish` 而**不是** `change`：uni-app 的 swiper 在手指离开的同一帧
+ *    就派发 change，惯性动画还要再滑 ~220ms。此时改数据，正在滑出/滑入的邻格内容会
+ *    当场变化 —— 用户看到的是月历错位/重影。
+ *
+ * ⚠️ 复位必须分两步：uni 的 swiper 内部 `current` 滑到 0/2 后就停在那儿，
+ *    只改自己的 ref 不会把它拉回来（prop 值没变 → 内部不回写）。
+ *    ① 先把 prop 同步成真实下标 ② 再改回 1 触发内部回流；②还要 0 时长瞬移。
+ *
+ * ⚠️ 2026-09-24 修：早先挂在 `change` 上、且复位只改了 ref，结果**滑动后视口里那张月历
+ *    比标题差一个月**（标题 10 月、格子却是 11 月）。`scripts/verify-calendar.mjs` 的
+ *    「滑动换月」用例就是为它补的。
+ */
+function onSwipeSettle(e: any) {
+  const i = e.detail.current;
+
+  // current = 1：复位动画落定（或"没滑够"的回弹）→ 恢复常规三格与滑动时长
+  if (i === 1) {
+    swiperOffsets.value = [-1, 0, 1];
+    swipeDuration.value = SWIPE_MS;
+    return;
+  }
+
+  shiftMonthBy(i === 0 ? -1 : 1);
+  // 落点那一格先复制基准月：它正显示用户刚滑到的那个月，复制后"换月"在这一格上看不出变化
+  swiperOffsets.value = i === 2 ? [-1, 0, 0] : [0, 0, 1];
+  swiperIndex.value = i; // ① prop 追上真实下标
+  nextTick(() => {
+    swipeDuration.value = 0; // ② 0 时长瞬移回中线
+    swiperIndex.value = 1;
+  });
 }
 
 /** 选中某天（收起态点格子 / 展开态点格子） */
@@ -486,13 +529,12 @@ function editTransaction(id: string) {
   uni.navigateTo({ url: `/pages/record/index?id=${id}` });
 }
 
-/** 左滑操作（复制 / 删除）—— 与流水页共用同一套逻辑（见 utils/txnSwipe.ts） */
-/*
- * ⚠️ 解构成 `onTxnSwipe`：本页已有一个 `onSwipe`（月份 swiper 的 @change），
- *    直接叫同名会 TS2300 重复标识符。改名比改那个既有函数安全 ——
- *    它被模板的 `@change` 引用着。
+/**
+ * 左滑操作（复制 / 删除）—— 与流水页共用同一套逻辑（见 utils/txnSwipe.ts）。
+ * 早先为避免与月份 swiper 的 `@change` 处理器重名曾解构成 `onTxnSwipe`；
+ * 那个处理器已改成 `onSwipeSettle`（挂在 animationfinish 上），重名冲突不复存在。
  */
-const { SWIPE_OPTIONS, onSwipe: onTxnSwipe } = useTxnSwipe(() => {
+const { SWIPE_OPTIONS, onSwipe } = useTxnSwipe(() => {
   // 刷新当日明细（金额 / 笔数变了）
   loadDetail();
 });

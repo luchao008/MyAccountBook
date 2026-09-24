@@ -78,7 +78,13 @@ async function submit() {
       return;
     }
     await userStore.login(form.username.trim(), form.password);
-    uni.reLaunch({ url: '/pages/main/index' });
+    /*
+     * 登录后落到「选择账本」页，而不是直接进主容器：
+     *   - 该页是 pages.json 首位启动页，reLaunch 清栈后它做栈底
+     *   - 选账本时用的是 navigateTo 进 main，首页左上角才有返回按钮
+     *     （account-select 页的既定设计，不要改成 redirectTo/reLaunch）
+     */
+    uni.reLaunch({ url: '/pages/account-select/index' });
   } catch (err: any) {
     // 错误提示已在 request 拦截器里统一 toast
     console.error('[login] 失败', err);

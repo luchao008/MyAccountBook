@@ -1,5 +1,11 @@
 <template>
-  <view v-if="visible" class="mask" @click="close">
+  <!--
+    ⚠️ `v-if` 只在**首次**打开时才真挂载；关掉后仅 `v-show` 隐藏，DOM 留着复用。
+    挂载一次的实测成本（4x 降速）：月历 3 格 + swiper ≈ 220ms，而再次打开 ≈ 2ms ——
+    日期选择器是记账时反复要用的东西，第二次之后必须是无感的。
+    （隐藏期间不留任何副作用：状态在 watch(visible) 里统一归位。）
+  -->
+  <view v-if="everOpened" v-show="visible" class="mask" @click="close">
     <view class="sheet" @click.stop>
       <view class="header">
         <text />
@@ -10,7 +16,7 @@
       <view v-if="panel === 'date'" class="panel">
         <view class="cal">
           <view class="cal-header">
-            <view class="cal-nav" @click="shiftMonth(-1)"><SvgIcon name="icon-chevron-left" :size="20" /></view>
+            <view class="cal-nav" @click="shiftBy(-1)"><SvgIcon name="icon-chevron-left" :size="20" /></view>
             <view class="cal-title" @click="toggleMonthPicker">
               <text class="cal-title-text">{{ viewYear }} 年 {{ viewMonth + 1 }} 月</text>
               <SvgIcon
@@ -19,7 +25,7 @@
                 :size="16"
               />
             </view>
-            <view class="cal-nav" @click="shiftMonth(1)"><SvgIcon name="icon-chevron-right" :size="20" /></view>
+            <view class="cal-nav" @click="shiftBy(1)"><SvgIcon name="icon-chevron-right" :size="20" /></view>
           </view>
 
           <!-- 年月快速选择 -->
@@ -38,9 +44,12 @@
           </view>
 
           <!--
-            日历网格：swiper 全量渲染所有月份，但只绘制当前 ±2 屏的内容
-            （其余为空占位，同样高度）。current 直接由 year/month 推导，
-            不做「复位到中间」的骚操作 —— 手指滑动与箭头翻月都只改 year/month。
+            日历网格：swiper 固定 3 项（前 / 当前 / 后月），滑完复位到中间再换数据。
+            ⚠️ 这是本组件**弹出速度的命门**：早先版本一次性渲染 2000 ~ MAX_YEAR 的
+               全部 384 个月（384 个 swiper-item + 5 张月历），真机会把主线程堵住 1s 以上，
+               用户感知就是「点日期半天弹不出来」。固定 3 项后滑动手感不变
+               （原生手势 + 惯性仍在），挂载成本降两个数量级。
+               与日历页 `pages/calendar/index.vue` 收起态是同一套做法。
           -->
           <view v-else class="cal-grid">
             <view class="week-row">
@@ -48,12 +57,12 @@
             </view>
             <swiper
               class="month-swiper"
-              :current="currentIndex"
-              :duration="SWIPE_MS"
-              @change="onSwipe"
+              :current="swiperIndex"
+              :duration="swipeDuration"
+              @animationfinish="onSwipeSettle"
             >
-              <swiper-item v-for="(m, i) in allMonths" :key="i">
-                <view v-if="Math.abs(i - currentIndex) <= 2" class="day-grid">
+              <swiper-item v-for="(m, i) in swiperMonths" :key="i">
+                <view class="day-grid">
                   <view v-for="(d, j) in monthCells(m.year, m.month)" :key="j" class="day-cell">
                     <view
                       v-if="d"
@@ -120,7 +129,7 @@
 
 <script setup lang="ts">
 import SvgIcon from '@/components/SvgIcon.vue';
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 
 const weekLabels = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 const dowNames = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
@@ -132,17 +141,9 @@ const SWIPE_MS = 240;
 const MIN_YEAR = 2000;
 const MAX_YEAR = new Date().getFullYear() + 5;
 
-/**
- * 全量月份表（2000-01 ~ MAX_YEAR-12），静态不变。
- * swiper 需要稳定的 item 列表，所以一次性算好；内容按需绘制（见模板 v-if）。
- */
-const allMonths: { year: number; month: number }[] = (() => {
-  const arr: { year: number; month: number }[] = [];
-  for (let idx = MIN_YEAR * 12; idx <= MAX_YEAR * 12 + 11; idx++) {
-    arr.push({ year: Math.floor(idx / 12), month: idx % 12 });
-  }
-  return arr;
-})();
+/* 可选范围换算成「月下标」的上下界，用于越界收敛（见 monthOfIndex / shiftBy） */
+const MIN_IDX = MIN_YEAR * 12;
+const MAX_IDX = MAX_YEAR * 12 + 11;
 
 const props = defineProps<{
   visible: boolean;
@@ -158,15 +159,37 @@ const emit = defineEmits<{
   (e: 'confirm', payload: { date: string; time: string | null }): void;
 }>();
 
-/** 日历当前展示的年月（month 为 0-based） */
+/** 日历当前展示的年月（month 为 0-based）。**固定渲染在 swiper 中间那一格** */
 const viewYear = ref(2026);
 const viewMonth = ref(0);
 const selectedDate = ref('');
 
-/** swiper 当前下标，由 year/month 直接推导（不做复位） */
-const currentIndex = computed(
-  () => viewYear.value * 12 + viewMonth.value - MIN_YEAR * 12,
-);
+/** swiper 下标：0/1/2 = 前 / 当前 / 后月。平时恒为 1（中线），只在滑动动画期间短暂偏离 */
+const swiperIndex = ref(1);
+
+/** swiper 动画时长；复位那一帧临时置 0 → 瞬移（见 onSwipeSettle） */
+const swipeDuration = ref(SWIPE_MS);
+
+/**
+ * 三格各自显示的月份 = 基准月 + offsets[i]，平时是 [-1, 0, 1]（前 / 当前 / 后月）。
+ * 越界（2000-01 之前 / MAX_YEAR-12 之后）由 monthOfIndex 收敛到边界月。
+ *
+ * ⚠️ 滑动落定后会**临时**把落点那一格也拉回基准月（[-1,0,0] / [0,0,1]），
+ *    原因见 onSwipeSettle：复位要隔一帧才落到 DOM 上，那一帧视口还停在落点上，
+ *    让落点与中线显示同一个月，这一帧里用户看到的就是正确的月份。
+ */
+const offsets = ref([-1, 0, 1]);
+
+const swiperMonths = computed(() => {
+  const base = viewYear.value * 12 + viewMonth.value;
+  return offsets.value.map((d) => monthOfIndex(base + d));
+});
+
+/** 月下标 → 年月（越界收敛到边界） */
+function monthOfIndex(idx: number): { year: number; month: number } {
+  const i = Math.min(Math.max(idx, MIN_IDX), MAX_IDX);
+  return { year: Math.floor(i / 12), month: i % 12 };
+}
 
 /** 时刻开关：是否记录时刻 */
 const timeEnabled = ref(false);
@@ -177,6 +200,9 @@ const wheelValue = ref([0, 0]);
 
 /** 展开面板：date（日历在上 + 时刻行）| time（日期行 + 时刻行 + 滚轮） */
 const panel = ref<'date' | 'time'>('date');
+
+/** 是否已挂载过（首次打开置 true，此后只切换 v-show，见模板顶部注释） */
+const everOpened = ref(false);
 
 /* ===== 年月快速选择 ===== */
 const showMonthPicker = ref(false);
@@ -232,31 +258,57 @@ function selectOf(y: number, m: number, d: number) {
   selectedDate.value = dateStr(y, m, d);
 }
 
-/** 由下标反推年月（下标越界时收敛到边界） */
-function setByIndex(i: number) {
-  const idx = Math.min(
-    Math.max(i + MIN_YEAR * 12, MIN_YEAR * 12),
-    MAX_YEAR * 12 + 11,
-  );
+/**
+ * 翻月：改 year/month（越界不动）。
+ *
+ * ⚠️ **箭头点按走这里，是「立即换月」而不是滑动动画**：动画要靠改 swiper 的
+ *    `current` 来触发，而 3 项窗口里 `current` 同时兼任"数据中线"——
+ *    连点箭头时（上一次动画没落定）会与手势落定的换月叠加，导致多跳一个月。
+ *    立即换月没有这个问题，连点 N 次就是 N 个月，手感也更跟手。
+ *    左右滑动手势仍是原生滑动动画（见 onSwipeSettle）。
+ */
+function shiftBy(delta: number) {
+  const idx = viewYear.value * 12 + viewMonth.value + delta;
+  if (idx < MIN_IDX || idx > MAX_IDX) return;
   viewYear.value = Math.floor(idx / 12);
   viewMonth.value = idx % 12;
 }
 
 /**
- * 点箭头翻月：改 year/month，currentIndex 随之变化 → swiper 平滑滑动。
+ * 手指滑动落定：换月 + 把 swiper 复位到中线。
+ *
+ * ⚠️ 挂在 `animationfinish` 而**不是** `change`：实测 uni-app 的 swiper 在手指离开的
+ *    同一帧就派发 change，惯性动画还要再滑 ~240ms。此时改数据，正在滑出/滑入的邻格
+ *    内容会当场变化（月历错位、重影）。等惯性动画落定再改，改的是已经站稳的那一格，
+ *    配合 offsets 的临时复制，全程无感。
+ *
+ * ⚠️ 复位分两步，缺一不可：uni 的 swiper 内部 `current` 滑到 0/2 后就停在那儿，
+ *    只改我们的 ref 不会把它拉回来（prop 值没变 → 内部不回写）。
+ *    ① 先把 prop 同步成真实下标 ② 再改回 1 触发内部回流；
+ *    ②还必须用 0 时长瞬移 —— 中线那一格已经换成新月份，若让它滑 240ms，
+ *    用户会看到月历被"撕开"滑一屏。
  */
-function shiftMonth(delta: number) {
-  const idx = viewYear.value * 12 + viewMonth.value + delta;
-  if (idx < MIN_YEAR * 12 || idx > MAX_YEAR * 12 + 11) return;
-  viewYear.value = Math.floor(idx / 12);
-  viewMonth.value = idx % 12;
-}
-
-/** 手指滑动：swiper 停在新的下标上，把它翻译成年月 */
-function onSwipe(e: any) {
+function onSwipeSettle(e: any) {
   const i = e.detail.current;
-  if (i === currentIndex.value) return;
-  setByIndex(i);
+
+  // current = 1：复位动画落定（或"没滑够"的回弹）→ 恢复常规三格与滑动时长
+  if (i === 1) {
+    offsets.value = [-1, 0, 1];
+    swipeDuration.value = SWIPE_MS;
+    return;
+  }
+
+  shiftBy(i === 0 ? -1 : 1); // 越界不动（2000-01 / 上限月）
+  /*
+   * 落点那一格先复制基准月：此刻它正显示用户刚滑到的那个月，
+   * 复制过来后"换月"这一步在这一格上完全看不出变化（相邻格在视口外，随便改）。
+   */
+  offsets.value = i === 2 ? [-1, 0, 0] : [0, 0, 1];
+  swiperIndex.value = i; // ① prop 追上真实下标
+  nextTick(() => {
+    swipeDuration.value = 0; // ② 0 时长瞬移回中线
+    swiperIndex.value = 1;
+  });
 }
 
 /** 点日期行 → 切到日期面板（日期行消失、日历展示在上方） */
@@ -341,8 +393,17 @@ watch(
   () => props.visible,
   (v) => {
     if (!v) return;
+    everOpened.value = true;
     showMonthPicker.value = false;
     panel.value = 'date';
+    /*
+     * 组件实例本身不在 v-if 里（销毁重建的是模板根节点），所以以下状态会跨次打开存活。
+     * 万一上次是「滑动/复位还没落定就点了完成或遮罩」，swiper 可能停在 0/2 上、
+     * offsets 还留着临时复制 —— 那这次打开就会错位。每次打开一律归位。
+     */
+    swiperIndex.value = 1;
+    offsets.value = [-1, 0, 1];
+    swipeDuration.value = SWIPE_MS;
 
     const parts = (props.date || '').split('-').map(Number);
     if (parts.length === 3 && parts.every((n) => Number.isFinite(n))) {
