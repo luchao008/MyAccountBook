@@ -104,10 +104,11 @@ export function periodLabel(key: string, unit: string): { title: string; sub: st
   return { title: `${Number(mStr)}月${Number(dStr)}日`, sub: key.slice(0, 4) };
 }
 
-/** 日期 → 「13日 Sun」这种日期头（明细按日分组时用） */
+/** 日期 → 「13日 周一」这种日期头（明细按日分组时用） */
 export function dayHeader(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number);
   const dow = new Date(y, m - 1, d).getDay();
-  const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  // getDay(): 0=周日 → 按「周一…周日」的自然顺序排列
+  const names = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
   return `${d}日 ${names[dow]}`;
 }
