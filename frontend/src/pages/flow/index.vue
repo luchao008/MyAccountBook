@@ -866,12 +866,21 @@ async function toggleGroup(g: SummaryItem) {
      *   · 分类维度 → 用该分类 id（一级要连带其下二级，后端 categoryIds 已支持）
      * 所以先把 baseParams 里与"分组"有关的字段剔掉，再补上本组的条件。
      */
+    /*
+     * ⚠️ **分类维度必须补上全局的 start/end**（2026-09-24 修）。
+     *    `filterOnlyParams()` 不含时间条件（时间只在 baseParams 里加，那是给分组汇总用的），
+     *    所以早先展开分类组时明细**不带时间限制** —— 表现为
+     *    "筛本月私家车，展开却冒出别的月份的记录"（汇总金额对、明细不对，就是这个原因）。
+     *    时间维度分支不受影响：它用 periodRange(key, unit) 自带该组区间。
+     */
     const rest = filterOnlyParams();
 
     const page =
       g.unit === 'category'
         ? await getTransactions({
             ...rest,
+            start: filterModel.start || undefined,
+            end: filterModel.end || undefined,
             categoryIds: key === '__none__' ? undefined : key,
             size: 100,
             order: order.value,
