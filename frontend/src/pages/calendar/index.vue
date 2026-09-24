@@ -26,6 +26,7 @@
     -->
     <swiper
       class="month-swiper"
+      :style="{ height: swiperHeight + 'px' }"
       :current="swiperIndex"
       :duration="swipeDuration"
       @animationfinish="onSwipeSettle"
@@ -46,6 +47,16 @@
 
     <!-- 当日明细 -->
     <view class="detail">
+      <!-- 头部：日期 + 当日收支合计（明细为空时也显示，与参考图一致） -->
+      <view class="detail-head">
+        <text class="detail-date">{{ selectedMonth + 1 }}月{{ selectedDay }}日</text>
+        <view class="detail-sum">
+          <text class="sum-label">收入</text>
+          <text class="sum-value income">{{ formatMoney(daySummary.income) }}</text>
+          <text class="sum-label">支出</text>
+          <text class="sum-value expense">{{ formatMoney(daySummary.expense) }}</text>
+        </view>
+      </view>
       <view v-if="loadingDetail">
         <view v-for="n in 4" :key="n" class="sk-txn">
           <Skeleton circle :h="28" />
@@ -62,8 +73,15 @@
         text="无流水"
         sub-text="点击右下角加号可快速记账"
       />
-      <template v-else>
-        <uni-swipe-action v-for="t in dayItems" :key="t.id">
+      <transition-group v-else name="txn" tag="view">
+        <!--
+          ⚠️ key 用 index 而**不是** t.id：
+          用 id 时切换日期 → 所有 id 都变 → Vue 认为整列表重建 → 全部条目一起淡入淡出（"闪烁"）。
+          用 index 时位置 0/1… 的 DOM 被复用、只替换内容（无动画），
+          只有"多出来 / 少掉的"那几个位置才触发 enter / leave —— 即需求里的
+          「2 个变 3 个 / 3 个变 1 个」才做展开收缩。
+        -->
+        <uni-swipe-action v-for="(t, i) in dayItems" :key="i">
           <uni-swipe-action-item :right-options="SWIPE_OPTIONS" @click="onSwipe($event, t)">
             <view class="txn" @click="editTransaction(t.id)">
               <CategoryIcon class="txn-icon" :name="t.category?.icon || 'cat-misc'" :size="28" />
@@ -77,7 +95,7 @@
             </view>
           </uni-swipe-action-item>
         </uni-swipe-action>
-      </template>
+      </transition-group>
     </view>
 
     <!-- 右下角 FAB：快速记账 -->
@@ -140,6 +158,7 @@
               :day-agg="dayAgg"
               :selected-date="selectedDate"
               :today-str="todayStr"
+              :show-week="false"
               @select="selectDate"
             />
           </view>
@@ -177,15 +196,29 @@ import { getTransactions, getTransactionSummary, type TransactionItem } from '@/
 import { useTxnSwipe } from '@/utils/txnSwipe';
 import { formatMoney } from '@/utils/format';
 
-const WEEK_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const WEEK_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
 
 /** 日历可滚动范围 */
 const RANGE_START_YEAR = 2000;
 const MONTH_COUNT = 600; // 2000-01 ~ 2049-12
 
-/** 每块的固定构成（用于前缀和算偏移） */
+/**
+ * 每块的固定构成（用于前缀和算偏移）。
+ * ⚠️ ROW_H 与 MonthGrid 的实际行高必须一致 —— 它算的是虚拟列表里每个
+ *    月块的 top 偏移，对不上会"滚着滚着月份错位"。
+ *    当前行高 = 色块 40 + 金额区 margin 2 + min-height 36 + 上下 padding 6 = 84。
+ */
 const TITLE_H = 36;
-const ROW_H = 74;
+const ROW_H = 84;
+/** 星期行高度（MonthGrid 的 .week-label 行高 18px） */
+const WEEK_H = 18;
+
+/** 某月占几行（周数）：月首星期偏移 + 天数，向上取整到周 */
+function rowsOfMonth(y: number, m0: number): number {
+  const firstDow = new Date(y, m0, 1).getDay();
+  const days = new Date(y, m0 + 1, 0).getDate();
+  return Math.ceil((firstDow + days) / 7);
+}
 
 const accountStore = useAccountStore();
 
@@ -245,6 +278,19 @@ const swiperMonths = computed(() =>
   })
 );
 
+/**
+ * 收起态 swiper 高度：按**当前选中月**的行数算，精确贴合。
+ *
+ * ⚠️ 代价（已知并接受）：滑向行数更多的月份时，滑动动画期间目标月底部会被
+ *    裁掉一截，落定换月后高度才补上 —— 由 .month-swiper 的 height 过渡
+ *    把这次"补高"做得平滑（见样式区）。
+ * ⚠️ 高度 = 星期行 + 行数 × 每行高，与 MonthGrid 的实际几何保持一致
+ *    （见 ROW_H / WEEK_H 的注释）。
+ */
+const swiperHeight = computed(
+  () => WEEK_H + rowsOfMonth(selectedYear.value, selectedMonth.value) * ROW_H
+);
+
 /** 换月：改年月、把「日」收敛到新月的月末、补齐相邻月数据、刷新当日明细 */
 function shiftMonthBy(delta: number) {
   const idx = selectedYear.value * 12 + selectedMonth.value + delta;
@@ -254,7 +300,7 @@ function shiftMonthBy(delta: number) {
   const daysInNew = new Date(selectedYear.value, selectedMonth.value + 1, 0).getDate();
   if (selectedDay.value > daysInNew) selectedDay.value = daysInNew;
   ensureMonthsAround(selectedYear.value, selectedMonth.value);
-  loadDetail();
+  loadDetail(true);
 }
 
 /**
@@ -298,7 +344,7 @@ function selectDate(date: string) {
   selectedYear.value = y;
   selectedMonth.value = m - 1;
   selectedDay.value = d;
-  loadDetail();
+  loadDetail(true);
   // 展开态下选完自动收起（用户已确认）
   if (expanded.value) collapse();
 }
@@ -307,7 +353,7 @@ function goToday() {
   selectedYear.value = now.getFullYear();
   selectedMonth.value = now.getMonth();
   selectedDay.value = now.getDate();
-  loadDetail();
+  loadDetail(true);
   if (expanded.value) {
     scrollToMonth(selectedYear.value, selectedMonth.value);
   } else {
@@ -319,8 +365,15 @@ function goToday() {
 const dayItems = ref<TransactionItem[]>([]);
 const loadingDetail = ref(false);
 
-async function loadDetail() {
-  loadingDetail.value = true;
+/**
+ * 加载当日明细。
+ *
+ * @param silent 静默模式：不显示骨架屏，保留旧列表直到新数据就绪。
+ *   切日期 / 从记账页返回时用它 —— 否则每次切换都闪一次骨架（即"闪烁"的来源）。
+ *   首次进入（onMounted）不要用，那时没有旧内容可留。
+ */
+async function loadDetail(silent = false) {
+  if (!silent) loadingDetail.value = true;
   try {
     const page = await getTransactions({
       start: selectedDate.value,
@@ -333,9 +386,20 @@ async function loadDetail() {
     console.error('[calendar] 明细加载失败', err);
     dayItems.value = [];
   } finally {
-    loadingDetail.value = false;
+    if (!silent) loadingDetail.value = false;
   }
 }
+
+/** 当日合计：直接由明细列表累加（与格子里 dayAgg 的口径一致，避免两处对不上） */
+const daySummary = computed(() => {
+  let income = 0;
+  let expense = 0;
+  for (const t of dayItems.value) {
+    if (t.type === 'income') income += Number(t.amount) || 0;
+    else expense += Number(t.amount) || 0;
+  }
+  return { income, expense };
+});
 
 function txnMeta(t: TransactionItem): string {
   const parts: string[] = [];
@@ -536,7 +600,7 @@ function editTransaction(id: string) {
  */
 const { SWIPE_OPTIONS, onSwipe } = useTxnSwipe(() => {
   // 刷新当日明细（金额 / 笔数变了）
-  loadDetail();
+  loadDetail(true);
 });
 
 onMounted(async () => {
@@ -568,7 +632,7 @@ onShow(() => {
     return;
   }
   // ① 当日明细
-  loadDetail();
+  loadDetail(true);
   // ② 日聚合缓存整体失效，按当前形态重新拉可见范围
   dayAgg.value = {};
   loadedMonths.clear();
@@ -648,9 +712,14 @@ onShow(() => {
 }
 
 /* ── 收起态 swiper ── */
+/*
+ * 高度由 :style 绑定 swiperHeight（星期行 + 展示月行数 × 每行高）。
+ * 切月行数变化时高度会跳，这里加过渡把它抹平 —— 时长与 SWIPE_MS 对齐，
+ * 换月动画落定时高度正好补到位。
+ */
 .month-swiper {
-  height: 486px;
   border-bottom: 1px solid $v11-line;
+  transition: height 0.22s ease;
 }
 
 .swiper-month {
@@ -718,6 +787,23 @@ onShow(() => {
   padding: 0 $space-2;
 }
 
+/*
+ * 月块收尾分隔线。
+ * ⚠️ 用伪元素而不是 border-bottom：虚拟列表的 offsets 按
+ *    TITLE_H + rows × ROW_H 算，border 会给每个块多加 1px，
+ *    累积 600 个月后渲染位置整体偏移。
+ * 左右缩进 $space-2，与块内内容对齐。
+ */
+.month-block::after {
+  content: '';
+  position: absolute;
+  left: $space-2;
+  right: $space-2;
+  bottom: 0;
+  height: 1px;
+  background: $v11-line;
+}
+
 .month-title {
   display: block;
   height: 36px;
@@ -730,6 +816,76 @@ onShow(() => {
 /* ── 当日明细 ── */
 .detail {
   min-height: 240px;
+}
+
+/*
+ * 明细条目进出过渡：只在**条目数量变化**时触发（key 用 index 见模板注释）。
+ * 方向按"展开 / 收缩"的直觉：
+ *   · 进入（展开）→ 从上方落下来（translateY -12 → 0）
+ *   · 离开（收缩）→ 向上收回去（translateY 0 → -12）
+ * 两者都从上方起落，视觉上像一块抽屉在顶部拉开 / 合上。
+ * ⚠️ 只在 H5 生效 —— transition-group 在小程序端不渲染动画，会直接降级。
+ * ⚠️ 时长 0.22s 与 swiper / 高度过渡对齐，整页节奏一致。
+ */
+.txn-enter-active,
+.txn-leave-active {
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s ease;
+}
+
+.txn-enter-from {
+  opacity: 0;
+  transform: translateY(-12px);
+}
+
+.txn-leave-to {
+  opacity: 0;
+  transform: translateY(-12px);
+}
+
+.detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $space-3 $space-4;
+}
+
+.detail-date {
+  font-size: $font-body-lg;
+  line-height: $lh-body-lg;
+  font-weight: $weight-semibold;
+  color: $v11-text-primary;
+}
+
+.detail-sum {
+  display: flex;
+  align-items: center;
+  gap: $space-1;
+}
+
+.sum-label {
+  font-size: $font-caption;
+  line-height: $lh-caption;
+  color: $v11-text-secondary;
+}
+
+.sum-value {
+  font-size: $font-body;
+  line-height: $lh-body;
+  @include tabular-nums;
+}
+
+.sum-value.income {
+  color: $v11-income-amount;
+}
+
+.sum-value.expense {
+  color: $v11-teal-amount;
+}
+
+.sum-label + .sum-label {
+  margin-left: $space-2;
 }
 
 .state {

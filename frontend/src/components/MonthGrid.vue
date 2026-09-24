@@ -1,27 +1,31 @@
 <template>
   <view class="month-grid">
-    <view class="week-row">
+    <view v-if="showWeek" class="week-row">
       <text v-for="(w, i) in WEEK_LABELS" :key="i" class="week-label">{{ w }}</text>
     </view>
 
     <view class="day-grid">
       <view v-for="(cell, i) in cells" :key="i" class="day-cell">
-        <view
-          v-if="cell"
-          class="day"
-          :class="{
-            today: cell.date === todayStr && cell.date !== selectedDate,
-            selected: cell.date === selectedDate,
-            empty: !cell.hasData,
-          }"
-          @click="emit('select', cell.date)"
-        >
-          <!-- 今天显示「今」而不是数字（与项目 DateTimePicker 一致） -->
-          <text class="day-num">{{ cell.date === todayStr && cell.date !== selectedDate ? '今' : cell.day }}</text>
-          <!-- 两行：上行支出、下行收入（只有支出时只显示一行） -->
-          <text v-if="cell.expense" class="day-amount expense">{{ shortMoney(cell.expense) }}</text>
-          <text v-if="cell.income" class="day-amount income">{{ shortMoney(cell.income) }}</text>
-        </view>
+        <template v-if="cell">
+          <view
+            class="day"
+            :class="{
+              today: cell.date === todayStr && cell.date !== selectedDate,
+              selected: cell.date === selectedDate,
+              empty: !cell.hasData,
+              past: cell.date < todayStr && !cell.hasData,
+            }"
+            @click="emit('select', cell.date)"
+          >
+            <!-- 今天显示「今」而不是数字（与项目 DateTimePicker 一致） -->
+            <text class="day-num">{{ cell.date === todayStr && cell.date !== selectedDate ? '今' : cell.day }}</text>
+          </view>
+          <!-- 金额在色块下方：上行支出、下行收入（只有支出时只显示一行） -->
+          <view class="day-amounts">
+            <text v-if="cell.expense" class="day-amount expense">{{ shortMoney(cell.expense) }}</text>
+            <text v-if="cell.income" class="day-amount income">{{ shortMoney(cell.income) }}</text>
+          </view>
+        </template>
       </view>
     </view>
   </view>
@@ -39,22 +43,31 @@
  */
 import { computed } from 'vue';
 
-const WEEK_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const WEEK_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
 
 interface DayAgg {
   income: number;
   expense: number;
 }
 
-const props = defineProps<{
-  year: number;
-  /** 0-based */
-  month: number;
-  /** 日期 → 收支聚合（全量映射，缺失表示当天无流水） */
-  dayAgg: Record<string, DayAgg>;
-  selectedDate: string;
-  todayStr: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    year: number;
+    /** 0-based */
+    month: number;
+    /** 日期 → 收支聚合（全量映射，缺失表示当天无流水） */
+    dayAgg: Record<string, DayAgg>;
+    selectedDate: string;
+    todayStr: string;
+    /**
+     * 是否渲染顶部星期行。
+     * 展开态由外层统一提供一行星期，每月再重复一遍就成刷屏了 —— 故传 false。
+     * 收起态（swiper）没有外层星期行，保持默认 true。
+     */
+    showWeek?: boolean;
+  }>(),
+  { showWeek: true }
+);
 
 const emit = defineEmits<{ (e: 'select', date: string): void }>();
 
@@ -127,26 +140,27 @@ function shortMoney(v: number): string {
 .day-cell {
   width: calc(100% / 7);
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   padding: 3px 1px;
 }
 
 /*
- * 宽度用**流式**而不是写死 44px。
- * 踩过：写死 44px 在 320px 屏上放不下 —— 容器宽 304px ÷ 7 = 43.4px/格，
- * 44px 的盒子直接压到邻居身上（reflow-audit 实测「压邻居 5 处」）。
+ * 日期色块：40% 圆角（照参考图）。
+ * 有流水铺 $v11-gold-fill；无流水透明，避免整屏都是色块。
+ * 宽度固定 40px 而不是流式 44px —— 320px 屏每格 304/7 ≈ 43.4px，
+ * 40px 的色块留出安全余量；max-width 兜底极窄屏。
  */
 .day {
-  width: 100%;
-  max-width: 44px;
-  min-height: 68px;
-  border-radius: $radius-md;
+  width: 40px;
+  height: 40px;
+  max-width: 100%;
+  border-radius: 40%;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  padding: 4px 1px;
-  background: $v11-gold-soft;
+  justify-content: center;
+  background: $v11-gold-fill;
+  flex-shrink: 0;
 }
 
 /* 无数据的日子不铺底色，避免整屏都是色块 */
@@ -154,9 +168,19 @@ function shortMoney(v: number): string {
   background: transparent;
 }
 
+/*
+ * 已过去且无流水的日子：铺一层浅灰，把「漏记」的日子显出来。
+ * 用 $v11-skeleton（1.20 压白卡 / 1.13 压页面底）—— 它是唯一的浅灰档，
+ * $v11-bg-inset #F5F5F5 压页面底只有 1.03，等于看不见。
+ * ⚠️ 必须排在 .day.selected 之前：两者同为 2 个 class，选中要能盖掉过去。
+ */
+.day.past {
+  background: $v11-skeleton;
+}
+
 .day.today {
   border: 1.5px solid $v11-gold;
-  padding: 2.5px 0.5px;
+  box-sizing: border-box;
 }
 
 .day.selected {
@@ -173,6 +197,21 @@ function shortMoney(v: number): string {
 .day.selected .day-num {
   color: $text-inverse;
   font-weight: $weight-semibold;
+}
+
+/*
+ * 金额移到色块下方（照参考图）。
+ * 固定 min-height 让「有数据 / 无数据」的格子总高一致 ——
+ * 展开态虚拟列表按固定行高（index.vue 的 ROW_H）算偏移，高度参差会错位。
+ */
+.day-amounts {
+  margin-top: 2px;
+  min-height: 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100%;
+  text-align: center;
 }
 
 /*
@@ -200,16 +239,13 @@ function shortMoney(v: number): string {
  *    这也说明：凡是**依赖具体色相**的规则，在色值对调时都要重新审视 ——
  *    纯 `color: $v11-income-amount` 这类会自动跟随，条件分支不会。
  */
-.day.empty .day-amount,
-.day .day-amount.income {
-  color: $v11-text-secondary;
+.day-amount.income {
+  color: $v11-income-amount;
 }
 
 .day .day-amount.expense {
   color: $v11-teal-amount;
 }
 
-.day.selected .day-amount {
-  color: $text-inverse;
-}
+
 </style>
