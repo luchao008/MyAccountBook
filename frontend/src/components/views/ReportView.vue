@@ -132,14 +132,22 @@
         <view class="panel">
           <text class="panel-title">收入来源</text>
           <EmptyState v-if="!report.incomeCategories.length" icon="icon-inbox" text="暂无收入记录" />
-          <RankList v-else :rows="report.incomeCategories" />
+          <RankList
+            v-else
+            :rows="report.incomeCategories"
+            @select="(r) => r.categoryId && goCategoryFlow(r.categoryId, 1)"
+          />
         </view>
 
         <!-- 支出分布 -->
         <view class="panel">
           <text class="panel-title">支出分布</text>
           <EmptyState v-if="!report.expenseCategories.length" icon="icon-inbox" text="暂无支出记录" />
-          <RankList v-else :rows="report.expenseCategories" />
+          <RankList
+            v-else
+            :rows="report.expenseCategories"
+            @select="(r) => r.categoryId && goCategoryFlow(r.categoryId, 1)"
+          />
         </view>
 
         <!-- 月度收支趋势（仅年粒度） -->
@@ -165,7 +173,10 @@
             <view class="ring-area">
               <RingChart :items="expenseChartItems" :size="130" :thickness="24" show-labels />
             </view>
-            <RankList :rows="report.expenseCategoriesL2" />
+            <RankList
+              :rows="report.expenseCategoriesL2"
+              @select="(r) => r.categoryId && goCategoryFlow(r.categoryId, 2)"
+            />
           </template>
         </view>
 
@@ -183,7 +194,10 @@
             <view class="ring-area">
               <RingChart :items="incomeChartItems" :size="130" :thickness="24" show-labels />
             </view>
-            <RankList :rows="report.incomeCategoriesL2" />
+            <RankList
+              :rows="report.incomeCategoriesL2"
+              @select="(r) => r.categoryId && goCategoryFlow(r.categoryId, 2)"
+            />
           </template>
         </view>
       </template>
@@ -234,6 +248,26 @@ import { CHART_SERIES, CHART_OTHER_COLOR } from '@/constants/chart';
 import { formatMoney } from '@/utils/format';
 
 const accountStore = useAccountStore();
+
+/**
+ * 点分类排行某一行 → 跳流水页，带上「当前时段 + 该分类」。
+ *
+ * 参数（沿用 HomeView 的既有约定，见其 goCategoryFlow）：
+ *   · groupBy=category + level → 底栏高亮对应层级
+ *   · categoryIds=<id>         → 只筛这一个分类（后端一级会连带其下二级）
+ *   · start/end                → 报表当前时段的区间（report.start/end）
+ *
+ * level 由调用处传入：基础 Tab 的榜单是一级口径（level=1），
+ * 分类 Tab 的榜单是二级口径（level=2）。
+ * ⚠️ 「未分类」（categoryId 为 null）由 RankList 拦掉，这里不会收到。
+ */
+function goCategoryFlow(categoryId: string, level: 1 | 2) {
+  const url =
+    '/pages/flow/index?groupBy=category&level=' + level +
+    '&categoryIds=' + encodeURIComponent(categoryId) +
+    '&start=' + report.start + '&end=' + report.end;
+  uni.navigateTo({ url });
+}
 
 const tab = ref<'basic' | 'category'>('basic');
 const pickerVisible = ref(false);

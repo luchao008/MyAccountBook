@@ -1,6 +1,12 @@
 <template>
   <view class="rank">
-    <view v-for="(row, index) in visibleRows" :key="row.categoryId || index" class="rank-item">
+    <view
+      v-for="(row, index) in visibleRows"
+      :key="row.categoryId || index"
+      class="rank-item"
+      :class="{ 'rank-item-link': !!row.categoryId }"
+      @click="onRowClick(row)"
+    >
       <view class="rank-line">
         <text class="rank-no">{{ index + 1 }}</text>
         <CategoryIcon class="rank-icon" :name="row.icon" :size="28" />
@@ -58,6 +64,18 @@ const props = withDefaults(
   { maxVisible: 5 }
 );
 
+/**
+ * 点击某一行 → 抛给父级（父级决定跳到哪、带什么筛选参数）。
+ * ⚠️ 只有 categoryId 非空才抛 ——「未分类」不可点，理由见 HomeView 的 isClickable：
+ *    分类筛选能力不含未分类，硬跳过去看到的是"没带筛选的全部流水"，名不副实。
+ */
+const emit = defineEmits<{ (e: 'select', row: RankRow): void }>();
+
+function onRowClick(row: RankRow) {
+  if (!row.categoryId) return;
+  emit('select', row);
+}
+
 const expanded = ref(false);
 
 const visibleRows = computed(() =>
@@ -90,6 +108,25 @@ function barWidth(ratio: number): string {
 <style scoped lang="scss">
 .rank-item {
   padding: $space-2 0;
+}
+
+/*
+ * 可点行（有 categoryId）的按下态。
+ * 水平方向用「补内边距 + 负外边距」把色块撑出文字两侧 8px —— 直接加 padding 会把
+ * 行内容挤窄、与不可点行的文字左边界对不齐。
+ */
+.rank-item-link {
+  cursor: pointer;
+  border-radius: $radius-sm;
+  padding-left: $space-2;
+  padding-right: $space-2;
+  margin-left: -$space-2;
+  margin-right: -$space-2;
+  transition: background 0.15s ease;
+}
+
+.rank-item-link:active {
+  background: $v11-bg-inset;
 }
 
 /*
