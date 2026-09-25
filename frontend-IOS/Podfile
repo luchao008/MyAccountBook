@@ -1,0 +1,27 @@
+# Podfile —— MyAccountBook iOS
+# 依赖：网络 AFNetworking / 布局 Masonry / 图片 SDWebImage
+#       刷新 MJRefresh / JSON 映射 YYModel / 缓存 YYCache / 图表 AAChartKit
+
+platform :ios, '17.0'
+
+source 'https://cdn.cocoapods.org/'
+
+target 'MyAccountBook' do
+  use_frameworks!
+
+  pod 'AFNetworking', '~> 4.0'
+  pod 'Masonry', '~> 1.1'
+  pod 'SDWebImage', '~> 5.0'
+  pod 'MJRefresh', '~> 3.7'
+  pod 'YYModel', '~> 1.0'
+  pod 'YYCache', '~> 1.0'
+  pod 'AAChartKit', '~> 7.0'
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '17.0'
+    end
+  end
+end
