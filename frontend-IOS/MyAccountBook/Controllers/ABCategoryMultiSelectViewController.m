@@ -5,6 +5,7 @@
 
 #import "ABCategoryMultiSelectViewController.h"
 #import "ABCategoryService.h"
+#import "ABCategorySelection.h"
 #import "ABAccountStore.h"
 #import "ABNavigationBar.h"
 #import "ABIconView.h"
@@ -110,10 +111,10 @@
 @property (nonatomic, strong) UITableView *tableView;
 
 @property (nonatomic, strong) NSArray<ABCategory *> *allCategories;
-/// 一级分类：**收入在前、支出在后**，段内保持后端 sort ASC / id ASC 的原序
+/// 一级分类：收入在前、支出在后（由 ABCategorySelection 保证）
 @property (nonatomic, strong) NSArray<ABCategory *> *roots;
-/// 已选（含被连带勾上的二级），保序便于压缩输出
-@property (nonatomic, strong) NSMutableOrderedSet<NSString *> *draft;
+/// 已选 id 集合。勾选规则全部委托给 `ABCategorySelection`（纯逻辑、有单测）
+@property (nonatomic, strong) NSMutableSet<NSString *> *draft;
 /// 被**折叠**的一级 id（未记录 = 展开，这样将来新增分类会自动展开）
 @property (nonatomic, strong) NSMutableSet<NSString *> *collapsed;
 /// 扁平化后的行（一级 + 展开的二级），每次状态变化重建
@@ -127,7 +128,7 @@
     self = [super init];
     if (self) {
         _accountId = [accountId copy];
-        _draft = [NSMutableOrderedSet orderedSetWithArray:selectedIds ?: @[]];
+        _draft = [NSMutableSet setWithArray:selectedIds ?: @[]];
         _collapsed = [NSMutableSet set];
         _allCategories = @[];
         _roots = @[];
@@ -223,11 +224,19 @@
                              success:^(NSArray<ABCategory *> *list) {
         __strong typeof(weakSelf) self = weakSelf;
         self.allCategories = list ?: @[];
-        [self rebuildRoots];
-        // 空数组 = 不过滤 = 全选：进来就把所有节点勾上
+        self.roots = [ABCategorySelection rootsOfCategories:self.allCategories];
+
         if (self.draft.count == 0) {
-            for (NSString *cid in [self allIds]) [self.draft addObject:cid];
+            // 空选中集 = 不过滤 = 全选：进来就把所有节点勾上
+            [self.draft addObjectsFromArray:[ABCategorySelection allIdsInCategories:self.allCategories]];
+        } else {
+            // 把「含一级 id」的选中集展开成「一级 + 其全部二级」，让勾选态与后端语义一致
+            NSSet *expanded = [ABCategorySelection expandSelection:self.draft
+                                                     allCategories:self.allCategories];
+            [self.draft removeAllObjects];
+            [self.draft unionSet:expanded];
         }
+
         [self rebuildRows];
         [self refreshRightTitle];
         [self.tableView reloadData];
@@ -238,18 +247,8 @@
     }];
 }
 
-- (void)rebuildRoots {
-    NSMutableArray *income = [NSMutableArray array];
-    NSMutableArray *expense = [NSMutableArray array];
-    for (ABCategory *c in self.allCategories) {
-        if (c.parentId.length) continue;
-        if ([c.type isEqualToString:@"income"]) [income addObject:c];
-        else [expense addObject:c];
-    }
-    self.roots = [income arrayByAddingObjectsFromArray:expense];
-}
-
-- (NSArray<ABCategory *> *)childrenOf:(ABCategory *)root {
+/// 某一级下的二级（返回**对象**，用于构建行；判定逻辑走 ABCategorySelection）
+- (NSArray<ABCategory *> *)childrenOfRoot:(ABCategory *)root {
     NSMutableArray *out = [NSMutableArray array];
     for (ABCategory *c in self.allCategories) {
         if (c.parentId.length && [c.parentId isEqualToString:root.categoryId]) [out addObject:c];
@@ -257,31 +256,8 @@
     return out;
 }
 
-/// 全部 id（一级 + 其全部二级），用于「全选」
-- (NSArray<NSString *> *)allIds {
-    NSMutableArray *out = [NSMutableArray array];
-    for (ABCategory *r in self.roots) {
-        [out addObject:r.categoryId];
-        for (ABCategory *c in [self childrenOf:r]) [out addObject:c.categoryId];
-    }
-    return out;
-}
-
 - (BOOL)isExpanded:(ABCategory *)root {
     return ![self.collapsed containsObject:root.categoryId];
-}
-
-- (BOOL)isRootChecked:(ABCategory *)root {
-    return [self.draft containsObject:root.categoryId];
-}
-
-/// 半选：一级自身没勾，但其下有二级被勾
-- (BOOL)isRootIndeterminate:(ABCategory *)root {
-    if ([self isRootChecked:root]) return NO;
-    for (ABCategory *c in [self childrenOf:root]) {
-        if ([self.draft containsObject:c.categoryId]) return YES;
-    }
-    return NO;
 }
 
 - (void)rebuildRows {
@@ -294,7 +270,7 @@
         [out addObject:row];
 
         if (![self isExpanded:r]) continue;
-        for (ABCategory *c in [self childrenOf:r]) {
+        for (ABCategory *c in [self childrenOfRoot:r]) {
             ABMSRow *cr = [[ABMSRow alloc] init];
             cr.cat = c;
             cr.isChild = YES;
@@ -305,37 +281,26 @@
     self.rows = out;
 }
 
-- (BOOL)allSelected {
-    if (self.roots.count == 0) return NO;
-    for (ABCategory *r in self.roots) {
-        if (![self isRootChecked:r]) return NO;
-    }
-    return YES;
-}
-
 - (void)refreshRightTitle {
-    [self.navBar setRightTitle:self.allSelected ? @"取消全选" : @"全选"];
+    BOOL all = [ABCategorySelection isAllSelectedWithSelection:self.draft
+                                                  allCategories:self.allCategories];
+    [self.navBar setRightTitle:all ? @"取消全选" : @"全选"];
 }
 
-#pragma mark - 勾选
+#pragma mark - 勾选（规则全在 ABCategorySelection，有单测）
 
 /// 勾 / 取消一级：**连带其下全部二级**
 - (void)toggleRoot:(ABCategory *)root {
-    NSMutableArray *ids = [NSMutableArray arrayWithObject:root.categoryId];
-    for (ABCategory *c in [self childrenOf:root]) [ids addObject:c.categoryId];
-
-    if ([self isRootChecked:root]) {
-        for (NSString *i in ids) [self.draft removeObject:i];
+    NSArray<NSString *> *ids = [ABCategorySelection idsAffectedByTogglingRoot:root
+                                                               allCategories:self.allCategories];
+    if ([self.draft containsObject:root.categoryId]) {
+        [self.draft minusSet:[NSSet setWithArray:ids]];
     } else {
-        for (NSString *i in ids) [self.draft addObject:i];
+        [self.draft unionSet:[NSSet setWithArray:ids]];
     }
 }
 
-/// 勾 / 取消二级，随后**重算一级 id 是否该留下**（维护不变量）
-///
-/// 不变量：`root.id ∈ draft` ⟺ 该一级的全部二级也都在 draft 里。
-/// 不做这一步的话，用户取消了一个二级、而 root.id 仍在，后端的
-/// 「传一级连带其全部二级」会把那次取消吃掉 —— 界面显示的和实际筛的不是一回事。
+/// 勾 / 取消二级，随后**重算一级 id 是否该留在选中集里**（维护不变量）
 - (void)toggleChild:(ABCategory *)child root:(ABCategory *)root {
     if ([self.draft containsObject:child.categoryId]) {
         [self.draft removeObject:child.categoryId];
@@ -343,45 +308,35 @@
         [self.draft addObject:child.categoryId];
     }
 
-    NSArray<ABCategory *> *kids = [self childrenOf:root];
-    BOOL allKids = kids.count > 0;
-    for (ABCategory *k in kids) {
-        if (![self.draft containsObject:k.categoryId]) { allKids = NO; break; }
+    if ([ABCategorySelection shouldSelectRoot:root
+                                withSelection:self.draft
+                                allCategories:self.allCategories]) {
+        [self.draft addObject:root.categoryId];
+    } else {
+        [self.draft removeObject:root.categoryId];
     }
-    if (allKids) [self.draft addObject:root.categoryId];
-    else [self.draft removeObject:root.categoryId];
 }
 
 - (void)toggleAll {
-    // ⚠️ 判据必须在清空**之前**取 —— 先清空再问 allSelected 永远是 NO，
+    // ⚠️ 判据必须在清空**之前**取 —— 先清空再问"是否全选"永远是 NO，
     //    「取消全选」会变成「重新全选」（点了没反应）。
-    BOOL wasAll = [self allSelected];
+    BOOL wasAll = [ABCategorySelection isAllSelectedWithSelection:self.draft
+                                                    allCategories:self.allCategories];
     [self.draft removeAllObjects];
     if (!wasAll) {
-        for (NSString *i in [self allIds]) [self.draft addObject:i];
+        [self.draft addObjectsFromArray:[ABCategorySelection allIdsInCategories:self.allCategories]];
     }
-}
-
-/// 提交时压缩：一级已勾 → 只发一级（后端连带其二级）；否则逐个发二级
-- (NSArray<NSString *> *)compress {
-    NSMutableArray *out = [NSMutableArray array];
-    for (ABCategory *r in self.roots) {
-        if ([self.draft containsObject:r.categoryId]) {
-            [out addObject:r.categoryId];
-        } else {
-            for (ABCategory *c in [self childrenOf:r]) {
-                if ([self.draft containsObject:c.categoryId]) [out addObject:c.categoryId];
-            }
-        }
-    }
-    return out;
 }
 
 - (void)confirm {
     if (!self.onDone) { [self.navigationController popViewControllerAnimated:YES]; return; }
     // 全选 → 空数组（不过滤）；全不选同理（防止用户清空后看到一片空白）
+    BOOL all = [ABCategorySelection isAllSelectedWithSelection:self.draft
+                                                 allCategories:self.allCategories];
     BOOL none = self.draft.count == 0;
-    self.onDone(([self allSelected] || none) ? @[] : [self compress]);
+    self.onDone((all || none) ? @[]
+                             : [ABCategorySelection compressSelection:self.draft
+                                                        allCategories:self.allCategories]);
     [self.navigationController popViewControllerAnimated:YES];
 }
 
@@ -428,9 +383,13 @@
     name.textColor = [ABTheme textPrimary];
 
     ABCheckboxView *box = [[ABCheckboxView alloc] init];
-    box.state = row.isChild
-        ? ([self.draft containsObject:cat.categoryId] ? 1 : 0)
-        : ([self isRootChecked:cat] ? 1 : ([self isRootIndeterminate:cat] ? 2 : 0));
+    if (row.isChild) {
+        box.state = [self.draft containsObject:cat.categoryId] ? 1 : 0;
+    } else {
+        box.state = [ABCategorySelection rootState:cat
+                                     withSelection:self.draft
+                                     allCategories:self.allCategories];
+    }
 
     [cell.contentView addSubview:icon];
     [cell.contentView addSubview:name];

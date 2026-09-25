@@ -73,6 +73,26 @@ xcodebuild -workspace MyAccountBook.xcworkspace -scheme MyAccountBook \
 ruby generate_project.rb && pod install
 ```
 
+工程里有两个 target：`MyAccountBook`（App）与 `MyAccountBookTests`（XCTest，走 `TEST_HOST`
+跑在 App 里，所以能拿到 App 与 Pods 的全部符号）。新增测试文件也要重跑上面这行。
+
+## 测试
+
+```bash
+bash scripts/run-tests.sh        # 69 个用例
+```
+
+判据是日志末尾的 `** TEST SUCCEEDED **`，**不是退出码**。
+
+⚠️ 脚本会先 `simctl uninstall` 掉模拟器上的 App —— 测试 bundle 在 App 包的 `PlugIns/` 里，
+App **已在运行**时 `xcodebuild test` 不会换掉它，于是跑的是**旧代码**、
+"全绿"但毫无意义（实测：把断言故意写反仍然报通过）。
+
+覆盖四块纯逻辑：**参数拼装**（`ABQueryBuilderTests`）、**分类勾选不变量**
+（`ABCategorySelectionTests`）、日期区间（`ABDateUtilTests`）、筛选值清洗
+（`ABFlowFilterValueTests`）。第一条是最要紧的 —— 本项目的
+`size` 超限、`order` 未传参两个静默 bug 都出在这里。
+
 ## 图标体系
 
 分类 `icon` 字段四种形态，`ABIconView` 统一分流：
@@ -97,7 +117,7 @@ ruby generate_project.rb && pod install
 
 **核心**：登录/注册、账本选择与管理、首页（banner + 区间统计 + 分类排行）、流水（分组/筛选/排序/滑动删除）、记一笔（金额键盘 + 二级分类 + 时间）、报表（环形图 + 趋势图 + 月/年切换）、日历、分类管理（分组树 + 增删改 + 搜索 / 批量 / 拖动排序）、账本分类设置（含从母本导入）、回收站、导入（xlsx）、导出（CSV）、离线记账队列（含幂等补传）、彩色/图片图标体系。
 
-**统计**：61 个 .m + 60 个 .h + 14,601 行。
+**统计**：63 个 .m + 62 个 .h + 14,916 行；单元测试 **69 个用例**（`MyAccountBookTests/`，786 行）。
 
 详见 `docs/移植实测与缺口.md` —— **实测基线 + 缺口清单，以它为准**。
 `docs/移植补全计划.md` 的状态表已过期，仅保留作历史。

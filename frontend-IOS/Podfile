@@ -16,6 +16,12 @@ target 'MyAccountBook' do
   pod 'YYModel', '~> 1.0'
   pod 'YYCache', '~> 1.0'
   pod 'AAChartKit', '~> 7.0'
+
+  # 单元测试 target：只继承搜索路径，不再单独链一遍 pods
+  # （测试跑在 App 里 —— TEST_HOST —— 符号从 App 拿）
+  target 'MyAccountBookTests' do
+    inherit! :search_paths
+  end
 end
 
 post_install do |installer|

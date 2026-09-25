@@ -10,6 +10,7 @@
 #import "ABTheme.h"
 #import "ABAlert.h"
 #import "ABFlowFilterViewController.h"
+#import "ABQueryBuilder.h"
 #import "ABTransactionService.h"
 #import "ABTransactionCell.h"
 #import "ABEmptyView.h"
@@ -526,44 +527,10 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
     return @"month";
 }
 
-/// 把筛选条件写进参数。
-///
-/// ⚠️ 三条口径都对齐前端 `filterOnlyParams()`，写错了是**静默**失效（界面照常渲染）：
-///   · **类型只在恰好选中 1 种时传** —— nil = 全部（前端把"全选"与"全不选"都归到不过滤）
-///   · **分类空数组 = 不过滤**；传一级 id 时后端会连带其下全部二级
-///   · **金额必须先过 normalizedAmount:** —— 后端 pattern 拒绝 "0"
-///
-/// @param start/end 传非 nil 表示用「本组的区间」覆盖筛选里的时间（展开明细时用）
-- (void)applyFilterTo:(NSMutableDictionary *)params
-        overrideStart:(nullable NSString *)start
-          overrideEnd:(nullable NSString *)end {
-    ABFlowFilterValue *f = self.filter ?: [ABFlowFilterValue empty];
-
-    NSString *s = start ?: f.start;
-    NSString *e = end ?: f.end;
-    if (s.length) params[@"start"] = s;
-    if (e.length) params[@"end"] = e;
-
-    if (f.type.length) params[@"type"] = f.type;
-    if (f.categoryIds.count) params[@"categoryIds"] = [f.categoryIds componentsJoinedByString:@","];
-
-    NSString *min = [ABFlowFilterValue normalizedAmount:f.minAmount];
-    NSString *max = [ABFlowFilterValue normalizedAmount:f.maxAmount];
-    if (min.length) params[@"minAmount"] = min;
-    if (max.length) params[@"maxAmount"] = max;
-
-    if (f.keyword.length) params[@"keyword"] = f.keyword;
-
-    NSString *aid = [ABAccountStore shared].currentId;
-    if (aid.length) params[@"accountId"] = aid;
-}
-
 - (NSDictionary *)baseParams {
-    NSMutableDictionary *params = [NSMutableDictionary dictionary];
-    params[@"groupBy"] = @"time";
-    params[@"unit"] = [self unitString];
-    [self applyFilterTo:params overrideStart:nil overrideEnd:nil];
-    return params;
+    return [ABQueryBuilder summaryParamsWithFilter:self.filter
+                                              unit:[self unitString]
+                                         accountId:[ABAccountStore shared].currentId];
 }
 
 - (void)refresh {
@@ -624,13 +591,16 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
     //    症状是「点开分组永远空白，且不细看日志根本不知道」——
     //    所以统一走 getAllTransactions: 循环分页拉全量。
     NSDictionary *range = [ABDateUtil periodRange:g.key unit:g.unit];
-    NSMutableDictionary *params = [NSMutableDictionary dictionary];
-    // 用**本组的区间**覆盖筛选里的时间（两者语义不同：一个是"组"，一个是"用户选的范围"）
-    [self applyFilterTo:params overrideStart:range[@"start"] overrideEnd:range[@"end"]];
-
+    // 用**本组的区间**覆盖筛选里的时间（一个是"组"，一个是"用户选的范围"，语义不同）。
     // ⚠️ `order` 只作用于**明细列表**（后端 /transactions/summary 没有 order 参数）。
-    //    之前这里漏了它 —— 结果是「排序」菜单选完**毫无反应**：菜单是真的、效果是假的。
-    if (self.order.length) params[@"order"] = self.order;
+    //    之前这里漏传过它 —— 症状是「排序菜单选完毫无反应」：菜单是真的、效果是假的。
+    //    `size` 传 nil，交给 getAllTransactions 内部按 maxPageSize 逐页取。
+    NSDictionary *params = [ABQueryBuilder listParamsWithFilter:self.filter
+                                                          start:range[@"start"]
+                                                            end:range[@"end"]
+                                                          order:self.order
+                                                           size:nil
+                                                      accountId:[ABAccountStore shared].currentId];
 
     __weak typeof(self) weakSelf = self;
     [ABTransactionService getAllTransactions:params success:^(NSArray<ABTransaction *> *list) {
@@ -845,11 +815,9 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
     // ⚠️ 搜索**不带任何其它筛选条件**（除了账本）—— 它是「在全部流水里找」，
     //    带上时间范围 / 金额区间会让用户困惑「我明明有这笔却搜不到」。
     //    账本必须带：那是数据隔离的边界，不该跨账本搜。
-    NSMutableDictionary *params = [NSMutableDictionary dictionary];
-    params[@"keyword"] = kw;
-    params[@"size"] = @100;
-    NSString *aid = [ABAccountStore shared].currentId;
-    if (aid.length) params[@"accountId"] = aid;
+    NSDictionary *params = [ABQueryBuilder searchParamsWithKeyword:kw
+                                                              size:@([ABQueryBuilder maxPageSize])
+                                                         accountId:[ABAccountStore shared].currentId];
 
     __weak typeof(self) weakSelf = self;
     [ABTransactionService getTransactions:params success:^(NSArray<ABTransaction *> *list, NSInteger total, NSInteger page, NSInteger size) {

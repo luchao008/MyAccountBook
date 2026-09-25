@@ -29,7 +29,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy, nullable) NSString *start;      // YYYY-MM-DD，nil = 不限
 @property (nonatomic, copy, nullable) NSString *end;
 @property (nonatomic, copy) NSString *timeLabel;            // 展示用：全部时间 / 本月 / 自定义…
-@property (nonatomic, copy) NSString *type;                 // nil / income / expense
+@property (nonatomic, copy, nullable) NSString *type;       // nil / income / expense
 @property (nonatomic, copy) NSArray<NSString *> *categoryIds;
 @property (nonatomic, copy, nullable) NSString *minAmount;
 @property (nonatomic, copy, nullable) NSString *maxAmount;

@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "49ED0066736EC351D92F1845"
+               BlueprintIdentifier = "9B62E1B1CDA9261AAF090049"
                BuildableName = "MyAccountBook.app"
                BlueprintName = "MyAccountBook"
                ReferencedContainer = "container:MyAccountBook.xcodeproj">
@@ -30,13 +30,23 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "49ED0066736EC351D92F1845"
+            BlueprintIdentifier = "9B62E1B1CDA9261AAF090049"
             BuildableName = "MyAccountBook.app"
             BlueprintName = "MyAccountBook"
             ReferencedContainer = "container:MyAccountBook.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <Testables>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "9C6EBDD82D636DF203F6021B"
+               BuildableName = "MyAccountBookTests.xctest"
+               BlueprintName = "MyAccountBookTests"
+               ReferencedContainer = "container:MyAccountBook.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction
@@ -53,7 +63,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "49ED0066736EC351D92F1845"
+            BlueprintIdentifier = "9B62E1B1CDA9261AAF090049"
             BuildableName = "MyAccountBook.app"
             BlueprintName = "MyAccountBook"
             ReferencedContainer = "container:MyAccountBook.xcodeproj">
@@ -70,7 +80,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "49ED0066736EC351D92F1845"
+            BlueprintIdentifier = "9B62E1B1CDA9261AAF090049"
             BuildableName = "MyAccountBook.app"
             BlueprintName = "MyAccountBook"
             ReferencedContainer = "container:MyAccountBook.xcodeproj">

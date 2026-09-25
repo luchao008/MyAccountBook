@@ -5,6 +5,7 @@
 
 #import "ABTransactionService.h"
 #import "ABHttpClient.h"
+#import "ABQueryBuilder.h"
 
 @implementation ABTransactionService
 
@@ -36,10 +37,11 @@ static NSArray<ABTransaction *> *ABMapTxns(id data) {
     }];
 }
 
-/// 列表接口 size 上限 100（后端 `RuleType.number().integer().min(1).max(100)`）。
-/// 与前端 pages/export 的 PAGE_SIZE / MAX_PAGES 保持一致。
-static const NSInteger kABTxnPageSize = 100;
-static const NSInteger kABTxnMaxPages = 200;
+/// 列表接口 size 上限与分页安全上限**统一从 ABQueryBuilder 取** ——
+/// 这个值被三处踩过（明细 / 日历 / 导出全传了超限值，三个页面都没数据），
+/// 常量散在各处就是会漏改。单测钉住 `maxPageSize == 100`。
+static NSInteger abTxnPageSize(void) { return (NSInteger)[ABQueryBuilder maxPageSize]; }
+static NSInteger abTxnMaxPages(void) { return (NSInteger)[ABQueryBuilder maxPages]; }
 
 /// getAllTransactions 的递归实现。定义在调用者之前，省掉前向声明。
 + (void)fetchTxnPage:(NSInteger)page
@@ -50,12 +52,12 @@ static const NSInteger kABTxnMaxPages = 200;
 
     NSMutableDictionary *p = [NSMutableDictionary dictionaryWithDictionary:params ?: @{}];
     p[@"page"] = @(page);
-    p[@"size"] = @(kABTxnPageSize);
+    p[@"size"] = @(abTxnPageSize());
 
     [self getTransactions:p success:^(NSArray<ABTransaction *> *list, NSInteger total, NSInteger curPage, NSInteger size) {
         [acc addObjectsFromArray:list ?: @[]];
         // 与前端一致的三个退出条件：本页为空 / 已取够 / 触到安全上限
-        if (list.count == 0 || (NSInteger)acc.count >= total || page >= kABTxnMaxPages) {
+        if (list.count == 0 || (NSInteger)acc.count >= total || page >= abTxnMaxPages()) {
             if (success) success([acc copy]);
             return;
         }

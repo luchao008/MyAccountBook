@@ -6,6 +6,8 @@ require 'fileutils'
 
 ROOT = File.expand_path(__dir__)
 SRC_ROOT = File.join(ROOT, 'MyAccountBook')
+TESTS_NAME = 'MyAccountBookTests'
+TESTS_ROOT = File.join(ROOT, TESTS_NAME)
 PROJECT_PATH = File.join(ROOT, 'MyAccountBook.xcodeproj')
 APP_NAME = 'MyAccountBook'
 BUNDLE_ID = 'com.luchao.MyAccountBook'
@@ -102,6 +104,36 @@ target.build_configurations.each do |config|
   config.build_settings['SUPPORTS_MACCATALYST'] = 'NO'
 end
 
+# —— 单元测试 target（XCTest）——
+# 用 TEST_HOST 跑在 App 里：这样测试能拿到 App 的全部符号（含 CocoaPods 的），
+# 不需要为测试单独再链一遍依赖。
+test_target = project.new_target(:unit_test_bundle, TESTS_NAME, :ios, DEPLOYMENT_TARGET)
+test_target.build_configurations.each do |config|
+  config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = "#{BUNDLE_ID}Tests"
+  config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = DEPLOYMENT_TARGET
+  config.build_settings['CLANG_ENABLE_OBJC_ARC'] = 'YES'
+  config.build_settings['TARGETED_DEVICE_FAMILY'] = '1,2'
+  config.build_settings['CODE_SIGN_STYLE'] = 'Automatic'
+  config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
+  config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+  config.build_settings['SDKROOT'] = 'iphoneos'
+  config.build_settings['SUPPORTED_PLATFORMS'] = 'iphoneos iphonesimulator'
+  # 测试要 import 被测代码的头文件
+  config.build_settings['HEADER_SEARCH_PATHS'] = '$(inherited) "$(SRCROOT)/MyAccountBook/**"'
+  # iOS 的 App 可执行文件就在 .app 根下（没有 Contents/MacOS 这一层）
+  config.build_settings['TEST_HOST'] = '$(BUILT_PRODUCTS_DIR)/MyAccountBook.app/MyAccountBook'
+  config.build_settings['BUNDLE_LOADER'] = '$(TEST_HOST)'
+  # 不手写 Info.plist，让 Xcode 生成
+  config.build_settings['GENERATE_INFOPLIST_FILE'] = 'YES'
+end
+
+test_sources = Dir.glob(File.join(TESTS_ROOT, '**', '*.m'))
+test_group = project.main_group.new_group(TESTS_NAME)
+test_sources.each do |f|
+  ref = test_group.new_reference(f)
+  test_target.add_file_references([ref])
+end
+
 project.save
 
 # objectVersion 46 太旧，Xcode 26 无法识别平台；提升为 56（Xcode 14 格式）
@@ -115,9 +147,11 @@ File.write(pbxproj_path, content)
 scheme = Xcodeproj::XCScheme.new
 scheme.add_build_target(target)
 scheme.set_launch_target(target)
+scheme.add_test_target(test_target)
 scheme.save_as(PROJECT_PATH, APP_NAME, true)
 
 puts "✅ 生成工程: #{PROJECT_PATH}"
 puts "   源文件: #{sources.size} 个"
 puts "   头文件: #{headers.size} 个"
 puts "   资源: #{resources.size} 个"
+puts "   测试: #{test_sources.size} 个"
