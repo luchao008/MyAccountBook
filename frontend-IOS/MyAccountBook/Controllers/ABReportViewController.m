@@ -8,6 +8,7 @@
 
 #import "ABReportViewController.h"
 #import "ABTheme.h"
+#import "ABAlert.h"
 #import "ABStatisticsService.h"
 #import "ABRingChart.h"
 #import "ABTrendChart.h"
@@ -286,8 +287,7 @@
         [self loadData];
     }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    sheet.popoverPresentationController.sourceView = self.periodPickerButton;
-    sheet.popoverPresentationController.sourceRect = self.periodPickerButton.bounds;
+    [ABAlert prepareSheet:sheet anchor:self.periodPickerButton in:self];
     [self presentViewController:sheet animated:YES completion:nil];
 }
 

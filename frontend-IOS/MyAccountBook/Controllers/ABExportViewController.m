@@ -8,6 +8,7 @@
 
 #import "ABExportViewController.h"
 #import "ABTheme.h"
+#import "ABAlert.h"
 #import "ABNavigationBar.h"
 #import "ABTransactionService.h"
 #import "ABAccountStore.h"
@@ -264,8 +265,7 @@
         }]];
     }
     [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    sheet.popoverPresentationController.sourceView = self.view;
-    sheet.popoverPresentationController.sourceRect = self.view.bounds;
+    [ABAlert prepareSheet:sheet anchor:self.view in:self];
     [self presentViewController:sheet animated:YES completion:nil];
 }
 
@@ -310,8 +310,7 @@
                 }]];
             }
             [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-            sheet.popoverPresentationController.sourceView = self.view;
-            sheet.popoverPresentationController.sourceRect = self.view.bounds;
+            [ABAlert prepareSheet:sheet anchor:self.view in:self];
             [self presentViewController:sheet animated:YES completion:nil];
         } failure:^(NSError *error) {
             NSLog(@"[export] 分类加载失败: %@", error.localizedDescription);

@@ -8,6 +8,7 @@
 
 #import "ABRecordViewController.h"
 #import "ABTheme.h"
+#import "ABAlert.h"
 #import "ABCategoryService.h"
 #import "ABTransactionService.h"
 #import "ABAccountStore.h"
@@ -410,8 +411,7 @@
         self.dateValueLabel.textColor = [ABTheme textPrimary];
     }]];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    alert.popoverPresentationController.sourceView = self.view;
-    alert.popoverPresentationController.sourceRect = self.view.bounds;
+    [ABAlert prepareSheet:alert anchor:self.view in:self];
     [self presentViewController:alert animated:YES completion:nil];
 }
 

@@ -8,6 +8,7 @@
 
 #import "ABFlowViewController.h"
 #import "ABTheme.h"
+#import "ABAlert.h"
 #import "ABTransactionService.h"
 #import "ABTransactionCell.h"
 #import "ABEmptyView.h"
@@ -636,8 +637,7 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
         [self loadGroups];
     }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    sheet.popoverPresentationController.sourceView = self.filterButton;
-    sheet.popoverPresentationController.sourceRect = self.filterButton.bounds;
+    [ABAlert prepareSheet:sheet anchor:self.filterButton in:self];
     [self presentViewController:sheet animated:YES completion:nil];
 }
 
@@ -653,8 +653,7 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
         }]];
     }
     [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    sheet.popoverPresentationController.sourceView = self.sortButton;
-    sheet.popoverPresentationController.sourceRect = self.sortButton.bounds;
+    [ABAlert prepareSheet:sheet anchor:self.sortButton in:self];
     [self presentViewController:sheet animated:YES completion:nil];
 }
 
@@ -670,8 +669,7 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
         }]];
     }
     [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    sheet.popoverPresentationController.sourceView = self.view;
-    sheet.popoverPresentationController.sourceRect = self.view.bounds;
+    [ABAlert prepareSheet:sheet anchor:self.view in:self];
     [self presentViewController:sheet animated:YES completion:nil];
 }
 
