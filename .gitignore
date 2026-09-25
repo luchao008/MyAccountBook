@@ -24,3 +24,8 @@ unpackage/
 # 部署：导出的镜像 tar 很大，不入库；.env 含密码
 deploy/out/
 deploy/.env
+
+# iOS 构建产物：xcodebuild 的 -derivedDataPath 指向这里
+# （默认路径 ~/Library/Developer/Xcode/DerivedData 会被沙箱拒绝写入，
+#   表现成 BUILD FAILED，其实不是代码问题）
+.tmp-ios-build/
