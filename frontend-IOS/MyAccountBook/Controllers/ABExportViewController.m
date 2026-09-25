@@ -322,13 +322,14 @@
     NSMutableDictionary *params = [NSMutableDictionary dictionary];
     params[@"start"] = self.startDate;
     params[@"end"] = self.endDate;
-    params[@"size"] = @(10000);
     NSString *accountId = [ABAccountStore shared].currentId;
     if (accountId.length) params[@"accountId"] = accountId;
 
     self.exportButton.enabled = NO;
     __weak typeof(self) weakSelf = self;
-    [ABTransactionService getTransactions:params success:^(NSArray<ABTransaction *> *list, NSInteger total, NSInteger page, NSInteger size) {
+    // ⚠️ 原来这里写 size = 10000 —— 上限是 100，请求会被参数校验整条拒掉，
+    //    也就是说**导出功能一直是坏的**。改走循环分页拉全量。
+    [ABTransactionService getAllTransactions:params success:^(NSArray<ABTransaction *> *list) {
         __strong typeof(weakSelf) self = weakSelf;
         self.exportButton.enabled = YES;
         [self shareCSVWithTransactions:list];

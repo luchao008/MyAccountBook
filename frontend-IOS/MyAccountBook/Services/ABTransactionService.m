@@ -36,6 +36,37 @@ static NSArray<ABTransaction *> *ABMapTxns(id data) {
     }];
 }
 
+/// 列表接口 size 上限 100（后端 `RuleType.number().integer().min(1).max(100)`）。
+/// 与前端 pages/export 的 PAGE_SIZE / MAX_PAGES 保持一致。
+static const NSInteger kABTxnPageSize = 100;
+static const NSInteger kABTxnMaxPages = 200;
+
+/// getAllTransactions 的递归实现。定义在调用者之前，省掉前向声明。
++ (void)fetchTxnPage:(NSInteger)page
+              params:(NSDictionary *)params
+         accumulated:(NSMutableArray<ABTransaction *> *)acc
+             success:(ABTxnListSuccess)success
+             failure:(ABServiceFailure)failure {
+
+    NSMutableDictionary *p = [NSMutableDictionary dictionaryWithDictionary:params ?: @{}];
+    p[@"page"] = @(page);
+    p[@"size"] = @(kABTxnPageSize);
+
+    [self getTransactions:p success:^(NSArray<ABTransaction *> *list, NSInteger total, NSInteger curPage, NSInteger size) {
+        [acc addObjectsFromArray:list ?: @[]];
+        // 与前端一致的三个退出条件：本页为空 / 已取够 / 触到安全上限
+        if (list.count == 0 || (NSInteger)acc.count >= total || page >= kABTxnMaxPages) {
+            if (success) success([acc copy]);
+            return;
+        }
+        [self fetchTxnPage:page + 1 params:params accumulated:acc success:success failure:failure];
+    } failure:failure];
+}
+
++ (void)getAllTransactions:(NSDictionary *)params success:(ABTxnListSuccess)success failure:(ABServiceFailure)failure {
+    [self fetchTxnPage:1 params:params accumulated:[NSMutableArray array] success:success failure:failure];
+}
+
 + (void)getTransactionSummary:(NSDictionary *)params success:(ABSummarySuccess)success failure:(ABServiceFailure)failure {
     [[ABHttpClient sharedClient] GET:@"/transactions/summary" params:params success:^(id data) {
         NSMutableArray<ABSummaryItem *> *out = [NSMutableArray array];

@@ -14,6 +14,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithText:(NSString *)text;
 - (instancetype)initWithIcon:(nullable NSString *)icon text:(NSString *)text;
 
+/// 复用同一个空状态时要能换文案（如「搜索备注、分类名或金额」→「没有找到相关流水」）
+- (void)setText:(NSString *)text;
+
 @end
 
 NS_ASSUME_NONNULL_END

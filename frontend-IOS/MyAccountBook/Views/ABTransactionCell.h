@@ -16,6 +16,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)configureWithTransaction:(ABTransaction *)txn;
 
+/// 搜索场景用：用 metaOverride 替换副标题（如「账本名 · 备注 · 日期 时刻」）。
+/// 传 nil 等同于 configureWithTransaction:（副标题走备注）。
+- (void)configureWithTransaction:(ABTransaction *)txn metaOverride:(nullable NSString *)metaOverride;
+
 + (CGFloat)height;
 
 @end

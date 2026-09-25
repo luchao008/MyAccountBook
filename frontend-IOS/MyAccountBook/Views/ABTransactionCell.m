@@ -77,10 +77,15 @@
 }
 
 - (void)configureWithTransaction:(ABTransaction *)txn {
+    [self configureWithTransaction:txn metaOverride:nil];
+}
+
+- (void)configureWithTransaction:(ABTransaction *)txn metaOverride:(NSString *)metaOverride {
     self.txn = txn;
     self.iconView.iconKey = txn.categoryIcon;
     self.nameLabel.text = [txn categoryName];
-    self.noteLabel.text = txn.note.length ? txn.note : @"";
+    // 搜索场景（前端 searchMeta）：账本名 · 备注 · 日期 时刻
+    self.noteLabel.text = metaOverride.length ? metaOverride : (txn.note.length ? txn.note : @"");
 
     BOOL isIncome = [txn.type isEqualToString:@"income"];
     NSString *sign = isIncome ? @"+" : @"-";

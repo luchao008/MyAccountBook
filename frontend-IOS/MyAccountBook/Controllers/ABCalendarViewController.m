@@ -246,12 +246,13 @@
     NSMutableDictionary *params = [NSMutableDictionary dictionary];
     params[@"start"] = range[@"start"];
     params[@"end"] = range[@"end"];
-    params[@"size"] = @(500);
     NSString *aid = [ABAccountStore shared].currentId;
     if (aid.length) params[@"accountId"] = aid;
 
     __weak typeof(self) weakSelf = self;
-    [ABTransactionService getTransactions:params success:^(NSArray<ABTransaction *> *list, NSInteger total, NSInteger page, NSInteger size) {
+    // ⚠️ 不要自己传 size：列表接口上限 100，写 500 会被参数校验整条拒掉，
+    //    症状是「日历上什么数据都没有」。走循环分页拉全量。
+    [ABTransactionService getAllTransactions:params success:^(NSArray<ABTransaction *> *list) {
         __strong typeof(weakSelf) self = weakSelf;
         [self.allMonthTxns removeAllObjects];
         [self.dayExpenseMap removeAllObjects];
