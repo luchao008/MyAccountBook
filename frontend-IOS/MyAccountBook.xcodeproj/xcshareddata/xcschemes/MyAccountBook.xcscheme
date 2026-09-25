@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E28FD294EA503CD1F0B516A1"
+               BlueprintIdentifier = "41873BFE6705DDC8CF0972DD"
                BuildableName = "MyAccountBook.app"
                BlueprintName = "MyAccountBook"
                ReferencedContainer = "container:MyAccountBook.xcodeproj">
@@ -30,7 +30,7 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "E28FD294EA503CD1F0B516A1"
+            BlueprintIdentifier = "41873BFE6705DDC8CF0972DD"
             BuildableName = "MyAccountBook.app"
             BlueprintName = "MyAccountBook"
             ReferencedContainer = "container:MyAccountBook.xcodeproj">
@@ -53,7 +53,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "E28FD294EA503CD1F0B516A1"
+            BlueprintIdentifier = "41873BFE6705DDC8CF0972DD"
             BuildableName = "MyAccountBook.app"
             BlueprintName = "MyAccountBook"
             ReferencedContainer = "container:MyAccountBook.xcodeproj">
@@ -70,7 +70,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "E28FD294EA503CD1F0B516A1"
+            BlueprintIdentifier = "41873BFE6705DDC8CF0972DD"
             BuildableName = "MyAccountBook.app"
             BlueprintName = "MyAccountBook"
             ReferencedContainer = "container:MyAccountBook.xcodeproj">

@@ -186,8 +186,8 @@
     if ([action isEqualToString:@"account"]) {
         vc = [[ABAccountManageViewController alloc] init];
     } else if ([action isEqualToString:@"cat-expense"] || [action isEqualToString:@"cat-income"]) {
-        ABCategoryViewController *catVC = [[ABCategoryViewController alloc] init];
-        vc = catVC;
+        NSString *type = [action isEqualToString:@"cat-income"] ? @"income" : @"expense";
+        vc = [[ABCategoryViewController alloc] initWithType:type];
     } else if ([action isEqualToString:@"recycle"]) {
         vc = [[ABRecycleViewController alloc] init];
     } else if ([action isEqualToString:@"export"]) {

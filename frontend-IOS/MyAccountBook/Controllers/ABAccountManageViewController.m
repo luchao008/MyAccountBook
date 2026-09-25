@@ -7,6 +7,7 @@
 #import "ABTheme.h"
 #import "ABAccountStore.h"
 #import "ABAccountNewViewController.h"
+#import "ABAccountCategoryViewController.h"
 #import "ABNavigationBar.h"
 #import <Masonry/Masonry.h>
 
@@ -49,7 +50,6 @@
     self.tableView.dataSource = self;
     self.tableView.delegate = self;
     self.tableView.rowHeight = 60;
-    [self.tableView registerClass:UITableViewCell.class forCellReuseIdentifier:@"acc"];
     [self.view addSubview:self.tableView];
 
     [self.navBar mas_makeConstraints:^(MASConstraintMaker *make) {
@@ -76,12 +76,29 @@
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"acc" forIndexPath:indexPath];
+    // ⚠️ 不能用 registerClass: + dequeueForIndexPath: ——
+    // 那样拿到的是 Default 样式，detailTextLabel 恒为 nil，「默认」徽标永远不显示（静默失效）
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"acc"];
+    if (!cell) cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"acc"];
     ABAccount *acc = [ABAccountStore shared].list[indexPath.row];
     cell.textLabel.text = [NSString stringWithFormat:@"%@ %@", acc.icon.length ? acc.icon : @"📒", acc.name];
     cell.textLabel.font = [ABTheme fontBody];
-    cell.detailTextLabel.text = acc.isDefault ? @"默认" : @"";
+    cell.detailTextLabel.text = acc.isDefault ? @"默认账本" : @"";
+    cell.detailTextLabel.font = [ABTheme fontCaption];
+    cell.detailTextLabel.textColor = [ABTheme textSecondary];
+    cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     return cell;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    if (indexPath.row >= (NSInteger)[ABAccountStore shared].list.count) return;
+
+    ABAccount *acc = [ABAccountStore shared].list[indexPath.row];
+    // 进该账本的分类设置。**不切换「当前账本」** ——
+    // 分类接口按 accountId 取数，看 A 账本的分类不该把当前账本改成 A。
+    ABAccountCategoryViewController *vc = [[ABAccountCategoryViewController alloc] initWithAccountId:acc.accountId];
+    [self.navigationController pushViewController:vc animated:YES];
 }
 
 @end
