@@ -9,6 +9,7 @@
 #import "ABFlowViewController.h"
 #import "ABTheme.h"
 #import "ABAlert.h"
+#import "ABFlowFilterViewController.h"
 #import "ABTransactionService.h"
 #import "ABTransactionCell.h"
 #import "ABEmptyView.h"
@@ -120,13 +121,14 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
 @property (nonatomic, strong) NSMutableSet<NSString *> *expandedKeys;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSArray<ABDayGroup *> *> *details;
 
-// 筛选状态
-@property (nonatomic, copy) NSString *filterStart;
-@property (nonatomic, copy) NSString *filterEnd;
-@property (nonatomic, copy) NSString *filterType;      // income / expense / nil
-@property (nonatomic, copy) NSString *filterKeyword;
+// 筛选状态：时间 / 分类 / 类型 / 金额 / 备注 全部收敛到一个值对象
+@property (nonatomic, strong) ABFlowFilterValue *filter;
 @property (nonatomic, copy) NSString *order;           // time / amountDesc / amountAsc
 @property (nonatomic, assign) ABFlowUnit unit;
+
+// —— 已筛选提示条（有任意条件就出现，让用户知道"当前看到的不是全部"）——
+@property (nonatomic, strong) UIView *filterTip;
+@property (nonatomic, strong) MASConstraint *filterTipHeight;
 
 // —— 搜索态（顶栏放大镜进入的整页搜索，对齐前端 searchVisible）——
 // 与筛选面板里的 filterKeyword 是**两条独立路径**：
@@ -156,6 +158,7 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
     self.details = [NSMutableDictionary dictionary];
     self.order = @"time";
     self.unit = ABFlowUnitMonth;
+    self.filter = [ABFlowFilterValue empty];
     self.searchResults = @[];
 
     [[NSNotificationCenter defaultCenter] addObserver:self
@@ -168,6 +171,7 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    [self updateFilterTip];
     [self loadGroups];
     // 从编辑页返回时搜索态也要刷新 —— 否则改完金额，搜索结果还是旧的
     if (!self.searchOverlay.hidden && self.searchCommitted.length) {
@@ -308,8 +312,47 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
         make.centerY.equalTo(toolbar);
     }];
 
-    [self.tableView mas_makeConstraints:^(MASConstraintMaker *make) {
+    // —— 已筛选提示条 ——
+    // ⚠️ `clipsToBounds = YES` 不能省：高度改到 0 之后，里面的 label 不会被自动裁掉，
+    //    会在工具栏下面露一条半截文字（分类页的搜索条踩过同一个坑）。
+    self.filterTip = [[UIView alloc] init];
+    self.filterTip.backgroundColor = [ABTheme goldSoft];
+    self.filterTip.clipsToBounds = YES;
+    self.filterTip.hidden = YES;
+    [self.view addSubview:self.filterTip];
+
+    UILabel *tipText = [[UILabel alloc] init];
+    tipText.text = @"已筛选，当前只展示部分流水";
+    tipText.font = [ABTheme fontCaption];
+    tipText.textColor = [ABTheme gold];
+    [self.filterTip addSubview:tipText];
+
+    UIButton *tipAction = [UIButton buttonWithType:UIButtonTypeSystem];
+    [tipAction setTitle:@"查看全部 ›" forState:UIControlStateNormal];
+    tipAction.titleLabel.font = [ABTheme fontCaption];
+    [tipAction setTitleColor:[ABTheme gold] forState:UIControlStateNormal];
+    [tipAction addTarget:self action:@selector(showFilterSummary) forControlEvents:UIControlEventTouchUpInside];
+    [self.filterTip addSubview:tipAction];
+
+    [tipText mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.left.equalTo(self.filterTip).offset(kSpace4);
+        make.centerY.equalTo(self.filterTip);
+    }];
+    [tipAction mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.right.equalTo(self.filterTip).offset(-kSpace4);
+        make.centerY.equalTo(self.filterTip);
+    }];
+    [self.filterTip mas_makeConstraints:^(MASConstraintMaker *make) {
         make.top.equalTo(toolbar.mas_bottom);
+        make.left.right.equalTo(self.view);
+    }];
+    __weak typeof(self) tipSelf = self;
+    [self.filterTip mas_makeConstraints:^(MASConstraintMaker *make) {
+        tipSelf.filterTipHeight = make.height.mas_equalTo(0);
+    }];
+
+    [self.tableView mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.top.equalTo(self.filterTip.mas_bottom);
         make.left.right.equalTo(self.view);
         make.bottom.equalTo(self.view.mas_safeAreaLayoutGuideBottom);
     }];
@@ -483,16 +526,43 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
     return @"month";
 }
 
+/// 把筛选条件写进参数。
+///
+/// ⚠️ 三条口径都对齐前端 `filterOnlyParams()`，写错了是**静默**失效（界面照常渲染）：
+///   · **类型只在恰好选中 1 种时传** —— nil = 全部（前端把"全选"与"全不选"都归到不过滤）
+///   · **分类空数组 = 不过滤**；传一级 id 时后端会连带其下全部二级
+///   · **金额必须先过 normalizedAmount:** —— 后端 pattern 拒绝 "0"
+///
+/// @param start/end 传非 nil 表示用「本组的区间」覆盖筛选里的时间（展开明细时用）
+- (void)applyFilterTo:(NSMutableDictionary *)params
+        overrideStart:(nullable NSString *)start
+          overrideEnd:(nullable NSString *)end {
+    ABFlowFilterValue *f = self.filter ?: [ABFlowFilterValue empty];
+
+    NSString *s = start ?: f.start;
+    NSString *e = end ?: f.end;
+    if (s.length) params[@"start"] = s;
+    if (e.length) params[@"end"] = e;
+
+    if (f.type.length) params[@"type"] = f.type;
+    if (f.categoryIds.count) params[@"categoryIds"] = [f.categoryIds componentsJoinedByString:@","];
+
+    NSString *min = [ABFlowFilterValue normalizedAmount:f.minAmount];
+    NSString *max = [ABFlowFilterValue normalizedAmount:f.maxAmount];
+    if (min.length) params[@"minAmount"] = min;
+    if (max.length) params[@"maxAmount"] = max;
+
+    if (f.keyword.length) params[@"keyword"] = f.keyword;
+
+    NSString *aid = [ABAccountStore shared].currentId;
+    if (aid.length) params[@"accountId"] = aid;
+}
+
 - (NSDictionary *)baseParams {
     NSMutableDictionary *params = [NSMutableDictionary dictionary];
     params[@"groupBy"] = @"time";
     params[@"unit"] = [self unitString];
-    if (self.filterStart.length) params[@"start"] = self.filterStart;
-    if (self.filterEnd.length) params[@"end"] = self.filterEnd;
-    if (self.filterType.length) params[@"type"] = self.filterType;
-    if (self.filterKeyword.length) params[@"keyword"] = self.filterKeyword;
-    NSString *aid = [ABAccountStore shared].currentId;
-    if (aid.length) params[@"accountId"] = aid;
+    [self applyFilterTo:params overrideStart:nil overrideEnd:nil];
     return params;
 }
 
@@ -555,12 +625,12 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
     //    所以统一走 getAllTransactions: 循环分页拉全量。
     NSDictionary *range = [ABDateUtil periodRange:g.key unit:g.unit];
     NSMutableDictionary *params = [NSMutableDictionary dictionary];
-    params[@"start"] = range[@"start"];
-    params[@"end"] = range[@"end"];
-    if (self.filterType.length) params[@"type"] = self.filterType;
-    if (self.filterKeyword.length) params[@"keyword"] = self.filterKeyword;
-    NSString *aid = [ABAccountStore shared].currentId;
-    if (aid.length) params[@"accountId"] = aid;
+    // 用**本组的区间**覆盖筛选里的时间（两者语义不同：一个是"组"，一个是"用户选的范围"）
+    [self applyFilterTo:params overrideStart:range[@"start"] overrideEnd:range[@"end"]];
+
+    // ⚠️ `order` 只作用于**明细列表**（后端 /transactions/summary 没有 order 参数）。
+    //    之前这里漏了它 —— 结果是「排序」菜单选完**毫无反应**：菜单是真的、效果是假的。
+    if (self.order.length) params[@"order"] = self.order;
 
     __weak typeof(self) weakSelf = self;
     [ABTransactionService getAllTransactions:params success:^(NSArray<ABTransaction *> *list) {
@@ -602,43 +672,104 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
 }
 
 - (void)onFilter {
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"筛选" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    ABFlowFilterViewController *vc =
+        [[ABFlowFilterViewController alloc] initWithValue:self.filter
+                                                accountId:[ABAccountStore shared].currentId];
     __weak typeof(self) weakSelf = self;
-    [sheet addAction:[UIAlertAction actionWithTitle:@"全部时间" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+    vc.onApply = ^(ABFlowFilterValue *value) {
         __strong typeof(weakSelf) self = weakSelf;
-        self.filterStart = nil; self.filterEnd = nil;
+        self.filter = value;
+        [self updateFilterTip];
         [self loadGroups];
+    };
+    [self.navigationController pushViewController:vc animated:YES];
+}
+
+/// 是否存在生效中的筛选条件 —— 与前端 `hasFilter` 同口径，
+/// **含顶部搜索关键词**（它和筛选面板的「备注」效果相同，都缩小了结果集）。
+- (BOOL)hasFilter {
+    if (self.filter.hasAny) return YES;
+    if (self.searchCommitted.length) return YES;
+    return NO;
+}
+
+/// 提示条显隐。高度归零时**必须同时把容器裁掉**，否则里面的 label
+/// 会露在顶栏下面形成一条残影（分类页踩过同款）。
+- (void)updateFilterTip {
+    BOOL show = [self hasFilter];
+    self.filterTip.hidden = !show;
+    self.filterTipHeight.mas_equalTo(show ? 36 : 0);
+}
+
+/// 条件摘要弹层：列出当前生效的条件 + 两个出口
+///   · 查看全部流水 —— 清掉所有筛选条件（含顶部搜索）
+///   · 修改筛选条件 —— 打开筛选面板
+- (void)showFilterSummary {
+    NSMutableArray<NSString *> *lines = [NSMutableArray array];
+    ABFlowFilterValue *f = self.filter ?: [ABFlowFilterValue empty];
+
+    if (f.start.length && f.end.length) {
+        [lines addObject:[NSString stringWithFormat:@"时间　　%@ - %@",
+                          [self cnDate:f.start], [self cnDate:f.end]]];
+    }
+    NSString *cat = [self summaryCategoryText];
+    if (cat.length) [lines addObject:[NSString stringWithFormat:@"分类　　%@", cat]];
+    if (f.type.length) {
+        [lines addObject:[NSString stringWithFormat:@"流水类型　%@",
+                          [f.type isEqualToString:@"expense"] ? @"支出" : @"收入"]];
+    }
+    NSString *amount = [self summaryAmountText];
+    if (amount.length) [lines addObject:[NSString stringWithFormat:@"金额区间　%@", amount]];
+    if (f.keyword.length) [lines addObject:[NSString stringWithFormat:@"关键词　　%@", f.keyword]];
+    if (self.searchCommitted.length) [lines addObject:[NSString stringWithFormat:@"搜索　　　%@", self.searchCommitted]];
+
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"筛选条件"
+                                                                  message:[lines componentsJoinedByString:@"\n"]
+                                                           preferredStyle:UIAlertControllerStyleActionSheet];
+    __weak typeof(self) weakSelf = self;
+    [sheet addAction:[UIAlertAction actionWithTitle:@"查看全部流水" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self clearAllFilters];
     }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"本月" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+    [sheet addAction:[UIAlertAction actionWithTitle:@"修改筛选条件" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         __strong typeof(weakSelf) self = weakSelf;
-        NSDictionary *r = [ABDateUtil periodRange:[ABDateUtil currentMonth] unit:@"month"];
-        self.filterStart = r[@"start"]; self.filterEnd = r[@"end"];
-        [self loadGroups];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"本年" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        __strong typeof(weakSelf) self = weakSelf;
-        NSDictionary *r = [ABDateUtil periodRange:[ABDateUtil currentYear] unit:@"year"];
-        self.filterStart = r[@"start"]; self.filterEnd = r[@"end"];
-        [self loadGroups];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"只看支出" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        __strong typeof(weakSelf) self = weakSelf;
-        self.filterType = @"expense";
-        [self loadGroups];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"只看收入" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        __strong typeof(weakSelf) self = weakSelf;
-        self.filterType = @"income";
-        [self loadGroups];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"清除筛选" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
-        __strong typeof(weakSelf) self = weakSelf;
-        self.filterStart = nil; self.filterEnd = nil; self.filterType = nil; self.filterKeyword = nil;
-        [self loadGroups];
+        [self onFilter];
     }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [ABAlert prepareSheet:sheet anchor:self.filterButton in:self];
     [self presentViewController:sheet animated:YES completion:nil];
+}
+
+/// 查看全部：清掉所有筛选条件（含顶部搜索）
+- (void)clearAllFilters {
+    self.filter = [ABFlowFilterValue empty];
+    self.searchCommitted = nil;
+    self.searchField.text = @"";
+    [self updateFilterTip];
+    [self loadGroups];
+}
+
+- (NSString *)summaryAmountText {
+    NSString *min = [ABFlowFilterValue normalizedAmount:self.filter.minAmount];
+    NSString *max = [ABFlowFilterValue normalizedAmount:self.filter.maxAmount];
+    if (min.length && max.length) return [NSString stringWithFormat:@"%@ - %@", min, max];
+    if (min.length) return [NSString stringWithFormat:@"%@ 以上", min];
+    if (max.length) return [NSString stringWithFormat:@"%@ 以下", max];
+    return @"";
+}
+
+- (NSString *)summaryCategoryText {
+    NSArray<NSString *> *ids = self.filter.categoryIds ?: @[];
+    if (ids.count == 0) return @"";
+    if (ids.count == 1) return ids.firstObject;
+    return [NSString stringWithFormat:@"已选 %lu 项", (unsigned long)ids.count];
+}
+
+/// YYYY-MM-DD → YYYY年MM月DD日
+- (NSString *)cnDate:(NSString *)d {
+    NSArray<NSString *> *p = [d componentsSeparatedByString:@"-"];
+    if (p.count < 3) return d;
+    return [NSString stringWithFormat:@"%@年%@月%@日", p[0], p[1], p[2]];
 }
 
 - (void)onSort {
@@ -687,6 +818,8 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
     self.searchCommitted = @"";
     self.searchResults = @[];
     [self reloadSearchUI];
+    // 关闭搜索 = 关键词不残留（对齐前端），提示条要跟着收起来
+    [self updateFilterTip];
 }
 
 - (void)onSearchInputChanged {
