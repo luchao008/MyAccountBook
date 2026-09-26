@@ -16,6 +16,8 @@
         _name = [n isKindOfClass:NSString.class] ? n : nil;
         id ic = dict[@"icon"];
         _icon = [ic isKindOfClass:NSString.class] ? ic : nil;
+        id pn = dict[@"parentName"];
+        _parentName = [pn isKindOfClass:NSString.class] ? pn : nil;
         _income  = [NSString stringWithFormat:@"%@", dict[@"income"] ?: @"0"];
         _expense = [NSString stringWithFormat:@"%@", dict[@"expense"] ?: @"0"];
         _balance = [NSString stringWithFormat:@"%@", dict[@"balance"] ?: @"0"];

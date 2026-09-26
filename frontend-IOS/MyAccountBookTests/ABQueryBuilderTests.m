@@ -82,6 +82,68 @@
     XCTAssertNil(params[@"size"]);
 }
 
+#pragma mark - 分类维度汇总（groupBy=category）
+
+/// 两个维度**互斥且参数不同**：time 带 unit 不带 level；category 反之。
+/// 混着传不报错，但那个维度对应的字段会被后端忽略 —— 症状是"切了维度没反应"。
+- (void)testCategorySummaryUsesGroupByCategoryAndLevelWithoutUnit {
+    for (NSNumber *level in @[@1, @2]) {
+        NSDictionary *p = [ABQueryBuilder categorySummaryParamsWithFilter:_empty
+                                                                   level:level.integerValue
+                                                               accountId:@"7"];
+        XCTAssertEqualObjects(p[@"groupBy"], @"category");
+        XCTAssertEqualObjects(p[@"level"], level);
+        XCTAssertNil(p[@"unit"], @"category 维度不该带 unit");
+    }
+}
+
+- (void)testCategorySummaryLevelIsClampedTo1Or2 {
+    // 后端 `RuleType.number().integer().valid(1, 2)`
+    for (NSNumber *bad in @[@(0), @(3), @(-1)]) {
+        NSDictionary *p = [ABQueryBuilder categorySummaryParamsWithFilter:_empty
+                                                                   level:bad.integerValue
+                                                               accountId:@"7"];
+        XCTAssertEqualObjects(p[@"level"], @(1), @"level=%@ 应回落到 1", bad);
+    }
+}
+
+/// 时间维度不该带 level（同一个"混着传就静默失效"的另一半）
+- (void)testTimeSummaryNeverCarriesLevel {
+    NSDictionary *p = [ABQueryBuilder summaryParamsWithFilter:_empty unit:@"month" accountId:@"7"];
+    XCTAssertNil(p[@"level"]);
+}
+
+- (void)testCategorySummaryKeysAreAllKnownToBackend {
+    ABFlowFilterValue *f = [self filterWithBlock:^(ABFlowFilterValue *x) {
+        x.start = @"2026-09-01";
+        x.end = @"2026-09-30";
+        x.type = @"expense";
+        x.keyword = @"午饭";
+    }];
+    NSDictionary *params = [ABQueryBuilder categorySummaryParamsWithFilter:f level:2 accountId:@"7"];
+    NSSet<NSString *> *allowed = [ABQueryBuilder allowedKeysForSummary];
+    for (NSString *key in params.allKeys) {
+        XCTAssertTrue([allowed containsObject:key], @"参数 %@ 不在 SummaryQueryDTO 里", key);
+    }
+}
+
+/// 分类维度的汇总**照样要带全套筛选条件**（与时间维度同口径）
+- (void)testCategorySummaryCarriesFilters {
+    ABFlowFilterValue *f = [self filterWithBlock:^(ABFlowFilterValue *x) {
+        x.start = @"2026-09-01";
+        x.end = @"2026-09-30";
+        x.type = @"income";
+        x.categoryIds = @[@"5"];
+        x.minAmount = @"2.00";
+    }];
+    NSDictionary *params = [ABQueryBuilder categorySummaryParamsWithFilter:f level:1 accountId:@"7"];
+    XCTAssertEqualObjects(params[@"start"], @"2026-09-01");
+    XCTAssertEqualObjects(params[@"end"], @"2026-09-30");
+    XCTAssertEqualObjects(params[@"type"], @"income");
+    XCTAssertEqualObjects(params[@"categoryIds"], @"5");
+    XCTAssertEqualObjects(params[@"minAmount"], @"2.00");
+}
+
 - (void)testGroupByIsAlwaysTime {
     NSDictionary *params = [ABQueryBuilder summaryParamsWithFilter:_empty
                                                               unit:@"month"

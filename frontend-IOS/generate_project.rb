@@ -102,12 +102,24 @@ target.build_configurations.each do |config|
   config.build_settings['SDKROOT'] = 'iphoneos'
   config.build_settings['SUPPORTED_PLATFORMS'] = 'iphoneos iphonesimulator'
   config.build_settings['SUPPORTS_MACCATALYST'] = 'NO'
+  # ⚠️ 关掉「debug dylib + stub 可执行文件」拆分（Xcode 16 起 App target 的默认行为）。
+  #    开着的话 `.app/MyAccountBook` 是个**最后才构建**的 stub，而测试 bundle 的
+  #    BUNDLE_LOADER 正好指向它 → 并行构建时**偶发** `ld: library ... not found`
+  #    （实测：先在干净产物上失败一次，重建就好了 —— 典型的时序竞争）。
+  #    我们不用 SwiftUI 预览，没有保留它的理由。
+  config.build_settings['ENABLE_DEBUG_DYLIB'] = 'NO'
 end
 
 # —— 单元测试 target（XCTest）——
 # 用 TEST_HOST 跑在 App 里：这样测试能拿到 App 的全部符号（含 CocoaPods 的），
 # 不需要为测试单独再链一遍依赖。
 test_target = project.new_target(:unit_test_bundle, TESTS_NAME, :ios, DEPLOYMENT_TARGET)
+
+# ⚠️ **必须显式声明依赖**。`BUNDLE_LOADER` 只是个**路径**，不会让 Xcode 先构建 App ——
+#    没有这行时两个 target 的构建顺序是听天由命的，干净构建下会偶发
+#    `ld: library '.../MyAccountBook.app/MyAccountBook' not found`
+#    （实测：先失败一次、直接重跑又好了 —— 典型的时序竞争）。
+test_target.add_dependency(target)
 test_target.build_configurations.each do |config|
   config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = "#{BUNDLE_ID}Tests"
   config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = DEPLOYMENT_TARGET

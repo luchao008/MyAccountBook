@@ -13,8 +13,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, copy) NSString *key;       // 2026 / 2026-Q3 / 2026-09 / 分类 id
 @property (nonatomic, copy) NSString *unit;      // year/quarter/month/week/day/category
-@property (nonatomic, copy, nullable) NSString *name;   // 分类维度才有
-@property (nonatomic, copy, nullable) NSString *icon;   // 分类维度才有
+@property (nonatomic, copy, nullable) NSString *name;        // 分类维度才有
+@property (nonatomic, copy, nullable) NSString *icon;        // 分类维度才有
+@property (nonatomic, copy, nullable) NSString *parentName;  // 二级口径下所属一级分类
 @property (nonatomic, copy) NSString *income;
 @property (nonatomic, copy) NSString *expense;
 @property (nonatomic, copy) NSString *balance;

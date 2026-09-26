@@ -33,9 +33,11 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
 @interface ABFlowGroupCell : UITableViewCell
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) UILabel *subLabel;
-@property (nonatomic, strong) UILabel *ioLabel;
+@property (nonatomic, strong) UILabel *balanceLabel;   // 右侧第一行：结余
+@property (nonatomic, strong) UILabel *ioLabel;        // 右侧第二行：收入 | 支出
 @property (nonatomic, strong) UIImageView *arrowView;
-- (void)configureWithItem:(ABSummaryItem *)item expanded:(BOOL)expanded;
+/// @param expandable NO 时不画箭头（「未分类」组：后端无法按"未分类"筛明细，故不可展开）
+- (void)configureWithItem:(ABSummaryItem *)item expanded:(BOOL)expanded expandable:(BOOL)expandable;
 @end
 
 @implementation ABFlowGroupCell
@@ -56,53 +58,92 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
         _subLabel.textColor = [ABTheme textSecondary];
         [self.contentView addSubview:_subLabel];
 
+        _balanceLabel = [[UILabel alloc] init];
+        _balanceLabel.textAlignment = NSTextAlignmentRight;
+        [self.contentView addSubview:_balanceLabel];
+
         _ioLabel = [[UILabel alloc] init];
-        _ioLabel.font = [ABTheme fontCaption];
-        _ioLabel.textColor = [ABTheme textSecondary];
         _ioLabel.textAlignment = NSTextAlignmentRight;
         [self.contentView addSubview:_ioLabel];
 
         _arrowView = [[UIImageView alloc] init];
-        _arrowView.image = [UIImage systemImageNamed:@"chevron.right"];
         _arrowView.tintColor = [ABTheme textTertiary];
         _arrowView.contentMode = UIViewContentModeScaleAspectFit;
         [self.contentView addSubview:_arrowView];
 
+        [_arrowView mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.right.equalTo(self.contentView).offset(-14);
+            make.centerY.equalTo(self.contentView);
+            make.width.height.mas_equalTo(14);
+        }];
+        // 右侧两行（对齐前端 group-head：上一行结余、下一行 收入|支出）
+        [_balanceLabel mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.right.equalTo(self.arrowView.mas_left).offset(-6);
+            make.top.equalTo(self.contentView).offset(10);
+        }];
+        [_ioLabel mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.right.equalTo(self.arrowView.mas_left).offset(-6);
+            make.top.equalTo(self.balanceLabel.mas_bottom).offset(2);
+        }];
+
         [_titleLabel mas_makeConstraints:^(MASConstraintMaker *make) {
             make.left.equalTo(self.contentView).offset(16);
-            make.top.equalTo(self.contentView).offset(12);
+            make.top.equalTo(self.contentView).offset(11);
         }];
+        // 左侧标题行整体不能压到右侧金额上（长分类名要能截断）
+        _titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
         [_subLabel mas_makeConstraints:^(MASConstraintMaker *make) {
             make.left.equalTo(self.titleLabel.mas_right).offset(8);
             make.bottom.equalTo(self.titleLabel);
-        }];
-        [_arrowView mas_makeConstraints:^(MASConstraintMaker *make) {
-            make.left.equalTo(self.subLabel.mas_right).offset(6);
-            make.centerY.equalTo(self.titleLabel);
-            make.width.height.mas_equalTo(12);
-        }];
-        [_ioLabel mas_makeConstraints:^(MASConstraintMaker *make) {
-            make.right.equalTo(self.contentView).offset(-16);
-            make.top.equalTo(self.contentView).offset(12);
-            make.left.greaterThanOrEqualTo(self.arrowView.mas_right).offset(8);
+            make.right.lessThanOrEqualTo(self.balanceLabel.mas_left).offset(-8);
         }];
     }
     return self;
 }
 
-- (void)configureWithItem:(ABSummaryItem *)item expanded:(BOOL)expanded {
+/// 「标签 + 数值」的着色行：标签走次要色，数值按语义色
+- (NSAttributedString *)lineWithLabel:(NSString *)label
+                                 text:(NSString *)text
+                             textColor:(UIColor *)textColor {
+    NSDictionary *labelAttrs = @{NSFontAttributeName: [ABTheme fontCaption],
+                                 NSForegroundColorAttributeName: [ABTheme textSecondary]};
+    NSDictionary *valueAttrs = @{NSFontAttributeName: [ABTheme fontCaption],
+                                 NSForegroundColorAttributeName: textColor};
+    NSMutableAttributedString *s = [[NSMutableAttributedString alloc] initWithString:label attributes:labelAttrs];
+    [s appendAttributedString:[[NSAttributedString alloc] initWithString:text attributes:valueAttrs]];
+    return s;
+}
+
+- (void)configureWithItem:(ABSummaryItem *)item expanded:(BOOL)expanded expandable:(BOOL)expandable {
     if (item.isCategoryGroup) {
-        self.titleLabel.text = [NSString stringWithFormat:@"%@ %@", item.icon.length ? item.icon : @"", item.name ?: @"未分类"];
-        self.subLabel.text = [NSString stringWithFormat:@"%ld笔", (long)item.count];
+        // 前端：分类维度标题就是**分类名**（不带图标），副标题是所属一级分类
+        self.titleLabel.text = item.name.length ? item.name : @"未分类";
+        self.subLabel.text = item.parentName ?: @"";
     } else {
         NSDictionary *label = [ABDateUtil periodLabel:item.key unit:item.unit];
         self.titleLabel.text = label[@"title"];
         self.subLabel.text = label[@"sub"];
     }
+    self.subLabel.hidden = self.subLabel.text.length == 0;
 
-    self.ioLabel.text = [NSString stringWithFormat:@"收 %@  支 %@",
-                         [ABFormat money:item.income], [ABFormat money:item.expense]];
-    self.arrowView.transform = expanded ? CGAffineTransformMakeRotation(M_PI_2) : CGAffineTransformIdentity;
+    // 结余：正负决定颜色（红=正、青绿=负，与全站口径一致）
+    double bal = [item.balance doubleValue];
+    UIColor *balColor = bal < 0 ? [ABTheme expense] : [ABTheme income];
+    self.balanceLabel.attributedText = [self lineWithLabel:@"结余 "
+                                                      text:[ABFormat money:item.balance]
+                                                 textColor:balColor];
+
+    // 收入 | 支出
+    NSMutableAttributedString *io = [[NSMutableAttributedString alloc] init];
+    [io appendAttributedString:[self lineWithLabel:@"收入 " text:[ABFormat money:item.income]
+                                         textColor:[ABTheme income]]];
+    [io appendAttributedString:[self lineWithLabel:@"  |  " text:@"" textColor:[ABTheme textDisabled]]];
+    [io appendAttributedString:[self lineWithLabel:@"支出 " text:[ABFormat money:item.expense]
+                                         textColor:[ABTheme expense]]];
+    self.ioLabel.attributedText = io;
+
+    self.arrowView.hidden = !expandable;
+    self.arrowView.image = [UIImage systemImageNamed:expanded ? @"chevron.up" : @"chevron.down"];
 }
 
 @end
@@ -126,6 +167,16 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
 @property (nonatomic, strong) ABFlowFilterValue *filter;
 @property (nonatomic, copy) NSString *order;           // time / amountDesc / amountAsc
 @property (nonatomic, assign) ABFlowUnit unit;
+
+// —— 分组维度：time（按时间，用 unit 指定粒度）/ category（按分类，用 level 指定层级）——
+// ⚠️ **两者互斥**，且请求参数不同：time 带 `unit` 不带 `level`；category 反之。
+//    混着传不报错，但对应的那个字段会被后端忽略 —— 症状是"切了维度没反应"。
+@property (nonatomic, copy) NSString *groupBy;
+@property (nonatomic, assign) NSInteger level;         // 1 / 2，仅 category 维度有意义
+
+// —— 底栏四个入口（前两个是**分组维度**，后两个是操作）——
+@property (nonatomic, strong) UIButton *unitButton;       // 时间：显示当前粒度
+@property (nonatomic, strong) UIButton *categoryButton;    // 分类：显示当前层级
 
 // —— 已筛选提示条（有任意条件就出现，让用户知道"当前看到的不是全部"）——
 @property (nonatomic, strong) UIView *filterTip;
@@ -159,6 +210,8 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
     self.details = [NSMutableDictionary dictionary];
     self.order = @"time";
     self.unit = ABFlowUnitMonth;
+    self.groupBy = @"time";
+    self.level = 1;
     self.filter = [ABFlowFilterValue empty];
     self.searchResults = @[];
 
@@ -233,12 +286,17 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
     toolbar.backgroundColor = [ABTheme bgPage];
     [self.view addSubview:toolbar];
 
+    // 工具栏：前两个是**分组维度**（时间 / 分类，互斥），后两个是操作
+    // 对齐前端底栏 —— 前端是 `时间(粒度)` / `分类(一级|二级)` / `更多(筛选·排序·导出)`
     self.filterButton = [self makeToolButton:@"筛选" action:@selector(onFilter)];
     self.sortButton = [self makeToolButton:@"排序" action:@selector(onSort)];
-    UIButton *unitButton = [self makeToolButton:@"粒度" action:@selector(onUnit)];
+    self.unitButton = [self makeToolButton:@"" action:@selector(onUnit)];
+    self.categoryButton = [self makeToolButton:@"" action:@selector(onCategoryLevel)];
+    [toolbar addSubview:self.unitButton];
+    [toolbar addSubview:self.categoryButton];
     [toolbar addSubview:self.filterButton];
     [toolbar addSubview:self.sortButton];
-    [toolbar addSubview:unitButton];
+    [self refreshToolbarTitles];
 
     // 列表
     self.tableView = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
@@ -300,16 +358,20 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
         make.left.right.equalTo(self.view);
         make.height.mas_equalTo(44);
     }];
-    [self.filterButton mas_makeConstraints:^(MASConstraintMaker *make) {
+    [self.unitButton mas_makeConstraints:^(MASConstraintMaker *make) {
         make.left.equalTo(toolbar).offset(16);
+        make.centerY.equalTo(toolbar);
+    }];
+    [self.categoryButton mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.left.equalTo(self.unitButton.mas_right).offset(16);
+        make.centerY.equalTo(toolbar);
+    }];
+    [self.filterButton mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.left.equalTo(self.categoryButton.mas_right).offset(16);
         make.centerY.equalTo(toolbar);
     }];
     [self.sortButton mas_makeConstraints:^(MASConstraintMaker *make) {
         make.left.equalTo(self.filterButton.mas_right).offset(16);
-        make.centerY.equalTo(toolbar);
-    }];
-    [unitButton mas_makeConstraints:^(MASConstraintMaker *make) {
-        make.left.equalTo(self.sortButton.mas_right).offset(16);
         make.centerY.equalTo(toolbar);
     }];
 
@@ -528,9 +590,15 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
 }
 
 - (NSDictionary *)baseParams {
+    NSString *aid = [ABAccountStore shared].currentId;
+    if ([self.groupBy isEqualToString:@"category"]) {
+        return [ABQueryBuilder categorySummaryParamsWithFilter:self.filter
+                                                        level:self.level
+                                                    accountId:aid];
+    }
     return [ABQueryBuilder summaryParamsWithFilter:self.filter
                                               unit:[self unitString]
-                                         accountId:[ABAccountStore shared].currentId];
+                                         accountId:aid];
 }
 
 - (void)refresh {
@@ -577,6 +645,14 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
         [self.tableView reloadData];
         return;
     }
+
+    // ⚠️ 「未分类」组**不展开**。
+    //    后端 `categoryIds` 只能传**真实分类 id**（外加"一级连带其下二级"的展开），
+    //    **没有任何方式筛出 category_id IS NULL 的流水** —— 前端在这条上是不传
+    //    categoryIds 直接查，于是展开「未分类」看到的是**该时段全部流水**（那是前端的 bug）。
+    //    这里宁可不展开，也不给一个"看起来能点、结果不对"的列表。
+    if ([g.key isEqualToString:@"__none__"]) return;
+
     [self.expandedKeys addObject:g.key];
 
     if (self.details[g.key]) {
@@ -590,17 +666,36 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
     //    （不是截断，是整条请求失败，返回「输入有误，请检查后重试」）。
     //    症状是「点开分组永远空白，且不细看日志根本不知道」——
     //    所以统一走 getAllTransactions: 循环分页拉全量。
-    NSDictionary *range = [ABDateUtil periodRange:g.key unit:g.unit];
-    // 用**本组的区间**覆盖筛选里的时间（一个是"组"，一个是"用户选的范围"，语义不同）。
+    NSDictionary *params = nil;
+    if ([g.unit isEqualToString:@"category"]) {
+        // 分类维度：**用全局筛选的 start/end**（不是本组的区间 —— 分类组没有自己的时间段），
+        // 再把 categoryIds 设成本组分类。这两个条件少一个都会出错：
+        // 少了时间 → "筛本月某分类，展开却冒出别的月份的记录"；
+        // 少了分类 → 展开出来的是全部流水。
+        params = [ABQueryBuilder listParamsWithFilter:self.filter
+                                                start:self.filter.start
+                                                  end:self.filter.end
+                                                order:self.order
+                                                 size:nil
+                                            accountId:[ABAccountStore shared].currentId];
+        NSMutableDictionary *m = [params mutableCopy];
+        m[@"categoryIds"] = g.key;
+        params = [m copy];
+    } else {
+        // 时间维度：用**本组的区间**覆盖筛选里的时间
+        // （一个是"组"，一个是"用户选的范围"，语义不同）
+        NSDictionary *range = [ABDateUtil periodRange:g.key unit:g.unit];
+        params = [ABQueryBuilder listParamsWithFilter:self.filter
+                                                start:range[@"start"]
+                                                  end:range[@"end"]
+                                                order:self.order
+                                                 size:nil
+                                            accountId:[ABAccountStore shared].currentId];
+    }
+
     // ⚠️ `order` 只作用于**明细列表**（后端 /transactions/summary 没有 order 参数）。
     //    之前这里漏传过它 —— 症状是「排序菜单选完毫无反应」：菜单是真的、效果是假的。
     //    `size` 传 nil，交给 getAllTransactions 内部按 maxPageSize 逐页取。
-    NSDictionary *params = [ABQueryBuilder listParamsWithFilter:self.filter
-                                                          start:range[@"start"]
-                                                            end:range[@"end"]
-                                                          order:self.order
-                                                           size:nil
-                                                      accountId:[ABAccountStore shared].currentId];
 
     __weak typeof(self) weakSelf = self;
     [ABTransactionService getAllTransactions:params success:^(NSArray<ABTransaction *> *list) {
@@ -758,19 +853,72 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
     [self presentViewController:sheet animated:YES completion:nil];
 }
 
+/// 底栏两个分组维度按钮的文案与激活色。
+/// 对齐前端：没在用的那个维度显示**中性名**（「时间」/「分类」），
+/// 在用的显示**当前取值**（「月」/「一级分类」）并高亮。
+- (void)refreshToolbarTitles {
+    BOOL byTime = [self.groupBy isEqualToString:@"time"];
+    [self.unitButton setTitle:byTime ? [self unitLabel] : @"时间" forState:UIControlStateNormal];
+    [self.categoryButton setTitle:byTime ? @"分类" : (self.level == 2 ? @"二级分类" : @"一级分类")
+                         forState:UIControlStateNormal];
+    [self.unitButton setTitleColor:byTime ? [ABTheme gold] : [ABTheme textSecondary]
+                          forState:UIControlStateNormal];
+    [self.categoryButton setTitleColor:byTime ? [ABTheme textSecondary] : [ABTheme gold]
+                              forState:UIControlStateNormal];
+}
+
+- (NSString *)unitLabel {
+    switch (self.unit) {
+        case ABFlowUnitYear:    return @"年";
+        case ABFlowUnitQuarter: return @"季";
+        case ABFlowUnitMonth:   return @"月";
+        case ABFlowUnitWeek:    return @"周";
+        case ABFlowUnitDay:     return @"天";
+    }
+    return @"月";
+}
+
+/// 选「时间」维度（或它的粒度）。
+/// ⚠️ **必须同时把 groupBy 切回 time** —— 只设 unit 不切维度的话，
+///    从「二级分类」点「月」会**仍按分类分组**（前端也踩过这个：见 index.vue 的注释）。
 - (void)onUnit {
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"分组粒度" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"按时间分组"
+                                                                  message:nil
+                                                           preferredStyle:UIAlertControllerStyleActionSheet];
     __weak typeof(self) weakSelf = self;
     NSArray *options = @[@"年", @"季", @"月", @"周", @"天"];
     for (NSInteger i = 0; i < options.count; i++) {
         [sheet addAction:[UIAlertAction actionWithTitle:options[i] style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
             __strong typeof(weakSelf) self = weakSelf;
+            self.groupBy = @"time";
             self.unit = (ABFlowUnit)i;
+            [self refreshToolbarTitles];
             [self loadGroups];
         }]];
     }
     [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [ABAlert prepareSheet:sheet anchor:self.view in:self];
+    [ABAlert prepareSheet:sheet anchor:self.unitButton in:self];
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+/// 选「分类」维度（一级 / 二级）。
+- (void)onCategoryLevel {
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"按分类分组"
+                                                                  message:nil
+                                                           preferredStyle:UIAlertControllerStyleActionSheet];
+    __weak typeof(self) weakSelf = self;
+    NSArray *options = @[@"一级分类", @"二级分类"];
+    for (NSInteger i = 0; i < options.count; i++) {
+        [sheet addAction:[UIAlertAction actionWithTitle:options[i] style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            __strong typeof(weakSelf) self = weakSelf;
+            self.groupBy = @"category";
+            self.level = i + 1;
+            [self refreshToolbarTitles];
+            [self loadGroups];
+        }]];
+    }
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [ABAlert prepareSheet:sheet anchor:self.categoryButton in:self];
     [self presentViewController:sheet animated:YES completion:nil];
 }
 
@@ -914,7 +1062,7 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
 
     if (indexPath.row == 0) {
         ABFlowGroupCell *cell = [tableView dequeueReusableCellWithIdentifier:@"group" forIndexPath:indexPath];
-        [cell configureWithItem:g expanded:expanded];
+        [cell configureWithItem:g expanded:expanded expandable:![g.key isEqualToString:@"__none__"]];
         return cell;
     }
 
@@ -960,6 +1108,17 @@ typedef NS_ENUM(NSInteger, ABFlowUnit) {
         }
     }
     return 44;
+}
+
+/// 返回 nil = 这一行不可选中。
+/// 「未分类」组的组头不给选中态（它没有箭头、也确实展不开），
+/// 这样就不会出现"点得动但没反应"的错觉。
+- (NSIndexPath *)tableView:(UITableView *)tableView willSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (tableView == self.tableView && indexPath.row == 0) {
+        ABSummaryItem *g = self.groups[indexPath.section];
+        if ([g.key isEqualToString:@"__none__"]) return nil;
+    }
+    return indexPath;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {

@@ -52,9 +52,19 @@ NS_ASSUME_NONNULL_BEGIN
 #pragma mark - 拼装
 
 /// 分组汇总参数（`GET /transactions/summary`）
+///
+/// ⚠️ `groupBy` 两种维度**互斥**，参数也不同：
+///   · `time`     → 带 `unit`（年/季/月/周/天），**不带 `level`**
+///   · `category` → 带 `level`（1/2），**不带 `unit`**
+/// 混着传不会报错，但那个维度对应的字段会被后端忽略 —— 症状是"切了维度没反应"。
 + (NSDictionary *)summaryParamsWithFilter:(ABFlowFilterValue *)filter
                                      unit:(NSString *)unit
                                 accountId:(nullable NSString *)accountId;
+
+/// 分类维度的分组汇总（`GET /transactions/summary?groupBy=category&level=N`）
++ (NSDictionary *)categorySummaryParamsWithFilter:(ABFlowFilterValue *)filter
+                                             level:(NSInteger)level
+                                        accountId:(nullable NSString *)accountId;
 
 /// 明细列表参数（`GET /transactions`）。
 ///

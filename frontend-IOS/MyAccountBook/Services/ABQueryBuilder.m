@@ -94,6 +94,19 @@
     return [params copy];
 }
 
++ (NSDictionary *)categorySummaryParamsWithFilter:(ABFlowFilterValue *)filter
+                                             level:(NSInteger)level
+                                        accountId:(NSString *)accountId {
+    NSMutableDictionary *params = [NSMutableDictionary dictionary];
+    params[@"groupBy"] = @"category";
+    // level 只有 1 / 2 两档（后端 `RuleType.number().integer().valid(1, 2)`）
+    params[@"level"] = @(level == 2 ? 2 : 1);
+    // ⚠️ 刻意**不传 unit** —— 它与 groupBy=time 配对，这里传了也会被忽略
+    [self applyFilter:filter toParams:params start:nil end:nil];
+    [self applyAccountId:accountId to:params];
+    return [params copy];
+}
+
 + (NSDictionary *)listParamsWithFilter:(ABFlowFilterValue *)filter
                                  start:(NSString *)start
                                    end:(NSString *)end
