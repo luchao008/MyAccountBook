@@ -38,10 +38,19 @@ EOF
 # 注册一次：同时拿状态码和 token
 REG_CODE=$(code -X POST $BASE/api/auth/register -H 'Content-Type: application/json' --data-binary @$TMP/reg.json)
 R=$(curl -s -X POST $BASE/api/auth/register -H 'Content-Type: application/json' --data-binary @$TMP/reg.json)
-# 上面第二次调用会 409，所以 token 需从第一次调用获取，这里改为直接再登录
-TOKEN=$(curl -s -X POST $BASE/api/auth/login -H 'Content-Type: application/json' --data-binary @$TMP/reg.json | jq_get "data.token")
 check "register" 200 "$REG_CODE"
 check "register dup 409" 409 "$(code -X POST $BASE/api/auth/register -H 'Content-Type: application/json' --data-binary @$TMP/reg.json)"
+
+# ⚠️ 2026-09 引入注册审批流后，新用户默认 pending、登录一律 401（「审核中」）。
+#    本脚本需要一个能登录的**一次性用户**跑后续用例 —— 走管理接口审批要管理员凭证
+#    （交互式创建、不入库），不可行；故直接查库把该用户置为 active。
+#    这**只影响本脚本自建的这个用户**，与审批流本身的用例（下方 login 相关检查）不冲突。
+#    ⚠️ 顺序敏感：token 必须在审批**之后**取，否则拿到的是空串，后续全 401。
+docker exec account-book-mariadb mysql -uroot -proot123456 account_book \
+  -e "UPDATE users SET status='active' WHERE username='$U'" 2>/dev/null \
+  || echo "  ⚠️ 审批绕过失败（docker/mysql 不可达？），后续用例会全 401"
+TOKEN=$(curl -s -X POST $BASE/api/auth/login -H 'Content-Type: application/json' --data-binary @$TMP/reg.json | jq_get "data.token")
+
 cat > $TMP/login.json <<EOF
 {"username":"$U","password":"123456"}
 EOF
@@ -179,7 +188,12 @@ U2="other_$(date +%s)"
 cat > $TMP/u2.json <<EOF
 {"username":"$U2","password":"123456"}
 EOF
-TOKEN2=$(curl -s -X POST $BASE/api/auth/register -H 'Content-Type: application/json' --data-binary @$TMP/u2.json | jq_get "data.token")
+# 审批流后注册不再签发 token（见 [auth] 段注释）：同样先查库置 active 再登录取 token
+curl -s -X POST $BASE/api/auth/register -H 'Content-Type: application/json' --data-binary @$TMP/u2.json > /dev/null
+docker exec account-book-mariadb mysql -uroot -proot123456 account_book \
+  -e "UPDATE users SET status='active' WHERE username='$U2'" 2>/dev/null \
+  || echo "  ⚠️ U2 审批绕过失败，跨用户用例会 401"
+TOKEN2=$(curl -s -X POST $BASE/api/auth/login -H 'Content-Type: application/json' --data-binary @$TMP/u2.json | jq_get "data.token")
 # ⚠️ 跨用户断言必须带**自己的** accountId 去查别人的分类 —— 不带会先撞上
 #    「accountId 必传」的 422，验不到数据隔离本身。
 A2_ID=$(curl -s $BASE/api/accounts -H "Authorization: Bearer $TOKEN2" | jq_get "data[0].id")

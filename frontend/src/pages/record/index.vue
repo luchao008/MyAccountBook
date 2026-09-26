@@ -10,10 +10,17 @@
       </view>
     </view>
 
-    <!-- 金额展示 -->
+    <!--
+      金额展示：含运算符时切「结果大字 + 表达式小字」双行形态。
+      盒子**固定高度**：表达式行无论有无都占位（visibility 隐藏而非移除），
+      输入过程中盒子不会上下跳动。
+    -->
     <view class="amount-box">
-      <text class="currency">¥</text>
-      <text class="amount">{{ amount || '0.00' }}</text>
+      <view class="amount-line">
+        <text class="amount" :class="amountSizeClass">{{ displayAmount }}</text>
+        <text class="currency">¥</text>
+      </view>
+      <text class="expr" :class="{ invisible: !hasExpr }">{{ hasExpr ? amount : '0' }}</text>
     </view>
 
     <!-- 分类：点击从底部弹出选择 -->
@@ -48,11 +55,7 @@
     </view>
 
     <!-- 底部分类选择器 -->
-    <CategoryPicker
-      v-model:visible="showPicker"
-      v-model="categoryId"
-      :type="type"
-    />
+    <CategoryPicker v-model:visible="showPicker" v-model="categoryId" :type="type" />
 
     <!-- 底部日期时间选择器 -->
     <DateTimePicker
@@ -85,6 +88,7 @@ import {
   deleteTransaction,
 } from '@/api/transaction';
 import { enqueue, genClientId, isOnline } from '@/utils/offline';
+import { evalExpr, formatCents, isExpression } from '@/utils/amountExpr';
 
 const categoryStore = useCategoryStore();
 const accountStore = useAccountStore();
@@ -107,7 +111,35 @@ const isCopy = ref(false);
 const LAST_CATEGORY_KEY = 'lastTxnCategoryId';
 
 const type = ref<'income' | 'expense'>('expense');
+/**
+ * 金额**或加减表达式**（如 `12.5+3-2`）。
+ * 输入规则与求值全部在 utils/amountExpr.ts；保存时才求值入库，
+ * 编辑/复制回填的纯数字同样是合法表达式，无需特判。
+ */
 const amount = ref('');
+
+/** 是否处于「表达式」形态（含真正的运算符） → 金额区切双行展示 */
+const hasExpr = computed(() => isExpression(amount.value));
+
+/** 大字位的内容：表达式形态显示实时结果，否则显示原始输入 */
+const displayAmount = computed(() => {
+  if (!hasExpr.value) return amount.value || '0.00';
+  const cents = evalExpr(amount.value);
+  return cents === null ? '0' : formatCents(cents);
+});
+
+/*
+ * 金额字号的缩档（防溢出）：盒子定宽，位数越多字越小。
+ * 阈值按 320px 屏实测余量定 —— 内容区 248px，数字按 tabular-nums
+ * 约 0.6em 宽估：36px 下 10 位 ≈ 232px（含 ¥）刚好放满。
+ * 最长可能 = 负号 + 9 位整数 + 小数点 + 2 位小数 = 13 字符。
+ */
+const amountSizeClass = computed(() => {
+  const len = displayAmount.value.length;
+  if (len > 12) return 'sm-2';
+  if (len > 10) return 'sm-1';
+  return '';
+});
 /** 只能选二级分类，所以这里必然是一个二级分类的 id */
 const categoryId = ref<string | null>(null);
 const recordDate = ref(today());
@@ -136,7 +168,7 @@ const submitting = ref(false);
 function today(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-    d.getDate()
+    d.getDate(),
   ).padStart(2, '0')}`;
 }
 
@@ -273,11 +305,21 @@ async function save() {
     return;
   }
 
-  const value = Number(amount.value);
-  if (!amount.value || value <= 0) {
+  /*
+   * 金额求值：amount 可能是加减表达式（键盘支持 + / -）。
+   * evalExpr 容忍尾部悬空的运算符（`12+` 按 12 算），
+   * 返回**分**（整数），<=0（含负数结果）一律拦下。
+   */
+  const cents = evalExpr(amount.value);
+  if (cents === null) {
     uni.showToast({ title: '请输入有效金额', icon: 'none' });
     return;
   }
+  if (cents <= 0) {
+    uni.showToast({ title: '金额必须大于 0', icon: 'none' });
+    return;
+  }
+  const value = cents / 100;
 
   const payload = {
     type: type.value,
@@ -436,20 +478,62 @@ function onDelete() {
   background: $v11-gold-fill;
 }
 
+/*
+ * 金额盒：**固定高度**（luchao 要求），不随内容变化。
+ * 118 = padding 24×2 + 结果行 $lh-display-lg 44 + 间距 2 + 表达式行 $lh-body 24。
+ * 表达式行用 visibility 隐藏占位（不是 v-if/display:none），
+ * 进入/退出表达式形态时盒子纹丝不动。
+ */
 .amount-box {
   background: $v11-bg-card;
   border-radius: $v11-radius-card;
   padding: 24px 20px;
+  height: 118px;
+  box-sizing: border-box;
   display: flex;
-  align-items: baseline;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
 }
 
+.amount-line {
+  display: flex;
+  align-items: baseline;
+  max-width: 100%;
+}
+
+/*
+ * 表达式行（如 `12.5+3-2`）：次要信息，用小字 + 二级文字色，
+ * 放在结果**下方**。它是"怎么算出来的"的凭据，不是主角。
+ */
+.expr {
+  @include tabular-nums;
+  font-size: $font-body;
+  line-height: $lh-body;
+  color: $v11-text-secondary;
+  margin-top: 2px;
+  /* 长表达式不折行、从左侧截断（尾部永远是最新输入，必须可见） */
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: right;
+}
+
+/* 无表达式时占位不可见 —— 高度照旧，盒子不跳 */
+.expr.invisible {
+  visibility: hidden;
+}
+
+/*
+ * 货币符号放在数字**后面**（`100¥`，luchao 要求），
+ * 与结果大字 baseline 对齐，比大字小两档。
+ */
 .currency {
   font-size: $font-h1;
   line-height: $lh-h1;
   color: $v11-text-primary;
-  margin-right: 4px;
+  margin-left: 4px;
 }
 
 /*
@@ -467,6 +551,22 @@ function onDelete() {
   line-height: $lh-display-lg;
   font-weight: $weight-semibold;
   color: $v11-teal-large;
+  white-space: nowrap;
+}
+
+/*
+ * 长金额缩档（阈值见 script 里 amountSizeClass 的注释）：
+ * 位数多就缩字号，而不是截断金额 —— 金额被 ellipsis 是正确性事故。
+ * 盒子是固定高度的，缩档只改行内高度，布局不动。
+ */
+.amount.sm-1 {
+  font-size: $font-display;
+  line-height: $lh-display;
+}
+
+.amount.sm-2 {
+  font-size: $font-h1;
+  line-height: $lh-h1;
 }
 
 .panel {

@@ -396,6 +396,15 @@ if (!(await inputs.nth(0).inputValue())) throw new Error('用户名没填进去�
 // 不要按文字定位：顶部导航标题也叫「登录」，会静默点空（阶段 9 踩过）
 await page.locator('.submit').first().click();
 await page.waitForTimeout(2500);
+/*
+ * 登录后可能落在「选择账本」页（pages/account-select）：
+ * 多账本账号 + 无本地记忆选择时，路由守卫会先让选账本。
+ * 不处理这一步，后面的「首页元素」判据会在选账本页上静默全挂（2026-09-26 实测）。
+ */
+if (await page.locator('.account-item').count()) {
+  await page.locator('.account-item').first().click();
+  await page.waitForTimeout(1500);
+}
 if (!(await page.locator('.banner, .rank-card, .account-switch').count())) {
   throw new Error(`登录失败（没看到首页元素），URL = ${page.url()}`);
 }

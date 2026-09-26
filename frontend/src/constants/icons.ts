@@ -66,6 +66,8 @@ export const UI_ICONS = {
   /* 搜索 */ 'icon-search': 'M11 5a6 6 0 1 1 0 12 6 6 0 0 1 0-12M16.2 16.2 20 20',
   /* 编辑 */ 'icon-pencil': 'M15 5l4 4L8 20H4v-4zM13 7l4 4',
   /* 删除 */ 'icon-trash': 'M5 7h14M9.5 7V5h5v2M7 7l1 13h8l1-13M11 11v6M15 11v6',
+  /* 退格（键盘删除键：左指键帽 + X） */ 'icon-backspace':
+    'M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zM18 9l-6 6M12 9l6 6',
   /* 筛选 */ 'icon-filter': 'M4 6h16l-6 7v6l-4-2v-4z',
   /* 排序 */ 'icon-sort': 'M4 7h16M7 12h10M10 17h4',
   /* 刷新 */ 'icon-refresh':
