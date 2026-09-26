@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "7EB36F26E3EA10B2443C659A"
+               BlueprintIdentifier = "0DE93638DEDA0B45BC39D48F"
                BuildableName = "MyAccountBook.app"
                BlueprintName = "MyAccountBook"
                ReferencedContainer = "container:MyAccountBook.xcodeproj">
@@ -30,7 +30,7 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "7EB36F26E3EA10B2443C659A"
+            BlueprintIdentifier = "0DE93638DEDA0B45BC39D48F"
             BuildableName = "MyAccountBook.app"
             BlueprintName = "MyAccountBook"
             ReferencedContainer = "container:MyAccountBook.xcodeproj">
@@ -41,7 +41,7 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "1BC5FCAFE98B8A96060B47F6"
+               BlueprintIdentifier = "B74EA4624E05BE1F6F2D67C5"
                BuildableName = "MyAccountBookTests.xctest"
                BlueprintName = "MyAccountBookTests"
                ReferencedContainer = "container:MyAccountBook.xcodeproj">
@@ -63,7 +63,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "7EB36F26E3EA10B2443C659A"
+            BlueprintIdentifier = "0DE93638DEDA0B45BC39D48F"
             BuildableName = "MyAccountBook.app"
             BlueprintName = "MyAccountBook"
             ReferencedContainer = "container:MyAccountBook.xcodeproj">
@@ -80,7 +80,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "7EB36F26E3EA10B2443C659A"
+            BlueprintIdentifier = "0DE93638DEDA0B45BC39D48F"
             BuildableName = "MyAccountBook.app"
             BlueprintName = "MyAccountBook"
             ReferencedContainer = "container:MyAccountBook.xcodeproj">
