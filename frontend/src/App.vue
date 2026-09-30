@@ -108,17 +108,31 @@ uni-scroll-view .uni-scroll-view::-webkit-scrollbar {
  *    保证弹层在上。**不要只抬遮罩不抬弹层。**
  *
  * ⚠️ 同款"遮罩是兄弟节点"结构的还有内置 picker（.uni-mask.uni-picker-mask 在前、
- *    .uni-picker-custom 在后，同为 999）。本项目未用内置 picker（弹层全部自绘），
- *    暂不处理；将来若引入，记得把 .uni-picker-custom 也一起抬进本组。
+ *    .uni-picker-custom 在后，同为 999）。
+ *    **2026-09-30 起本项目已用它**：图表页的时间粒度弹层里，自定义起止日期用的是
+ *    内置 `<picker mode="date">`（自绘日期选择器成本高、收益低）。
+ *
+ *    ⚠️ **光抬 `.uni-picker-custom` 不够**（第一次就是这么修的，仍然被盖住）：
+ *    实测 picker 的 DOM 是三层，**真正画日历面板的是最里层的 `.uni-picker-container`**，
+ *    它自己还是 **999** → 被图表页的遮罩（`.mask` = 1000）**整层压住、点都点不到**。
+ *    所以下面把 `uni-picker` / `.uni-picker-toggle` / `.uni-picker-custom` /
+ *    `.uni-picker-container` / `.uni-date-select` / `.uni-picker-mask` **整组**一起抬 ——
+ *    少抬一层就等于没抬（层叠是逐层的，中间断一节就穿不过去）。
  */
 uni-modal,
 uni-toast,
 uni-actionsheet,
 uni-mask,
+uni-picker,
 .uni-modal,
 .uni-toast,
 .uni-actionsheet,
 .uni-mask,
+.uni-picker-toggle,
+.uni-picker-custom,
+.uni-picker-container,
+.uni-date-select,
+.uni-picker-mask,
 .uni-sample-toast,
 .uni-simple-toast {
   z-index: 3000 !important;

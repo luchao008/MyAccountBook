@@ -14,6 +14,13 @@
       }
     },
     {
+      "path": "pages/charts/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "图表"
+      }
+    },
+    {
       "path": "pages/statistics/index",
       "style": {
         "navigationStyle": "custom",

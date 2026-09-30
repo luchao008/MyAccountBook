@@ -171,7 +171,9 @@ function shortMoney(v: number): string {
 /*
  * 已过去且无流水的日子：铺一层浅灰，把「漏记」的日子显出来。
  * 用 $v11-skeleton（1.20 压白卡 / 1.13 压页面底）—— 它是唯一的浅灰档，
- * $v11-bg-inset #F5F5F5 压页面底只有 1.03，等于看不见。
+ * $v11-bg-inset 压页面底只有 1.03，等于看不见。
+ * ⚠️ 这里刻意**不写色值字面量**：check-contrast 的「旧色值残留扫描」
+ *    会扫 .vue 里的 #rrggbb，写在注释里也算残留（2026-09-30 清）。
  * ⚠️ 必须排在 .day.selected 之前：两者同为 2 个 class，选中要能盖掉过去。
  */
 .day.past {

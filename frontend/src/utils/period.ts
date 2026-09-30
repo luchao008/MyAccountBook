@@ -104,11 +104,127 @@ export function periodLabel(key: string, unit: string): { title: string; sub: st
   return { title: `${Number(mStr)}月${Number(dStr)}日`, sub: key.slice(0, 4) };
 }
 
-/** 日期 → 「13日 周一」这种日期头（明细按日分组时用） */
-export function dayHeader(dateStr: string): string {
+/**
+ * 日期 → 「13日 周一」这种日期头（明细按日分组时用）。
+ *
+ * `withMonth`：**分类维度下必须传 true**。分类维度的组头是分类名（如「餐饮」），
+ * 它下面的明细会横跨多个月 —— 只写「13日」根本看不出是哪个月（8 月 13 和 9 月 13 长得一样）。
+ * 时间维度下组头本身已经带月份（「9月」），再加一次就是重复信息，所以默认不加。
+ */
+export function dayHeader(dateStr: string, withMonth = false): string {
   const [y, m, d] = dateStr.split('-').map(Number);
   const dow = new Date(y, m - 1, d).getDay();
   // getDay(): 0=周日 → 按「周一…周日」的自然顺序排列
   const names = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-  return `${d}日 ${names[dow]}`;
+  return `${withMonth ? `${m}月${d}日` : `${d}日`} ${names[dow]}`;
+}
+
+/* ============================================================
+ * 图表页的时间粒度（2026-09-30 加）
+ * ============================================================ */
+
+/** 图表页的时间粒度。`all` = 不限时间；`custom` = 用户自选起止 */
+export type Granularity = 'all' | 'day' | 'week' | 'month' | 'quarter' | 'year' | 'custom';
+
+/** `2026-09-30` → `9.30`（不补零，与参考图的「今年 1.1 ~ 12.31」写法一致） */
+function md(dateStr: string): string {
+  const [, m, d] = dateStr.split('-').map(Number);
+  return `${m}.${d}`;
+}
+
+/** 某个日期所在 ISO 周的周一（周一为一周起点，与后端 `%x-%v` 口径一致） */
+function mondayOf(d: Date): Date {
+  // getDay(): 0=周日 → 需要映射成 ISO 的 7
+  const dow = d.getDay() === 0 ? 7 : d.getDay();
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - (dow - 1));
+  return monday;
+}
+
+/** 单期粒度（不含 all / custom）在某个基准日期上的区间 */
+function rangeOf(
+  gran: Exclude<Granularity, 'all' | 'custom'>,
+  d: Date,
+): { start: string; end: string } {
+  const year = d.getFullYear();
+  const month0 = d.getMonth();
+
+  if (gran === 'day') {
+    const s = fmtDate(d);
+    return { start: s, end: s };
+  }
+  if (gran === 'week') {
+    const start = mondayOf(d);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return { start: fmtDate(start), end: fmtDate(end) };
+  }
+  if (gran === 'month') {
+    return {
+      start: `${year}-${pad(month0 + 1)}-01`,
+      end: `${year}-${pad(month0 + 1)}-${pad(lastDayOfMonth(year, month0))}`,
+    };
+  }
+  if (gran === 'quarter') {
+    const first0 = Math.floor(month0 / 3) * 3;
+    const last0 = first0 + 2;
+    return {
+      start: `${year}-${pad(first0 + 1)}-01`,
+      end: `${year}-${pad(last0 + 1)}-${pad(lastDayOfMonth(year, last0))}`,
+    };
+  }
+  // year
+  return { start: `${year}-01-01`, end: `${year}-12-31` };
+}
+
+/** 「今天 / 本周 / 本月 / 本季度 / 今年」前缀（仅当区间正好落在此刻所在的当期） */
+const CURRENT_PREFIX: Record<Exclude<Granularity, 'all' | 'custom'>, string> = {
+  day: '今天',
+  week: '本周',
+  month: '本月',
+  quarter: '本季度',
+  year: '今年',
+};
+
+/**
+ * 时间粒度 → 查询区间（`start` / `end`，闭区间）+ 左下角展示文案。
+ *
+ * `all` 返回**不含 start/end** 的对象 —— 调用方据此"不传时间参数"，
+ * 而不是传个空串（后端 DTO 对空串会走"必须匹配日期正则"的分支，直接 422）。
+ *
+ * `anchor` = 基准日期（默认今天）。左下角的左右箭头靠它实现"往前/往后翻一期"，
+ * 翻页后区间就不是"当期"了 —— 那时文案改为带年份（`2025年 1.1 ~ 12.31`），
+ * 否则光看「1.1 ~ 12.31」根本不知道是哪一年。
+ *
+ * ⚠️ 周按 **ISO 周**（周一为一周起点），必须与后端 `GROUP_FORMAT.week`（`%x-%v`）同口径；
+ *    用 JS 默认的周日起点会让"本周"错一天。
+ * ⚠️ 文案里的日期**不补零**（`1.1` 而不是 `01.01`），与参考图一致。
+ */
+export function granularityRange(
+  gran: Granularity,
+  custom?: { start: string; end: string },
+  anchor?: Date,
+): { start?: string; end?: string; label: string } {
+  if (gran === 'all') return { label: '全部时间' };
+
+  if (gran === 'custom') {
+    // 用户明确给了起止；缺一边时按"不给限制"处理，不猜
+    const s = custom?.start || '';
+    const e = custom?.end || '';
+    if (!s || !e) return { label: '自定义时间' };
+    return { start: s, end: e, label: `${md(s)} ~ ${md(e)}` };
+  }
+
+  const base = anchor ?? new Date();
+  const { start, end } = rangeOf(gran, base);
+  const now = rangeOf(gran, new Date());
+  const isCurrent = start === now.start && end === now.end;
+
+  if (isCurrent) {
+    // 「今天」只有一天，写成「今天 9.30 ~ 9.30」是废话
+    return gran === 'day'
+      ? { start, end, label: `今天 ${md(start)}` }
+      : { start, end, label: `${CURRENT_PREFIX[gran]} ${md(start)} ~ ${md(end)}` };
+  }
+  return { start, end, label: `${base.getFullYear()}年 ${md(start)} ~ ${md(end)}` };
 }

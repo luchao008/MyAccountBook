@@ -24,6 +24,8 @@
         :stroke-dashoffset="seg.offset"
         :transform="`rotate(-90 ${center} ${center})`"
         stroke-linecap="butt"
+        :opacity="segOpacity(index)"
+        @click="onSegmentClick(index)"
       />
 
       <!-- 引出线（参考图的环形图特征）：从弧外缘斜向引出，末端横一小段 -->
@@ -111,6 +113,13 @@ const props = withDefaults(
     palette?: string[];
     /** 是否绘制引出线标注（分类名 + 占比） */
     showLabels?: boolean;
+    /**
+     * 选中扇区下标；`null` = **不启用选中态**（默认，报表页用法完全不变）。
+     *
+     * 启用后：选中扇区保持原样，其余降到 `SEG_DIM_OPACITY`，
+     * 由调用方在环外展示"选中项是谁、占多少"。
+     */
+    selectedIndex?: number | null;
   }>(),
   {
     size: 180,
@@ -119,8 +128,31 @@ const props = withDefaults(
     centerValue: '',
     palette: () => [...CHART_SERIES],
     showLabels: false,
+    selectedIndex: null,
   }
 );
+
+/** 扇区点击 → 调用方接管（图表页用它做"点扇区看明细"） */
+const emit = defineEmits<{ (e: 'select', index: number): void }>();
+
+/**
+ * 未选中扇区的透明度。
+ *
+ * 用**降透明度**而不是改颜色：改颜色会与 `CHART_SERIES` 的语义绑死
+ * （项目踩过"按下标取色、序列一重排颜色就静默错"的坑），
+ * 而透明度是纯视觉权重，与色板无关。
+ */
+const SEG_DIM_OPACITY = 0.32;
+
+/** 选中态未启用时一律 1，保证既有用法零变化 */
+function segOpacity(index: number): number {
+  if (props.selectedIndex === null || props.selectedIndex === undefined) return 1;
+  return index === props.selectedIndex ? 1 : SEG_DIM_OPACITY;
+}
+
+function onSegmentClick(index: number) {
+  emit('select', index);
+}
 
 /**
  * SVG 画布相对环直径的外扩量：只用来容纳引出线最外那段水平线。

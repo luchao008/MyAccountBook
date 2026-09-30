@@ -172,7 +172,13 @@
           <EmptyState v-else-if="!details[g.key]?.length" icon="icon-inbox" text="该时段无流水" />
           <template v-else>
             <view v-for="day in details[g.key]" :key="day.date" class="day">
-              <view class="day-head"><text class="day-head-text">{{ dayHeader(day.date) }}</text></view>
+              <!--
+                分类维度下明细跨月，日头必须带月份（「9月15日 周一」）；
+                时间维度组头已含月份，保持「15日 周一」不重复。
+              -->
+              <view class="day-head">
+                <text class="day-head-text">{{ dayHeader(day.date, groupBy === 'category') }}</text>
+              </view>
               <uni-swipe-action v-for="t in day.items" :key="t.id">
                 <uni-swipe-action-item :right-options="SWIPE_OPTIONS" @click="onSwipe($event, t)">
                   <view class="txn" @click="editTransaction(t.id)">

@@ -505,6 +505,12 @@ function onDelete() {
 /*
  * 表达式行（如 `12.5+3-2`）：次要信息，用小字 + 二级文字色，
  * 放在结果**下方**。它是"怎么算出来的"的凭据，不是主角。
+ *
+ * ⚠️ **刻意不用 `direction: rtl`**（luchao 定，2026-09-30）：rtl 本是用来把
+ *    溢出方向翻到左侧（让"最新输入的那一段"永远可见），但 `+` / `-` 是
+ *    **中性字符**，在 rtl 上下文里会被重排到整串的左端 —— 表达式读起来是乱的。
+ *    代价：超长表达式改为**右侧截断**（先看到开头的 12.5，看不到刚敲的尾部）。
+ *    金额盒定宽 118px，实际长度下极少触发，这里选择"顺序正确"优先。
  */
 .expr {
   @include tabular-nums;
@@ -512,11 +518,10 @@ function onDelete() {
   line-height: $lh-body;
   color: $v11-text-secondary;
   margin-top: 2px;
-  /* 长表达式不折行、从左侧截断（尾部永远是最新输入，必须可见） */
+  /* 长表达式不折行 */
   max-width: 100%;
   overflow: hidden;
   white-space: nowrap;
-  direction: rtl;
   text-align: right;
 }
 

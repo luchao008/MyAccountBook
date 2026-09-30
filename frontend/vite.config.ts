@@ -13,6 +13,24 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
     },
   },
+  build: {
+    /*
+     * ⚠️ **压低 rollup 的并行文件操作数**（2026-09-30）。
+     *
+     * 症状：`npm run build:h5` 随机失败在某个 `.vue` 的 `<style lang="scss">` 上，
+     *   报 `[vite:css] [sass] write EPIPE` —— 而且**每次崩的文件都不一样**
+     *   （实测中过 `uni-swipe-action-item` / `icon-picker` / `CategoryPicker`）。
+     *   排除过的原因：内存（64G / 80% 空闲）、fd 上限（1048575）、
+     *   node 版本（22 与 24 都复现）、沙箱（关掉沙箱同样复现）、
+     *   依赖变动（sass 1.104.0 自 09-19 未变）。
+     *   剩下最合理的解释是 **vite 5.2.8 + sass 1.104 的 legacy API 在高并发
+     *   scss 编译下写通道失败** —— 本文件与页面越加越多，压力只会更大。
+     *
+     * 默认是 20，这里降到 2：构建慢一点，但能稳定出包（部署打包要的是"能出"）。
+     * 若将来升级 vite（≥5.4 可用 `scss.api: 'modern-compiler'`）或降 sass，可以撤掉。
+     */
+    rollupOptions: { maxParallelFileOps: 2 },
+  },
   server: {
     port: 5173,
     /*

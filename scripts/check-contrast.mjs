@@ -794,8 +794,19 @@ section('13. 字号阶梯自洽（文档 §3.2 ↔ tokens.scss ↔ 各 .vue）')
   //    2026-09-20 更新二十九：DateTimePicker 重构为「日期行 / 时刻行」两段式 +
   //    互斥展开区（日历 ↔ 时分滚轮）。新增 .row-label/.row-value（各 $font-body），
   //    删除原 .time-label（$font-body）→ 净增 1 处 → 文字 242 → 243，总数 244 → 245。
-  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 245, 0);
-  expect('  其中文字字号 $font-*', nText, 243, 0);
+  //    2026-09-30 更新三十：新增「图表页」`pages/charts/index.vue`（分类占比饼图 /
+  //    条形图 + 时间粒度弹层 + 口径弹层），并把首页 `HomeView.vue` 改成自绘顶栏
+  //    （右上角「图表」入口）→ 新增 17 处字号。
+  //    另外 5 处是 2026-09-26 记账页表达式键盘引入的偏差（当时未同步本计数）：
+  //    文字 243 → 265，总数 245 → 267。
+  //    ⚠️ 新增的 17 处**全部真实承载文字/图形**（标题、区间文案、排行各行、弹层各项），
+  //       不是死样式；且都在 .vue 里显式声明了 line-height（WCAG 1.4.12）。
+  //    2026-09-30 更新三十一：图表页补「白色三角 + 中心总计（不随环旋转）」与新的
+  //    `NavDropdown`（顶栏下拉，从触发点往下展开）→ 新增 3 处字号
+  //    （.ring-total-label / .ring-total-value / .dropdown-text）：
+  //    文字 265 → 268，总数 267 → 270。
+  expect('.vue 中 font-size 出现总次数（方案 §1.3）', nText + nIcon + nLiteral, 270, 0);
+  expect('  其中文字字号 $font-*', nText, 268, 0);
   expect('  其中图标尺寸 $icon-*', nIcon, 2, 0);
   expect('  其中字面量（必须为 0）', nLiteral, 0, 0);
 }

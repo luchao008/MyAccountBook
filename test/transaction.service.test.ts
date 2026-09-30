@@ -354,6 +354,27 @@ describe('TransactionService', () => {
       });
       expect(updated.categoryId === null || updated.categoryId === undefined).toBe(true);
     });
+
+    it('★ 改分类：从一个分类改成另一个同类分类，应真的落库', async () => {
+      const another = await categoryService.create(userId, {
+        accountId: defaultAccountId,
+        name: '改分类目标',
+        type: 'expense',
+      });
+      const txn = await transactionService.create(userId, {
+        type: 'expense',
+        amount: '20.00',
+        categoryId: expenseCategoryId,
+        recordDate: '2026-06-04',
+      });
+      const updated = await transactionService.update(userId, txn.id, {
+        categoryId: another.id,
+      });
+      expect(String(updated.categoryId)).toBe(String(another.id));
+      // 再独立查一次：确认是库里的值变了，而不是只有返回值好看
+      const reread = await transactionService.findById(userId, txn.id);
+      expect(String(reread.categoryId)).toBe(String(another.id));
+    });
   });
 
   describe('delete', () => {

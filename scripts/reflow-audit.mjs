@@ -77,6 +77,8 @@ const OUT = process.env.SHOT_DIR || '/tmp/reflow-audit';
  *   · **2026-09-16 阶段 5 收口**：补齐此前一直缺的 4 个页面
  *     （`login` / `category-new` / `icon-picker` / `recycle`）+「我的」+ 流水页 4 个弹层。
  *     13 页 → 20 条，39 屏 → 60 屏。
+ *   · **2026-09-30**：新增「图表页」（`pages/charts/index`，首页右上角图标进入）
+ *     及其两个弹层态（口径 / 时间粒度）→ 25 条 → 28 条，75 屏 → 84 屏。
  *
  * ⚠️ **仍然扫不到的（人工验收项，见文末清单）**：
  *     ① 三列时间滚轮**滚动到底部**后的状态；
@@ -108,6 +110,8 @@ const PAGES = [
     steps: [{ sel: '.tab-item', nth: 1 }],
     guard: '.mine-slot',
   }],
+  // —— 2026-09-30 新增：图表页（首页右上角图标进入）——
+  ['charts', '#/pages/charts/index', { guard: '.bar' }],
 ];
 
 /**
@@ -135,6 +139,24 @@ const FLOW_OVERLAYS = [
 ].map(([name, steps, guard, guardText]) => [
   name,
   '#/pages/flow/index',
+  { steps, guard, guardText },
+]);
+
+/**
+ * 图表页的弹层交互态（同样"不点开就不在 DOM 里"）。
+ *
+ * ⚠️ 触发器是**自绘的** `.nav-center`（顶部口径标题）与 `.bar-text`（左下区间文案），
+ *    不是流水页那套 `.nav-btn` —— 照抄那边的选择器会点空，
+ *    而点空会被 `guard` 拦住（这正是 guard 存在的意义）。
+ */
+const CHARTS_OVERLAYS = [
+  // 口径：**从顶栏往下展开的下拉**（不是底部 sheet）→ 守卫要用 .dropdown
+  ['charts-dim-dropdown', [{ sel: '.nav-center' }], '.dropdown', '分类支出'],
+  // 时间粒度：仍是贴底升起的 sheet
+  ['charts-gran-sheet', [{ sel: '.bar-text' }], '.sheet', '自定义'],
+].map(([name, steps, guard, guardText]) => [
+  name,
+  '#/pages/charts/index',
   { steps, guard, guardText },
 ]);
 
@@ -410,7 +432,7 @@ if (!(await page.locator('.banner, .rank-card, .account-switch').count())) {
 }
 console.log('登录成功\n');
 
-const SCREENS = [...PAGES, ...FLOW_OVERLAYS];
+const SCREENS = [...PAGES, ...FLOW_OVERLAYS, ...CHARTS_OVERLAYS];
 
 for (const vp of VIEWPORTS) {
   console.log(`===== ${vp.w}×${vp.h}，字号${vp.scale === 1 ? '正常' : ` ×${vp.scale}`} =====`);

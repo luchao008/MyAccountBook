@@ -144,6 +144,24 @@ check "update 200" 200 "$(code -X PUT $BASE/api/transactions/$T1_ID -H "Authoriz
 echo '{"categoryId":""}' > $TMP/tclr.json
 CLR=$(curl -s -X PUT $BASE/api/transactions/$T1_ID -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/tclr.json)
 check "clear category -> null" "null" "$(echo "$CLR" | jq_get "data.categoryId")"
+# 改分类（从 A 改成 B，**不是清空**）：同样必须真的落库。
+# ⚠️ 与上面的"清空"是**同一个坑的两半** —— 两者都是"改了外键字段但没同步实体上
+#    已加载的关系对象"，TypeORM 会拿旧关系把 category_id 回填回去。
+#    2026-09-30 之前只测了"清空"这一半，于是「编辑流水改分类保存不生效」藏了很久：
+#    接口 200、响应体看着正常（其实是旧值），库里根本没变。
+#    **判据必须落在"再查一次详情"上，不能只看 PUT 的响应。**
+cat > $TMP/ce2.json <<EOF
+{"accountId":"$AID","name":"RegExpense2","type":"expense","sort":2}
+EOF
+CE2=$(curl -s -X POST $BASE/api/categories -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/ce2.json)
+CE2_ID=$(echo "$CE2" | jq_get "data.id")
+echo "{\"categoryId\":\"$CE_ID\"}" > $TMP/tcat1.json
+curl -s -X PUT $BASE/api/transactions/$T1_ID -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/tcat1.json > /dev/null
+echo "{\"categoryId\":\"$CE2_ID\"}" > $TMP/tcat2.json
+SW=$(curl -s -X PUT $BASE/api/transactions/$T1_ID -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @$TMP/tcat2.json)
+check "switch category -> new id" "$CE2_ID" "$(echo "$SW" | jq_get "data.categoryId")"
+DET=$(curl -s $BASE/api/transactions/$T1_ID -H "Authorization: Bearer $TOKEN")
+check "switch category persisted" "$CE2_ID" "$(echo "$DET" | jq_get "data.categoryId")"
 check "missing 404" 404 "$(code $BASE/api/transactions/99999 -H "Authorization: Bearer $TOKEN")"
 echo ""
 

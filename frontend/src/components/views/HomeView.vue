@@ -74,112 +74,121 @@
     />
 
     <template v-else>
-    <!-- 顶部 banner：当前账本的历年累计 -->
-    <view class="banner">
-      <view class="banner-top">
-        <view class="account-switch" @click="switchAccount">
-          <SvgIcon class="account-icon" name="icon-wallet" :size="14" />
-          <text class="account-name">{{ accountStore.currentName }}</text>
-          <SvgIcon class="account-arrow" name="icon-chevron-down" :size="12" />
-        </view>
-        <SvgIcon class="banner-deco" name="icon-chart-bar" :size="28" />
-      </view>
-
-      <view class="banner-main">
-        <text class="banner-label">总支出</text>
-        <text class="banner-expense">¥{{ formatMoney(overview.total.expense) }}</text>
-      </view>
-
-      <view class="banner-sub">
-        <view class="sub-item">
-          <text class="sub-label">总收入</text>
-          <text class="sub-value">{{ formatMoney(overview.total.income) }}</text>
-        </view>
-        <view class="sub-item">
-          <text class="sub-label">结余</text>
-          <text class="sub-value">{{ formatMoney(overview.total.balance) }}</text>
-        </view>
-      </view>
-    </view>
-
-    <!-- 时间区间统计 -->
-    <view class="card range-card">
-      <!-- 每行可点：跳到流水页并带上该区间的起止与分组粒度 -->
-      <view
-        v-for="(item, index) in overview.ranges"
-        :key="item.key"
-        class="range-row"
-        @click="goFlow(item)"
-      >
-        <view class="range-icon" :style="{ background: iconColors[index % iconColors.length] }">
-          <text class="range-icon-text">{{ iconTexts[index] || '¥' }}</text>
-        </view>
-        <view class="range-main">
-          <text class="range-label">{{ item.label }}</text>
-          <text class="range-period">{{ item.period }}</text>
-        </view>
-        <view class="range-amounts">
-          <view class="amount-line">
-            <text class="amount-key">总收入</text>
-            <text class="amount-val income">{{ formatMoney(item.income) }}</text>
+      <!-- 顶部 banner：当前账本的历年累计 -->
+      <view class="banner">
+        <view class="banner-top">
+          <view class="account-switch" @click="switchAccount">
+            <SvgIcon class="account-icon" name="icon-wallet" :size="14" />
+            <text class="account-name">{{ accountStore.currentName }}</text>
+            <SvgIcon class="account-arrow" name="icon-chevron-down" :size="12" />
           </view>
-          <view class="amount-line">
-            <text class="amount-key">总支出</text>
-            <text class="amount-val expense">{{ formatMoney(item.expense) }}</text>
+          <!--
+          右上角图标 = **图表页入口**（2026-09-30 luchao 定：不动导航栏，直接用这个 svg）。
+          它原本是纯装饰，现在可点 —— 所以触摸区撑到 44、并给按下反馈。
+        -->
+          <view class="banner-action" @click="goCharts">
+            <SvgIcon class="banner-deco" name="icon-chart-bar" :size="28" />
+          </view>
+        </view>
+
+        <view class="banner-main">
+          <text class="banner-label">总支出</text>
+          <text class="banner-expense">¥{{ formatMoney(overview.total.expense) }}</text>
+        </view>
+
+        <view class="banner-sub">
+          <view class="sub-item">
+            <text class="sub-label">总收入</text>
+            <text class="sub-value">{{ formatMoney(overview.total.income) }}</text>
+          </view>
+          <view class="sub-item">
+            <text class="sub-label">结余</text>
+            <text class="sub-value">{{ formatMoney(overview.total.balance) }}</text>
           </view>
         </view>
       </view>
-    </view>
 
-    <!-- 本月分类支出排行 -->
-    <view class="card rank-card">
-      <view class="rank-header">
-        <text class="rank-title">本月各分类支出排行</text>
-        <view class="rank-summary">
-          <text class="summary-item">记账笔数 {{ monthCount }}</text>
-          <text class="summary-item">
-            总支出
-            <text class="summary-val">{{ formatMoney(monthExpense) }}</text>
-          </text>
-        </view>
-      </view>
-
-      <EmptyState v-if="!ranking.length" icon="icon-chart-bar" text="本月还没有支出记录" />
-
-      <view v-else class="rank-list">
+      <!-- 时间区间统计 -->
+      <view class="card range-card">
+        <!-- 每行可点：跳到流水页并带上该区间的起止与分组粒度 -->
         <view
-          v-for="(item, index) in visibleRanking"
-          :key="item.categoryId || index"
-          class="rank-item"
-          :class="{ 'rank-item-link': isClickable(item) }"
-          @click="goCategoryFlow(item)"
+          v-for="(item, index) in overview.ranges"
+          :key="item.key"
+          class="range-row"
+          @click="goFlow(item)"
         >
-          <text class="rank-no">{{ index + 1 }}</text>
-          <view class="rank-body">
-            <view class="rank-line">
-              <view class="rank-name">
-                <CategoryIcon :name="item.icon" :size="36" />
-                <text>{{ item.name }}</text>
-              </view>
-              <view class="rank-right">
-                <text class="rank-ratio">{{ item.ratio }}%</text>
-                <text class="rank-dot">•</text>
-                <text class="rank-amount">{{ formatMoney(item.sum) }}</text>
-              </view>
+          <view class="range-icon" :style="{ background: iconColors[index % iconColors.length] }">
+            <text class="range-icon-text">{{ iconTexts[index] || '¥' }}</text>
+          </view>
+          <view class="range-main">
+            <text class="range-label">{{ item.label }}</text>
+            <text class="range-period">{{ item.period }}</text>
+          </view>
+          <view class="range-amounts">
+            <view class="amount-line">
+              <text class="amount-key">总收入</text>
+              <text class="amount-val income">{{ formatMoney(item.income) }}</text>
             </view>
-            <view class="bar-bg">
-              <view class="bar-fill" :style="{ width: barWidth(item.ratio) }" />
+            <view class="amount-line">
+              <text class="amount-key">总支出</text>
+              <text class="amount-val expense">{{ formatMoney(item.expense) }}</text>
             </view>
           </view>
         </view>
+      </view>
 
-        <view v-if="ranking.length > COLLAPSED_COUNT" class="rank-toggle" @click="expanded = !expanded">
-          <text class="rank-toggle-text">{{ expanded ? '收起' : '点击展开' }}</text>
-          <SvgIcon :name="expanded ? 'icon-chevron-up' : 'icon-chevron-down'" :size="12" />
+      <!-- 本月分类支出排行 -->
+      <view class="card rank-card">
+        <view class="rank-header">
+          <text class="rank-title">本月各分类支出排行</text>
+          <view class="rank-summary">
+            <text class="summary-item">记账笔数 {{ monthCount }}</text>
+            <text class="summary-item">
+              总支出
+              <text class="summary-val">{{ formatMoney(monthExpense) }}</text>
+            </text>
+          </view>
+        </view>
+
+        <EmptyState v-if="!ranking.length" icon="icon-chart-bar" text="本月还没有支出记录" />
+
+        <view v-else class="rank-list">
+          <view
+            v-for="(item, index) in visibleRanking"
+            :key="item.categoryId || index"
+            class="rank-item"
+            :class="{ 'rank-item-link': isClickable(item) }"
+            @click="goCategoryFlow(item)"
+          >
+            <text class="rank-no">{{ index + 1 }}</text>
+            <view class="rank-body">
+              <view class="rank-line">
+                <view class="rank-name">
+                  <CategoryIcon :name="item.icon" :size="36" />
+                  <text>{{ item.name }}</text>
+                </view>
+                <view class="rank-right">
+                  <text class="rank-ratio">{{ item.ratio }}%</text>
+                  <text class="rank-dot">•</text>
+                  <text class="rank-amount">{{ formatMoney(item.sum) }}</text>
+                </view>
+              </view>
+              <view class="bar-bg">
+                <view class="bar-fill" :style="{ width: barWidth(item.ratio) }" />
+              </view>
+            </view>
+          </view>
+
+          <view
+            v-if="ranking.length > COLLAPSED_COUNT"
+            class="rank-toggle"
+            @click="expanded = !expanded"
+          >
+            <text class="rank-toggle-text">{{ expanded ? '收起' : '点击展开' }}</text>
+            <SvgIcon :name="expanded ? 'icon-chevron-up' : 'icon-chevron-down'" :size="12" />
+          </view>
         </view>
       </view>
-    </view>
-
     </template>
 
     <!-- 底栏的「记一笔」与导航由容器统一承载，视图内不再持有 -->
@@ -203,6 +212,16 @@ import { SOLID_SERIES } from '@/constants/chart';
 const userStore = useUserStore();
 const accountStore = useAccountStore();
 const categoryStore = useCategoryStore();
+
+/**
+ * banner 右上角图标 → 图表页。
+ *
+ * 用 `navigateTo`（**不是** switchTab / reLaunch）：图表页是独立页，
+ * 用户看完要能原路返回首页。原生 tabBar 早已移除，switchTab 会失败。
+ */
+function goCharts() {
+  uni.navigateTo({ url: '/pages/charts/index' });
+}
 
 const loading = ref(false);
 /**
@@ -231,7 +250,7 @@ const expanded = ref(false);
 
 /** 折叠态：默认只显示前 COLLAPSED_COUNT 条；展开后显示全部 */
 const visibleRanking = computed(() =>
-  expanded.value ? ranking.value : ranking.value.slice(0, COLLAPSED_COUNT)
+  expanded.value ? ranking.value : ranking.value.slice(0, COLLAPSED_COUNT),
 );
 
 const overview = reactive({
@@ -458,8 +477,41 @@ defineExpose({ activate, onPullDownRefresh });
      opacity 会静默吃掉对比度（本项目已踩过：白字 4.52 × 0.85 只剩 3.69）。 */
 }
 
+/*
+ * banner 右上角 = **图表页入口**（2026-09-30 luchao 定：不动导航栏，直接用这个 svg）。
+ * 它原本是纯装饰、现在可点，所以触摸区要撑到 $touch-target-min（44）。
+ *
+ * ⚠️ 扩大触摸区用 **伪元素**，不用负 margin：
+ *    负 margin 会让渲染盒（44×44）真的超出 28 的占位，与相邻元素重叠 ——
+ *    reflow-audit 会把它判成"压邻居"（2026-09-30 实测 home 三档全红）。
+ *    伪元素不参与布局与重叠检测，触摸区照样是 44。
+ */
+.banner-action {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.banner-action::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: $touch-target-min;
+  height: $touch-target-min;
+  transform: translate(-50%, -50%);
+}
+
+/* 按下反馈：图标不变形，只降透明度（与全站图标按钮同一手法） */
+.banner-action:active {
+  opacity: 0.6;
+}
+
 .banner-deco {
-  /* 纯装饰（不承载信息，WCAG 豁免），故保留 opacity；浅金底上做淡化装饰 */
+  /* 浅金底上的淡化装饰；纯图形、不承载文字，所以对比度不按正文判据 */
   opacity: 0.85;
 }
 

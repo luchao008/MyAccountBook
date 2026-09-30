@@ -386,7 +386,16 @@ export class TransactionService {
       finalAccount = await this.resolveAccount(userId, dto.accountId || undefined);
     }
     const finalAccountId = finalAccount ? finalAccount.id : entity.accountId;
-    await this.assertCategoryValid(finalAccountId, finalCategoryId, finalType);
+    /*
+     * ⚠️ 接住校验返回的分类实体 —— 下面替换 `entity.category` 关系对象时要用它。
+     *    这个返回值**不能丢**：只改 `categoryId` 而不动关系对象，
+     *    TypeORM 会拿旧关系把 category_id 回填回去（见下文 categoryId 分支）。
+     */
+    const finalCategory = await this.assertCategoryValid(
+      finalAccountId,
+      finalCategoryId,
+      finalType,
+    );
 
     const patch: Partial<Transaction> = {};
     if (dto.type !== undefined) patch.type = dto.type;
@@ -394,13 +403,18 @@ export class TransactionService {
     if (dto.recordDate !== undefined) patch.recordDate = dto.recordDate;
     if (dto.note !== undefined) patch.note = dto.note;
     if (dto.categoryId !== undefined) {
-      const nextCategoryId = dto.categoryId || null;
-      patch.categoryId = nextCategoryId;
-      // 清空分类时必须同时断开关系对象，否则 TypeORM 会依据仍挂在实体上的
-      // entity.category 把 category_id 回填成旧值，导致"清空"无效。
-      if (!nextCategoryId) {
-        entity.category = null;
-      }
+      /*
+       * ⚠️ `categoryId` 与 `category` 关系对象**必须同时更新**，两者不一致时
+       *    TypeORM 以**关系对象**为准 —— 只改 `patch.categoryId` 的话，
+       *    `findById` 加载的旧 `entity.category` 会把 category_id 回填成旧值。
+       *
+       * 2026-09-30 修复：早先只处理了"清空分类"（把它设为 null）这一支，
+       *    于是 **"从一个分类改成另一个分类" 会静默失效** —— 接口 200、返回体看着
+       *    正常（其实是旧值），库里根本没变，界面上就是"改了分类保存不生效"。
+       *    同类坑在 accountId 分支已经处理过（见下），category 这一支漏了。
+       */
+      patch.categoryId = finalCategory ? finalCategory.id : null;
+      entity.category = finalCategory as Category;
     }
     if (dto.accountId !== undefined && finalAccount) {
       // 传空字符串/null 表示改挂到默认账本。
