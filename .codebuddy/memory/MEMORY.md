@@ -23,6 +23,12 @@
 - 验证技巧：注入 `CanvasRenderingContext2D.prototype.fillText` 可抓取 canvas 上画过的**每一段文字及其坐标** ——
   这是断言"有没有 undefined / 数据标签 / chip 是否对齐"的唯一手段（DOM 里查不到）。
 
+## 分类选择器高亮归属（2026-09-30 定版）
+- 二级分类的**高亮归属**用独立的 `pickedKey` 状态（`frontend/src/components/CategoryPicker.vue`），与左侧联动高亮 `activeKey` **解耦**。
+- 为什么：`activeKey` 会随右侧滚动变化（onMainScroll 反推），若高亮直接绑 activeKey，选中后一滚动高亮就丢/跑位。
+- `pickedKey` 只在两处更新：①打开时 `syncActiveOnOpen()`（优先「最近使用」，否则所属一级）；②用户点击 `pick()`（跟随点的那份副本，最近使用/一级二选一）。
+- 同一二级分类在「最近使用」和所属一级各出现一次，**同一时刻只高亮一份**（由 pickedKey 决定是哪份）。
+
 ## 分类选择器（记一笔）视觉规格 · 2026-09-19 定版
 - 网格：4 列（25%），图标直接落在卡片上（无背板圆），40px（<360px 视口降 36）；名称 12px / #222226，图标下方居中、允许两行、**无 margin-top**（2026-09-19 luchao 定）。
 - 选中：整格奶油卡片（$v11-gold-soft 底 + 1px rgba(143,83,18,.18) 描边 + 名称 500）；未选中无底无框。
