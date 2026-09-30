@@ -92,7 +92,7 @@
                 v-for="item in recentItems"
                 :key="'r-' + item.id"
                 class="grid-item"
-                :class="{ picked: activeKey === 'recent' && item.id === modelValue }"
+                :class="{ picked: pickedKey === 'recent' && item.id === modelValue }"
                 @click="pick(item, 'recent')"
               >
                 <CategoryIcon class="icon" :name="item.icon" :size="iconSize" />
@@ -113,7 +113,7 @@
                 v-for="item in g.children"
                 :key="item.id"
                 class="grid-item"
-                :class="{ picked: activeKey === g.root.id && item.id === modelValue }"
+                :class="{ picked: pickedKey === g.root.id && item.id === modelValue }"
                 @click="pick(item, g.root.id)"
               >
                 <CategoryIcon class="icon" :name="item.icon" :size="iconSize" />
@@ -166,6 +166,17 @@ const categoryStore = useCategoryStore();
 const instance = getCurrentInstance();
 
 const activeKey = ref<string>(RECENT_KEY_ANCHOR);
+
+/**
+ * 二级分类的**高亮归属**（左侧哪个分组下的那份副本要高亮）。
+ *
+ * ⚠️ 与 activeKey（左侧联动高亮）**解耦**：activeKey 会随右侧滚动变化，
+ *    但高亮归属只在两件事上变 ——
+ *      · 打开选择器时：优先「最近使用」，否则所属一级分组（见 syncActiveOnOpen）
+ *      · 用户点击某份副本时：跟随他点的那份（见 pick）
+ *    这样滚动右侧列表时，之前选中的格子不会因 activeKey 变化而丢高亮。
+ */
+const pickedKey = ref<string>(RECENT_KEY_ANCHOR);
 
 /**
  * 分类图标的显示尺寸。
@@ -456,7 +467,11 @@ function selectKey(key: string) {
 function pick(item: CategoryItem, fromKey?: string | null) {
   if (!item.parentId) return;
   saveRecent(item.id);
-  if (fromKey) activeKey.value = fromKey;
+  if (fromKey) {
+    activeKey.value = fromKey;
+    // 高亮归属跟随用户点的这份副本（最近使用 / 所属一级，二选一）
+    pickedKey.value = fromKey;
+  }
   emit('update:modelValue', item.id);
   emit('update:visible', false);
 }
@@ -509,6 +524,8 @@ function syncActiveOnOpen() {
         ? RECENT_KEY_ANCHOR
         : (roots.value[0]?.id ?? RECENT_KEY_ANCHOR);
   activeKey.value = targetKey;
+  // 打开时的高亮归属与联动高亮一致：优先最近使用，否则所属一级
+  pickedKey.value = targetKey;
 }
 
 /*
