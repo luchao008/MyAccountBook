@@ -521,11 +521,18 @@ export class TransactionService {
     }
 
     /*
-     * ⚠️ `?? 1` / `?? 20` 看着多余（DTO 的属性声明成非可选，且有 `.default()`），
-     *    但它们是**兜住"退化成全量拉取"的最后一道**：`.default()` 只在经过 HTTP
-     *    参数校验时生效，而 TypeORM 里 `skip(NaN)` / `take(undefined)` 都是**假值**
-     *    → OFFSET / LIMIT 被整段丢弃 → 悄悄回到"一次拉全量"，正是本次要修的问题。
-     *    数值必须与 DTO 的 `.default(1)` / `.default(20)` 保持一致（改一处要改两处）。
+     * ⚠️ `?? 1` / `?? 20` 不是多余的防御（下面三种退化方式都在 TypeORM 源码里核对过，
+     *    不是推测）——分页一旦失效，要么**静默全量**、要么 500，代价都不该由"上游记得传参"来承担：
+     *    ① `size` 缺失且 `page=1` → `take(undefined)` + `skip(0)`：TypeORM 实体查询的入口
+     *       条件是 `skip || take` 为**真值**，`0` 恰好是假值 → 整段分页逻辑被跳过
+     *       → 查询**没有 LIMIT / OFFSET** → 悄悄回到"一次拉全量"（正是本次要修的问题）；
+     *    ② `size` 缺失且 `page>1` → `take(undefined)` + `skip>0`：走"先查 distinct id 再回表"
+     *       那条路，`.offset(20).limit(undefined)` 在 MySQL 上直接抛 OffsetWithoutLimitNotSupportedError；
+     *    ③ `page` 缺失 → `skip(NaN)`：`skip()` 内部校验非数字会抛
+     *       `Provided "skip" value is not a number` → 接口 500。
+     *    这三种都只可能由"绕过 DTO 直接调用本方法"引发，但**静默截断/静默全量**是最难发现的一类
+     *    事故，所以这里不信任上游。数值与 DTO 的 `.default(1)` / `.default(20)` 保持一致
+     *    （**改一处要改两处**）。
      */
     const page = query.page ?? 1;
     const size = query.size ?? 20;
