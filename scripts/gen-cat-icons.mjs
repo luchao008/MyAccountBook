@@ -4,7 +4,7 @@
  *   node scripts/gen-cat-icons.mjs
  *
  * 产物：
- *   frontend/src/static/cat-icons/<拼音>.png   94 张 256×256 透明 PNG（按需 HTTP 加载，不进 bundle）
+ *   frontend/src/static/cat-icons/<拼音>.png   94 张 160×160 透明 PNG（按需 HTTP 加载，不进 bundle）
  *   frontend/src/constants/cat-icons.ts        名字清单 + 名字→文件名映射
  *
  * 源文件：`assets/cat-icons-original/*.svg`（94 个，文件名 = 分类名）
@@ -29,7 +29,8 @@
  *
  * 处理三步：
  *   1. 解析 SVG 内嵌 base64 → 解出位图（格式无关，jimp 自己判）
- *   2. 缩到 256×256（分类图标最大显示 48px，3 倍屏 = 144px；256 留一倍余量）
+ *   2. 缩到 160×160（最大渲染场景 icon-picker 的 28×2=56px，3 倍屏 = 168px；
+ *      160 在 2 倍屏富余、3 倍屏轻微软化，换来体积从 4.8MB 降到约 1.9MB —— 2026-10-01 定）
  *   3. 从**四边泛洪填充**去掉近白背景 → 透明
  *      ⚠️ 不能"把所有白像素变透明"：图标内部的白色高光会被打洞。
  *         泛洪只清理"与画布边框连通"的白，内部白保留。
@@ -46,8 +47,8 @@ const SRC_DIR = path.join(ROOT, 'assets/cat-icons-original');
 const OUT_DIR = path.join(ROOT, 'frontend/src/static/cat-icons');
 const META_OUT = path.join(ROOT, 'frontend/src/constants/cat-icons.ts');
 
-/** 输出边长（px）。见文件头"处理三步"第 2 条的推导 */
-const SIZE = 256;
+/** 输出边长（px）。见文件头"处理三步"第 2 条的推导（2026-10-01 由 256 降到 160） */
+const SIZE = 160;
 /**
  * 近白判定阈值（RGB 三通道都 > 该值才算背景）。
  *
