@@ -11,8 +11,11 @@
           @click="pick(key)"
         >
           <view class="cell-box">
-            <!-- image-scale=2：图片图标是位图插画，同尺寸下观感偏小（2026-09-19 luchao 要求翻倍） -->
-            <CategoryIcon :name="key" :size="28" :image-scale="2" />
+            <!--
+              显示尺寸按 Tab 分档：见 script 里 cellSize / cellScale 的说明。
+              两个 Tab 的图标是同一视觉重量（同尺寸、同画布留白口径），不是"大小两套"。
+            -->
+            <CategoryIcon :name="key" :size="cellSize" :image-scale="cellScale" />
           </view>
         </view>
       </view>
@@ -38,9 +41,10 @@
  * 图标选择页。
  *
  * 数据来源三处：
- *   - 图片图标：`constants/cat-icons.ts` 的名字清单（94 张静态 PNG，`img:` key）
+ *   - 图片图标：`constants/cat-icons.ts` 的名字清单（94 张静态 PNG/WebP，`img:` key）
  *   - 彩色图标：`utils/colorIcon.ts`（由 `constants/color-icons.ts` 建索引）
- *   - 标准图标：`constants/icons.ts` 的 `CATEGORY_ICONS`（项目原有的单色分类图标）
+ *   - 标准图标：`constants/icons.ts` 的 `CATEGORY_ICONS`（15 个一级分类图标，
+ *     2026-10-01 由单色线性改绘为**彩色软胶**，与「图片」Tab 同一套画风）
  *
  * 选中即回传并返回（与参考图一致，没有额外的「确定」按钮）：
  *   发一个全局事件给上一页，然后 `navigateBack`。
@@ -61,7 +65,7 @@ import { EVENT_ICON_PICKED } from '@/constants/events';
  *
  * ⚠️ 彩色图标集的 Tab **从元数据派生**，不再手写 —— 手写一份就等于埋了
  *    一个"加了新图标集但忘了加 Tab"的坑，而且它不会报错，只会安静地少一个入口。
- *    「图片」（`img:` 分类图片图标）与「标准」（单色分类图标）不在彩色图标元数据里，
+ *    「图片」（`img:` 分类图片图标）与「标准」（彩色分类图标）不在彩色图标元数据里，
  *    各自单独补一个。
  *
  * 「图片」放第一个并作为默认 Tab（2026-09-19）：它现在承担**分类默认图标**的角色
@@ -96,6 +100,19 @@ const visibleKeys = computed(() => {
   if (!colorIconsReady.value) return [];
   return colorIconKeysOf(activeSet.value);
 });
+
+/**
+ * 格子里的图标显示尺寸 —— **两个"图形类"Tab 必须同尺寸**。
+ *
+ * 「图片」是位图插画，靠 `image-scale=2` 撑到 56px（2026-09-19 定的）；
+ * 「标准」的彩色图标画布留白口径与图片集一致（实测内容约占画布 60%），
+ * 所以它也要 56px 才是同一视觉重量 —— 停在 28px 会明显小一圈，
+ * 这正是本次"两个 Tab 尺寸不一致"的来源。
+ *
+ * 其余彩色集（多彩/生活）不在本次范围内，沿用原尺寸。
+ */
+const cellSize = computed(() => (activeSet.value === 'standard' ? 56 : 28));
+const cellScale = computed(() => (activeSet.value === CAT_ICON_SET ? 2 : 1));
 
 /** 已选（用于高亮），由上一页用 query 带进来 */
 const picked = ref('');

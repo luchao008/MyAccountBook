@@ -143,30 +143,62 @@ await shot('02-category-new');
 /* ③ 图标选择页 */
 step('进入图标选择页');
 await page.locator('.field-row').first().click();
-await page.waitForTimeout(1600);
+/*
+ * ⚠️ 必须**等 Tab 出现**再往下测，不能只靠固定 sleep。
+ *    Vite 是按需编译的：图标选择页第一次被访问时先编译再渲染，
+ *    1.6s 常常不够 —— 于是"图片 Tab 图标数 = 0 / 底部 Tab = 空"
+ *    会被读成产品 bug，其实是脚本量早了（2026-10-01 实测踩到）。
+ */
+await page.locator('.tabs .tab').first().waitFor({ state: 'visible', timeout: 20000 });
+await page.waitForTimeout(600);
 await shot('03-picker-colorful');
 
 const countColorful = await page.locator('.cell').count();
 const tabLabels = await page.locator('.tabs .tab').allTextContents();
-console.log('多彩 Tab 图标数:', countColorful);
-console.log('底部 Tab:', tabLabels.map((t) => t.trim()).join(' / '));
+const tabs = tabLabels.map((t) => t.trim());
+console.log('第一个 Tab（图片）图标数:', countColorful);
+console.log('底部 Tab:', tabs.join(' / '));
+
+/*
+ * ⚠️ 按**文字**选 Tab，不要按序号。
+ *    2026-09-19 把「图片」插到最前面之后，Tab 从 3 个变 4 个，
+ *    而本脚本当时写的是 .nth(1)/.nth(2) —— 序号全错位，点的根本不是它以为的那个 Tab，
+ *    末项断言还停在"3 个 Tab"。序号选法改一次页面就静默失效一次，用文字才稳。
+ */
+const tabOf = (label) => page.locator('.tabs .tab').filter({ hasText: label });
 
 // 切到「生活」
-await page.locator('.tabs .tab').nth(1).click();
+await tabOf('生活').click();
 await page.waitForTimeout(800);
 await shot('04-picker-life');
 const countLife = await page.locator('.cell').count();
 console.log('生活 Tab 图标数:', countLife);
 
 // 切到「标准」
-await page.locator('.tabs .tab').nth(2).click();
+await tabOf('标准').click();
 await page.waitForTimeout(800);
 await shot('05-picker-standard');
 const countStd = await page.locator('.cell').count();
+/*
+ * 标准 Tab 的图标现在是**彩色软胶**（48 画布），不是单色线段。
+ * 这条断言是"改绘真的生效了"的判据 —— 只数格子数的话，
+ * 单色方块和彩色图标同样能过，等于没测。
+ */
+const stdArt = await page.evaluate(() => {
+  const svg = document.querySelector('.cell svg');
+  if (!svg) return null;
+  return {
+    viewBox: svg.getAttribute('viewBox') || '',
+    hasGradient: !!svg.querySelector('linearGradient'),
+    // 单色图标一定带 stroke="currentColor"；彩色图标不该有
+    strokeCurrentColor: svg.getAttribute('stroke') === 'currentColor',
+  };
+});
 console.log('标准 Tab 图标数:', countStd);
+console.log('标准 Tab 首图:', JSON.stringify(stdArt));
 
-// 回到「多彩」并选第一个图标
-await page.locator('.tabs .tab').nth(0).click();
+// 回到「多彩」并选第一个图标（下面要断言"渲染出彩色图标"，所以必须从彩色集里挑）
+await tabOf('多彩').click();
 await page.waitForTimeout(600);
 const pickedKey = await page.locator('.cell').first().getAttribute('class');
 console.log('第一个格子的 class:', pickedKey);
@@ -229,10 +261,12 @@ console.log(cleaned);
 console.log('\n===== 汇总 =====');
 const checks = [
   ['导航栏标题为「新建二级支出分类」', title.includes('新建二级支出分类')],
-  ['多彩 Tab 有图标', countColorful > 0],
-  ['底部有 3 个图标集 Tab', tabLabels.length === 3],
+  ['图片 Tab 有图标', countColorful > 0],
+  ['底部有 4 个图标集 Tab（图片/多彩/生活/标准）', tabs.length === 4],
   ['生活 Tab 有图标', countLife > 0],
-  ['标准 Tab 有图标', countStd > 0],
+  ['标准 Tab 有 15 个图标', countStd === 15],
+  ['标准 Tab 首图是彩色软胶（48 画布 + 渐变，且不吃 currentColor）',
+    !!stdArt && stdArt.viewBox === '0 0 48 48' && stdArt.hasGradient && !stdArt.strokeCurrentColor],
   ['选完图标后回到新建页', back.hash.includes('category-new')],
   ['图标已回传（渲染出彩色图标）', back.hasColorIcon && back.iconSlotChildren > 0],
   ['再次进入时高亮回填当前图标', refill.pickedCount === 1],
