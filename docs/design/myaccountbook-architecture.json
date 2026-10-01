@@ -1,0 +1,334 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "MyAccountBook 系统架构",
+    "output": "myaccountbook-architecture.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/luchao008/MyAccountBook",
+      "revision": "a72531115f0dffdf1bd266263d7a87f621ddd503"
+    },
+    "viewBox": [
+      1360,
+      510
+    ],
+    "views": [
+      {
+        "id": "main-path",
+        "label": "记账主链路",
+        "focus": [
+          "app",
+          "webgw",
+          "api",
+          "db",
+          "volume"
+        ],
+        "note": "App 与接口同域：Nginx 托管静态产物并把 /api 反代到后端，后端经 TypeORM 落到 MariaDB。"
+      },
+      {
+        "id": "admin-path",
+        "label": "中台链路",
+        "focus": [
+          "adminuser",
+          "admingw",
+          "api",
+          "db"
+        ],
+        "note": "中台是独立容器与独立端口，自带一份 Nginx，同样走 /api 反代，不共用 App 登录态。"
+      },
+      {
+        "id": "data-path",
+        "label": "数据与持久化",
+        "focus": [
+          "api",
+          "modules",
+          "db",
+          "volume"
+        ],
+        "note": "请求先过守卫再分发到领域模块，表结构由迁移而非 synchronize 管理，数据落在群晖共享文件夹。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "adminuser",
+      "type": "external",
+      "label": "中台管理员",
+      "sublabel": "浏览器",
+      "pos": [
+        90,
+        70
+      ],
+      "size": [
+        190,
+        64
+      ]
+    },
+    {
+      "id": "admingw",
+      "type": "cloud",
+      "label": "Nginx · admin",
+      "sublabel": "对外 :8081",
+      "tag": "静态 + /api 反代",
+      "pos": [
+        400,
+        70
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "sources": [
+        {
+          "path": "deploy/nginx.admin.conf",
+          "line": 1,
+          "label": "反代与静态托管"
+        }
+      ]
+    },
+    {
+      "id": "app",
+      "type": "frontend",
+      "label": "记账 App",
+      "sublabel": "uni-app 3.0",
+      "tag": "H5 / 小程序 / iOS",
+      "pos": [
+        90,
+        230
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "sources": [
+        {
+          "path": "frontend/src/pages.json",
+          "label": "页面路由"
+        },
+        {
+          "path": "frontend/src/utils/request.ts",
+          "line": 21,
+          "label": "接口基址 /api"
+        }
+      ]
+    },
+    {
+      "id": "webgw",
+      "type": "cloud",
+      "label": "Nginx · web",
+      "sublabel": "对外 :8082",
+      "tag": "静态 + /api 反代",
+      "pos": [
+        400,
+        230
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "sources": [
+        {
+          "path": "deploy/nginx.conf",
+          "line": 1,
+          "label": "反代与静态托管"
+        }
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "Midway.js 4 后端",
+      "sublabel": "Koa · :7001",
+      "pos": [
+        720,
+        230
+      ],
+      "size": [
+        210,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/configuration.ts",
+          "label": "应用装配"
+        },
+        {
+          "path": "src/config/config.default.ts",
+          "line": 1,
+          "label": "运行时配置"
+        },
+        {
+          "path": "src/middleware/jwt.guard.ts",
+          "label": "App 鉴权守卫"
+        }
+      ]
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "MariaDB 10.11",
+      "sublabel": "account_book",
+      "tag": "TypeORM · 迁移建表",
+      "pos": [
+        1050,
+        230
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/data-source.ts",
+          "label": "数据源"
+        },
+        {
+          "path": "src/migration/1789865000000-AdminAndUserStatus.ts",
+          "label": "13 个迁移之一"
+        }
+      ]
+    },
+    {
+      "id": "modules",
+      "type": "backend",
+      "label": "领域模块",
+      "sublabel": "认证 · 账本 · 分类 · 流水 · 统计",
+      "pos": [
+        720,
+        390
+      ],
+      "size": [
+        210,
+        64
+      ]
+    },
+    {
+      "id": "volume",
+      "type": "database",
+      "label": "数据卷",
+      "sublabel": "群晖共享文件夹",
+      "tag": "备份即拷该目录",
+      "pos": [
+        1050,
+        390
+      ],
+      "size": [
+        190,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "群晖 NAS · docker compose 内网",
+      "wraps": [
+        "admingw",
+        "webgw",
+        "api",
+        "db",
+        "modules",
+        "volume"
+      ],
+      "pad": 30
+    },
+    {
+      "kind": "security-group",
+      "label": "Bearer JWT 守卫",
+      "wraps": [
+        "api"
+      ],
+      "pad": 22
+    }
+  ],
+  "connections": [
+    {
+      "id": "admin-to-admingw",
+      "from": "adminuser",
+      "to": "admingw",
+      "label": "HTTPS"
+    },
+    {
+      "id": "app-to-webgw",
+      "from": "app",
+      "to": "webgw",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "webgw-to-api",
+      "from": "webgw",
+      "to": "api",
+      "label": "/api 反代"
+    },
+    {
+      "id": "admingw-to-api",
+      "from": "admingw",
+      "to": "api",
+      "label": "/api 反代",
+      "fromSide": "right",
+      "toSide": "top",
+      "via": [
+        [
+          825,
+          102
+        ]
+      ]
+    },
+    {
+      "id": "api-to-db",
+      "from": "api",
+      "to": "db",
+      "label": "SQL · TypeORM"
+    },
+    {
+      "id": "api-to-modules",
+      "labelAt": [825, 322],
+      "from": "api",
+      "to": "modules",
+      "label": "分发"
+    },
+    {
+      "id": "db-to-volume",
+      "labelAt": [1145, 322],
+      "from": "db",
+      "to": "volume",
+      "label": "持久化"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "客户端",
+      "items": [
+        "uni-app 3.0 一套代码产出 H5 / 微信小程序 / iOS",
+        "页面覆盖记一笔、流水、日历、图表、报表、账本与分类、导入导出"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "后端领域模块",
+      "items": [
+        "认证与账本、分类与流水（含 xlsx 导入）、统计报表、中台用户管理",
+        "统一 /api/* REST 接口，带 Swagger 文档，DTO 由 joi 校验"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "数据与鉴权",
+      "items": [
+        "MariaDB 10.11，关闭 synchronize，13 个 TypeORM 迁移管理表结构",
+        "App 用 Bearer JWT，中台用独立管理员令牌，两套登录态互不共用"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "部署",
+      "items": [
+        "Mac 上构建镜像 → docker load 到群晖 → docker compose 起 4 个容器",
+        "backend 启动时先跑 migration 再起服务，首次部署一条命令即可"
+      ]
+    }
+  ]
+}
