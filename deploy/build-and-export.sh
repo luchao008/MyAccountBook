@@ -24,24 +24,32 @@ mkdir -p "$OUT"
 #    这里虽已不装依赖，但 host 网络仍可避免其它隐性的代理问题。
 BUILD_FLAGS="--network host"
 
-echo "== 1/6 构建 App 前端静态产物（本机）=="
+echo "== 1/7 构建 App 前端静态产物（本机）=="
 ( cd "$ROOT/frontend" && npm run build:h5 )
 
-echo "== 2/6 构建中台前端静态产物（本机）=="
+echo "== 2/7 构建中台前端静态产物（本机）=="
 ( cd "$ROOT/admin-web" && pnpm build:antd )
 
-echo "== 3/6 安装后端依赖并编译（本机）=="
+# ⚠️ 必须在两个前端产物都构建完**之后**、打镜像**之前**跑：
+#    镜像里的 nginx 开了 `gzip_static`，靠的就是这里生成的 `.gz`；
+#    Dockerfile 是整目录 COPY，所以 .gz 会被一起带进镜像，无需改 Dockerfile。
+#    早于构建跑会压到上一次的旧产物，晚于打镜像跑则根本进不去镜像。
+#    脚本是增量的（.gz 比源文件新就跳过），重复部署几乎零成本。
+echo "== 3/7 预压缩静态产物（生成 .gz 供 nginx 直接吐）=="
+node "$ROOT/scripts/precompress.mjs"
+
+echo "== 4/7 安装后端依赖并编译（本机）=="
 # npm ci 而不是 install：保证 node_modules 与 package-lock.json 严格一致 ——
 # 这一份 node_modules 会被**原样打进镜像**，必须可复现。
 ( cd "$ROOT" && npm ci --no-audit --no-fund && npm run build )
 
-echo "== 4/6 构建后端镜像（只拷 node_modules + dist）=="
+echo "== 5/7 构建后端镜像（只拷 node_modules + dist）=="
 docker build $BUILD_FLAGS -f deploy/Dockerfile.backend -t account-book-backend:latest .
 
-echo "== 5/6 构建前端镜像（只拷静态产物）=="
+echo "== 6/7 构建前端镜像（只拷静态产物）=="
 docker build $BUILD_FLAGS -f deploy/Dockerfile.frontend -t account-book-frontend:latest .
 
-echo "== 6/6 构建中台镜像（只拷静态产物）=="
+echo "== 7/7 构建中台镜像（只拷静态产物）=="
 docker build $BUILD_FLAGS -f deploy/Dockerfile.admin -t account-book-admin:latest .
 
 echo "== 导出为 tar =="

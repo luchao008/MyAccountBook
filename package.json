@@ -33,6 +33,7 @@
     "@midwayjs/typeorm": "4.2.3",
     "@midwayjs/validate": "4.2.3",
     "bcryptjs": "^2.4.3",
+    "koa-compress": "^5.2.2",
     "mysql2": "^3.9.7",
     "typeorm": "^0.3.20"
   },
