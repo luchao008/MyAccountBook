@@ -19,10 +19,10 @@
  *    CPU 和时间，产物还几乎不缩。
  *
  *    `static/cat-icons/` 下的图标就是典型：**两套都不压**，各有各的原因 ——
- *      · `.png`（小程序 / App 用）：160×160 插画，单张约 25 KB，gzip 压不动；
+ *      · `.png`（小程序 / App 用）：160×160 插画，单张 11–27 KB（均值 20.5 KB），gzip 压不动；
  *      · `.webp`（H5 用）：本身已经是压缩格式，gzip 更压不动。
  *    这类"图太大"的问题**不是靠压缩解决的**：H5 端已改成加载 WebP
- *    （94 张 1.884 MB → 0.186 MB，省 90%；见 scripts/gen-cat-icons.mjs 与
+ *    （94 张 1.884 MB → 0.215 MB，省 88.6%；见 scripts/gen-cat-icons.mjs 与
  *    frontend/src/utils/catIcon.ts 的平台分支），而这份脚本只负责把
  *    **能压的文本**压掉。别指望它去动图片。
  *
