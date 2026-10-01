@@ -6,7 +6,10 @@
  *
  * icon 字段**存图标标识**，取值两类：
  *   · `img:<分类名>` —— 专属图片图标（支出 54 + 收入 19 = 73 个）。
- *     PNG 在 frontend/src/static/cat-icons/，由 scripts/gen-cat-icons.mjs 生成；
+ *     图标在 frontend/src/static/cat-icons/，由 scripts/gen-cat-icons.mjs 生成；
+ *     ⚠️ 2026-10-01 起是**双份产物**：`<拼音>.png`（小程序/App）与 `<拼音>.webp`（H5），
+ *     扩展名由前端按平台拼（frontend/src/utils/catIcon.ts）。这里存的 key **不含扩展名**，
+ *     所以本文件不受那次改动影响 —— 详见 docs/工程约定与踩坑.md §8.4。
  *     「腐败聚会」借用「朋友聚会」的图（两者同义）。
  *   · 其余仍是 emoji —— 前端 EMOJI_TO_ICON 会把 emoji 兜底成单色分类图标，永不留白
  *     （见 frontend/src/constants/icons.ts）。

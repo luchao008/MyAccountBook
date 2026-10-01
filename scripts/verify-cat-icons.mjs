@@ -7,8 +7,16 @@
  *   预置分类默认图标替换 + 存量数据迁移（见 src/migration/*-CategoryImageIcons.ts）。
  *   同日补做收入侧 19 张（原先只有支出 75 张），总数 75 → 94。
  *
+ * 背景（2026-10-01）：**H5 端图标改用 WebP**（省 88.6% 体积）——
+ *   `static/cat-icons/` 下每个分类现在是**双份产物**：
+ *     · H5 端       → `<拼音>.webp`（本脚本断言的目标，`catIconSrc()` 按平台切扩展名）
+ *     · 小程序/App  → `<拼音>.png`（包内本地文件，保持原样，不在本脚本范围内）
+ *   ⚠️ 本脚本跑的是 **H5 dev server**，所以期望的是 `.webp`：
+ *      请求 `.png` 会因为类型是 image/png 而**判失败** —— 那正是"H5 端没切过去"的信号。
+ *      （小程序 / App 那两端不该按 webp 断言，它们本来就该是 PNG。）
+ *
  * 覆盖：
- *   ① 静态资源：抽样请求 `/static/cat-icons/*.png` —— 必须 200 **且 Content-Type 是 image/png**
+ *   ① 静态资源：抽样请求 `/static/cat-icons/*.webp` —— 必须 200 **且 Content-Type 是 image/webp**
  *      （⚠️ 这条是回归守卫：文件名一度用中文，dev server 静态中间件不解码 URL，
  *        请求会回退成 index.html —— HTTP 200 但类型是 text/html，图片整片空白）
  *   ② 分类管理页：二级分类渲染出图片图标（uni-image 的 background-image 指向 cat-icons）
@@ -77,7 +85,11 @@ const page = await (await browser.newContext({ viewport: { width: 375, height: 8
 page.setDefaultTimeout(8000);
 page.on('pageerror', (e) => console.log('[pageerror]', e.message.slice(0, 160)));
 
-/** 记录所有 cat-icons 静态请求的 URL 与响应类型（用于守卫"文件名必须 ASCII"） */
+/**
+ * 记录所有 cat-icons 静态请求的 URL 与响应类型（末尾两条守卫的数据源）：
+ *   ① 每个请求都必须 200 + `image/webp`（H5 端目标态）
+ *   ② 文件名必须是 **ASCII**（中文名在 uni-app H5 dev server 会静默 404）
+ */
 const iconResponses = [];
 page.on('response', async (r) => {
   if (r.url().includes('/static/cat-icons/')) {
@@ -99,11 +111,12 @@ if (page.url().indexOf('/pages/login') >= 0) {
 }
 
 /* ============================================================
- * ① 静态资源：200 + image/png（回归守卫）
+ * ① 静态资源：200 + image/webp（回归守卫）
  * ============================================================ */
-console.log('[1] 静态资源可用性（含"必须是 image/png"守卫）');
+console.log('[1] 静态资源可用性（含"必须是 image/webp"守卫）');
 const staticProbe = await page.evaluate(async () => {
-  const files = ['wucan.png', 'hongbao.png', 'lvyoudujia.png'];
+  // ⚠️ 抽的是 **H5 端的产物**（.webp）。小程序/App 的 .png 同目录并存，但不在这里断言。
+  const files = ['wucan.webp', 'hongbao.webp', 'lvyoudujia.webp'];
   const out = [];
   for (const f of files) {
     const res = await fetch('/static/cat-icons/' + f);
@@ -112,8 +125,8 @@ const staticProbe = await page.evaluate(async () => {
   return out;
 });
 check(
-  '抽样 3 个图标均 200 + image/png',
-  staticProbe.every((r) => r.status === 200 && r.type.includes('image/png')),
+  '抽样 3 个图标均 200 + image/webp',
+  staticProbe.every((r) => r.status === 200 && r.type.includes('image/webp')),
   staticProbe.map((r) => `${r.f}:${r.status}/${r.type}/${r.size}B`).join(' ')
 );
 
@@ -130,11 +143,27 @@ const catPage = await page.evaluate(() => {
     return div && /cat-icons/.test(getComputedStyle(div).backgroundImage || '');
   });
   const loaded = imgs.filter((el) => el.querySelector('img[src*="/static/cat-icons/"]'));
-  return { total: imgs.length, withBg: withBg.length, loaded: loaded.length };
+  /** uni-image 里的 <img>：属性可能是相对路径（带 `?v=` 版本号），取属性优先、属性为空才回落到 absolute */
+  const srcOf = (el) => {
+    const img = el.querySelector('img');
+    return img ? img.getAttribute('src') || img.src || '' : '';
+  };
+  return {
+    total: imgs.length,
+    withBg: withBg.length,
+    loaded: loaded.length,
+    webp: loaded.filter((el) => /\.webp(\?|$)/.test(srcOf(el))).length,
+    sample: loaded.slice(0, 2).map(srcOf),
+  };
 });
 check('页面出现图片图标容器', catPage.total > 0, `uni-image ${catPage.total} 个`);
 check('背景图指向 /static/cat-icons/', catPage.withBg > 0, `${catPage.withBg} 个`);
 check('图片真实加载完成（uni-image 内部已 append <img>）', catPage.loaded > 0, `${catPage.loaded} 个`);
+check(
+  'H5 端引用的确实是 .webp（不是 .png）',
+  catPage.loaded > 0 && catPage.webp === catPage.loaded,
+  `${catPage.webp}/${catPage.loaded} 样例: ${catPage.sample.join(' ')}`
+);
 await page.screenshot({ path: '/tmp/verify-cat-icons-category.png' });
 
 /* ============================================================
@@ -236,15 +265,60 @@ await page.evaluate(() => history.back());
 await page.waitForTimeout(1200);
 
 /* ============================================================
- * 守卫：全程所有 cat-icons 请求都必须是 image/png
+ * 守卫：全程所有 cat-icons 请求都必须是 200 + image/webp，
+ *       且文件名必须 ASCII（uni-app H5 dev server 不解码 URL）
  * ============================================================ */
-console.log('[6] 静态请求守卫（文件名必须 ASCII 且可服务）');
-const bad = iconResponses.filter((r) => r.status !== 200 || !r.type.includes('image/png'));
+console.log('[6] 静态请求守卫（200 + image/webp；文件名必须 ASCII）');
+
+/** H5 端期望类型。小程序 / App 仍是 image/png —— 但本脚本只跑 H5，这里就是 webp。 */
+const EXPECTED_TYPE = 'image/webp';
+
+/** 取请求里的文件名（`/static/cat-icons/<拼音>.webp?v=xxxx` → `<拼音>.webp`） */
+function iconFileName(url) {
+  const m = String(url).match(/\/static\/cat-icons\/([^/?#]+)/);
+  return m ? m[1] : '';
+}
+
+/**
+ * 文件名是否是纯 ASCII。
+ *
+ * ⚠️ 这条守卫的由来（**不能删**）：文件名一度用中文，而 uni-app H5 dev server 的
+ *    静态中间件**不解码 URL** —— 中文名会 404 / 回退成 index.html
+ *    （HTTP 200，但 Content-Type 是 text/html，图片整片空白，很难查）。
+ *    所以文件名用拼音；这里显式断言"取到的文件名解码后是 ASCII"。
+ *    浏览器会把中文名百分号编码（`%E5%8D%88%E9%A4%90.webp`），
+ *    `decodeURIComponent` 回来就能看出它不是 ASCII —— 光看原始 URL 会漏判。
+ */
+function isAsciiFileName(url) {
+  const raw = iconFileName(url);
+  if (!raw) return false;
+  let decoded;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    return false; // 编码畸形：同样不是合法的 ASCII 文件名
+  }
+  return /^[\x21-\x7e]+$/.test(decoded);
+}
+
+const bad = iconResponses.filter((r) => r.status !== 200 || !r.type.includes(EXPECTED_TYPE));
 check(
-  `全部 ${iconResponses.length} 个 cat-icons 请求均为 200 + image/png`,
+  `全部 ${iconResponses.length} 个 cat-icons 请求均为 200 + ${EXPECTED_TYPE}`,
   iconResponses.length > 0 && bad.length === 0,
   bad.length ? '异常样例: ' + JSON.stringify(bad.slice(0, 2)) : ''
 );
+
+const badName = iconResponses.filter((r) => !isAsciiFileName(r.url));
+check(
+  'cat-icons 文件名全为 ASCII（中文名在 H5 dev server 会 404 / 变成 text/html）',
+  iconResponses.length > 0 && badName.length === 0,
+  badName.length
+    ? '异常样例: ' + badName.slice(0, 2).map((r) => `${r.status}/${r.type} ${iconFileName(r.url)}`).join(' | ')
+    : ''
+);
+
+// 排错用：万一上面判红，先看这里 —— 类型不统一往往一眼就能看出是"PNG 没切到 webp"
+console.log('     实测类型分布:', [...new Set(iconResponses.map((r) => r.type))].sort().join(' | ') || '(无请求)');
 
 console.log(
   '\n结果：PASS=' + pass + ' FAIL=' + fail + '（截图：/tmp/verify-cat-icons-category.png、/tmp/verify-cat-icons-picker.png）'

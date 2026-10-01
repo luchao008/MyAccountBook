@@ -7,14 +7,16 @@ import uni from '@dcloudio/vite-plugin-uni';
 // 后端地址：开发时用本机，可用环境变量覆盖
 const BACKEND = process.env.VITE_BACKEND || 'http://127.0.0.1:7001';
 
-/** 分类图标目录（94 张 PNG，见 src/constants/cat-icons.ts 头部） */
+/** 分类图标目录（94 组，每组一份 `.png` + 一份 `.webp`，共 188 个文件；见 src/constants/cat-icons.ts 头部） */
 const CAT_ICON_DIR = resolve(__dirname, 'src/static/cat-icons');
 
 /**
  * 算分类图标的**构建版本号**（8 位 hex），注入给全局常量 `__CAT_ICON_VERSION__`。
  *
- * 为什么要算：`src/static/cat-icons/` 下 94 张 PNG 的文件名是**拼音、不带内容 hash**
- *   （`wucan.png` 这种）。部署侧即将给这个目录加**一年长缓存**，文件名又不会随内容变
+ * 为什么要算：`src/static/cat-icons/` 下 94 组图标的**基名**是拼音、不带内容 hash
+ *   （`wucan` 这种，每组同时存在 `wucan.png` 与 `wucan.webp`；H5 用 webp、
+ *    小程序/App 用 png，见 `src/utils/catIcon.ts` 的 `catIconSrc()`）。部署侧即将给
+ *   这个目录加**一年长缓存**，文件名又不会随内容变
  *   —— 结果就是"以后换了图标，老用户一年内永远看老图"。所以 URL 必须自带版本号：
  *   图标一变版本号就变，URL 就是新地址，长缓存自然失效（不需要刷 CDN）。
  *
@@ -29,7 +31,10 @@ const CAT_ICON_DIR = resolve(__dirname, 'src/static/cat-icons');
  *     —— 它受系统 locale 影响，不同机器/不同 CI 环境下顺序可能不同，hash 就不确定。
  *   · 只统计**普通文件**、且**跳过隐藏文件**：macOS 的 `.DS_Store` 会随 Finder 浏览而变化，
  *     让它参与 hash 会导致"同一份代码在我机器和他机器上算出的版本号不同"，白刷一遍缓存。
- *     增删任何一张真正的图标（.png）仍然会变 —— 这正是我们要的。
+ *     增删任何一张真正的图标（`.png` / `.webp`）仍然会变 —— 这正是我们要的。
+ *     注意 hash 覆盖的是目录下**全部**文件（94 PNG + 94 WebP = 188 个），
+ *     所以两套资源任意一侧重新导出，版本号都会变 —— 这是对的：
+ *     URL 一变，H5 与小程序/App 各自的缓存都会一起失效。
  *   · 目录不存在/读不了就**直接抛错**（不吞）：静默给个固定值会让人以为"版本号算过了"，
  *     实际是路径写错，配上一年的长缓存就是永远更新的脏图，越早崩越好。
  *

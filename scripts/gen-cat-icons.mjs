@@ -4,8 +4,23 @@
  *   node scripts/gen-cat-icons.mjs
  *
  * 产物：
- *   frontend/src/static/cat-icons/<拼音>.png   94 张 160×160 透明 PNG（按需 HTTP 加载，不进 bundle）
- *   frontend/src/constants/cat-icons.ts        名字清单 + 名字→文件名映射
+ *   frontend/src/static/cat-icons/<拼音>.png   94 张 160×160 透明 PNG（小程序 / App 用）
+ *   frontend/src/static/cat-icons/<拼音>.webp  94 张**同图** WebP（H5 用，省约 88% 体积）
+ *   frontend/src/constants/cat-icons.ts        名字清单 + 名字→基名映射（**不带扩展名**）
+ *
+ * ⚠️ 为什么要生成**两份**（2026-10-01 定）：
+ *    · WebP 比 PNG 小得多（本批实测 1.884 MB → 0.215 MB，省 88.6%）—— H5 端请求这些图标的
+ *      总量直接降一个数量级，没有理由不用；
+ *    · 但**无法离线确认微信小程序对"包内本地 webp"的支持**：`<image>` 加载包内文件走的是
+ *      各端原生实现、不是浏览器内核，一旦不支持就是**安静地显示空白**（不是报错，极难定位）。
+ *    · 于是只在**能确认的 H5** 上用 WebP，小程序 / App 继续用 PNG。两套并存、
+ *      像素完全一致，由 `frontend/src/utils/catIcon.ts` 按平台拼扩展名 ——
+ *      正因为扩展名由消费方决定，映射表里只存**不带扩展名的基名**（`wucan`，不是 `wucan.png`）。
+ *    · 代价：构建产物里会带上"本端不用"的那一套 —— uni-app 把 `static/` 原样拷进 dist、
+ *      不按平台裁剪（**H5 产物已实测**：94 张 PNG 一张不少地进了 `dist/build/h5/static/`；
+ *      小程序端本机没构建过，但同一套拷贝逻辑，多半同样会带上一份用不到的 WebP）。
+ *      多出的 WebP 实测仅 0.215 MB；若日后在意，应在构建期按平台剔除
+ *      （见 `vite.config.ts` 的 `catIconVersion()`，那是唯一同时看得见两套产物的地方）。
  *
  * 源文件：`assets/cat-icons-original/*.svg`（94 个，文件名 = 分类名）
  *
@@ -34,9 +49,12 @@
  *   3. 从**四边泛洪填充**去掉近白背景 → 透明
  *      ⚠️ 不能"把所有白像素变透明"：图标内部的白色高光会被打洞。
  *         泛洪只清理"与画布边框连通"的白，内部白保留。
+ *   4. 把第 3 步的结果编码成 PNG（小程序 / App）**和** WebP（H5）—— 同一张图、两种容器
  *
- * 依赖：jimp、pinyin-pro（都已声明在 frontend/package.json 的 devDependencies）。
- *      缺失时：`cd frontend && npm i -D jimp@0.10.3 pinyin-pro`
+ * 依赖：jimp、pinyin-pro（PNG + 拼音）、sharp（**只有它**能写 WebP）
+ *      三者都声明在 frontend/package.json 的 devDependencies
+ *      —— 脚本在仓库根、依赖在 frontend/ 下，靠下面的 createRequire(frontend/package.json) 解析。
+ *      缺失时：`cd frontend && npm i -D jimp@0.10.3 pinyin-pro sharp`
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -57,14 +75,45 @@ const SIZE = 160;
  */
 const WHITE = 242;
 
+/**
+ * WebP 编码参数（H5 端产物）。
+ *
+ *   · `quality: 90` —— 这批图是扁平色块 + 细线条的小插画（160²），q90 与 PNG 肉眼无差；
+ *     再往上（q100）体积会明显回涨，而这类图的收益本来就来自"颜色少、压缩友好"。
+ *   · `effort: 6` —— libvips 的最高档（0~6）。**离线生成，不怕慢**：
+ *     只影响编码耗时、不影响解码，所以拉满换更小体积。
+ *     实测全量 94 张 ≈ 80 秒（整脚本 1 分 21 秒，几乎全花在这里）——
+ *     这是**构建期一次性成本**，不进产物、不影响用户，值得用时间换体积。
+ *     （真要提速：降到 effort 4 约省一半时间，但产物会大一截。别为此改成并行/跳过。）
+ *
+ * ⚠️ 透明通道：sharp 的 `webp()` 默认 `alphaQuality: 100`（alpha 走无损通道），
+ *    正好保住图标边缘；有 alpha 的 lossy WebP 会编码成 **VP8X** 容器（VP8 + ALPH），
+ *    而不是 VP8L —— 这是正常现象，校验脚本按 VP8X 判定"支持透明"。
+ */
+const WEBP = { quality: 90, effort: 6 };
+
 const require = createRequire(path.join(ROOT, 'frontend/package.json'));
 let Jimp;
 let pinyin;
+let sharp;
 try {
   Jimp = require('jimp');
   ({ pinyin } = require('pinyin-pro'));
 } catch {
   throw new Error('缺少 jimp / pinyin-pro：请先 `cd frontend && npm i -D jimp@0.10.3 pinyin-pro`');
+}
+
+/*
+ * ⚠️ WebP 为什么要多一个依赖：**jimp 写不出 WebP**。
+ *    jimp 0.10.3（本项目锁的版本）里 `Jimp.MIME_WEBP` 是 `undefined`
+ *    —— 它的编码器只注册了 PNG/JPEG/BMP/TIFF/GIF，"写 webp"根本没有实现（实测）。
+ *    sharp 走 libvips，本地有预编译包（darwin-x64 / Node 24 实测直接可用），
+ *    所以 PNG 继续由 jimp 出（**不搅动已确定性的既有产物**），WebP 交给 sharp。
+ */
+try {
+  sharp = require('sharp');
+} catch {
+  throw new Error('缺少 sharp（唯一的 WebP 编码器）：请先 `cd frontend && npm i -D sharp`');
 }
 
 if (!fs.existsSync(SRC_DIR)) {
@@ -79,9 +128,12 @@ if (!fs.existsSync(OUT_DIR)) {
  *
  * ⚠️ 必须有这一步：文件名从「中文」改「拼音」后，老文件不会被覆盖，
  *    目录里新旧混放会让人不知道哪套在用、也会白白进构建产物。
+ * ⚠️ `.webp` 也要一起清：两套是**按基名成对**消费的（见校验脚本
+ *    `scripts/verify-cat-icon-assets.mjs`），只清 PNG 会留下"改了名/删了图标后"
+ *    无人引用的孤儿 WebP —— 它会静静躺在 dist 里占体积，且没有任何报错。
  */
 for (const f of fs.readdirSync(OUT_DIR)) {
-  if (/\.(png|svg)$/i.test(f)) fs.rmSync(path.join(OUT_DIR, f));
+  if (/\.(png|svg|webp)$/i.test(f)) fs.rmSync(path.join(OUT_DIR, f));
 }
 
 /** 分类名 → 拼音文件名（ASCII，无音调）；如 午餐 → `wucan`、旅游度假 → `lvyoudujia` */
@@ -153,10 +205,11 @@ function clearWhiteBackground(image) {
 const files = fs.readdirSync(SRC_DIR).filter((f) => f.endsWith('.svg'));
 if (!files.length) throw new Error(`${SRC_DIR} 里没有 .svg 文件`);
 
-/** 名字 → 文件名（写进 constants，供 `catIconSrc` 解析） */
+/** 名字 → **基名**（不含扩展名；扩展名由 `utils/catIcon.ts` 按平台拼） */
 const mapping = {};
 const usedSlug = new Map();
-let totalBytes = 0;
+let pngBytes = 0;
+let webpBytes = 0;
 for (const file of files) {
   const name = path.basename(file, '.svg');
   const slug = slugOf(name);
@@ -187,8 +240,28 @@ for (const file of files) {
     throw new Error(`${file}: 去白底没有清理到任何像素，阈值 ${WHITE} 可能失效`);
   }
   await image.writeAsync(path.join(OUT_DIR, `${slug}.png`));
-  totalBytes += fs.statSync(path.join(OUT_DIR, `${slug}.png`)).size;
-  mapping[name] = `${slug}.png`;
+  pngBytes += fs.statSync(path.join(OUT_DIR, `${slug}.png`)).size;
+
+  /*
+   * ── WebP：把**刚写到磁盘的那张 PNG** 再编码一份 ─────────────────────────
+   *
+   * ⚠️ 为什么输入是"磁盘上那张 PNG"、而不是手上 jimp 的位图：
+   *    这样"两套产物像素完全一致"是**结构上成立**的 —— 同一个字节流解码两次、
+   *    只换容器，不依赖"jimp 的 PNG 是有损还是无损""sharp 怎么解释裸 RGBA 的
+   *    预乘 alpha"这类外部假设。PNG 是无损直存，读回来就是第 3 步的结果。
+   *
+   * ⚠️ 为什么**先写 PNG 再写 WebP**：PNG 是基线产物（小程序/App 依赖它），
+   *    万一 sharp 出问题，至少已经落盘的 PNG 是完整的 —— 顺序即优先级。
+   *    也正因如此，这段代码**不碰 PNG 一个字节**（只读不写），既有产物不会被搅动。
+   */
+  const webp = await sharp(fs.readFileSync(path.join(OUT_DIR, `${slug}.png`)))
+    .webp(WEBP)
+    .toBuffer();
+  fs.writeFileSync(path.join(OUT_DIR, `${slug}.webp`), webp);
+  webpBytes += webp.length;
+
+  /* 值只存基名：扩展名是**消费方按平台**决定的（H5 → .webp，其它端 → .png） */
+  mapping[name] = slug;
 }
 
 const names = Object.keys(mapping).sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'));
@@ -203,13 +276,19 @@ function buildMetaTs() {
   lines.push(' * 与其它图标集的分工（三套并存，别混用）：');
   lines.push(' *   · `icons.ts`       —— 单色界面/分类图标（`icon-*` / `cat-*`），内联 path、跟随 currentColor');
   lines.push(' *   · `color-icons.ts` —— 彩色图标（`colorful:` / `life:`），内联 SVG body、动态分包');
-  lines.push(' *   · 本文件           —— 分类图片图标（`img:<分类名>`），静态 PNG、按需 HTTP 加载');
+  lines.push(' *   · 本文件           —— 分类图片图标（`img:<分类名>`），静态 PNG + WebP、按需 HTTP 加载');
   lines.push(' *');
   lines.push(' * ⚠️ 文件名是**拼音**不是中文名 —— uni-app H5 dev server 的静态中间件不解码 URL，');
   lines.push(' *    中文名文件在开发环境 404（详见 gen 脚本头部）。key 仍是中文的分类名。');
   lines.push(' *');
-  lines.push(' * ⚠️ 本集**不进 JS bundle**：PNG 放在 `static/cat-icons/`，');
-  lines.push(' *    由 `<image src="/static/cat-icons/<拼音>.png">` 按需加载。');
+  lines.push(' * ⚠️ 每个图标有**两份等价产物**：`<基名>.png`（小程序 / App）与 `<基名>.webp`（H5，省 ~88% 体积）。');
+  lines.push(' *    正文**不带扩展名**，由 `utils/catIcon.ts` 按平台拼（`#ifdef H5` → .webp，否则 .png）——');
+  lines.push(' *    因为"哪端能用 WebP"是平台知识，属于取数逻辑，不该固化进生成物。');
+  lines.push(' *    为什么不能统一用 WebP：无法离线确认微信小程序对"包内本地 webp"的支持，');
+  lines.push(' *    一旦不支持就是 `<image>` 安静地显示空白。详见 gen 脚本头部"为什么要生成两份"。');
+  lines.push(' *');
+  lines.push(' * ⚠️ 本集**不进 JS bundle**：两套图都放在 `static/cat-icons/`，');
+  lines.push(' *    由 `<image src="/static/cat-icons/<拼音>.<扩展名>">` 按需加载。');
   lines.push(' *    原始 2048px 源图（39MB）备份在 `assets/cat-icons-original/`，不参与构建。');
   lines.push(' */');
   lines.push('');
@@ -220,7 +299,13 @@ function buildMetaTs() {
   }
   lines.push('];');
   lines.push('');
-  lines.push('/** 名字 → 文件名（`static/cat-icons/` 下的 PNG，文件名为拼音） */');
+  lines.push('/**');
+  lines.push(' * 名字 → **基名**：`static/cat-icons/` 下的文件名**去掉扩展名**（`"wucan"`，不是 `"wucan.png"`）。');
+  lines.push(' *');
+  lines.push(' * ⚠️ 为什么不带扩展名：同名的两份产物（`.png` 给小程序/App、`.webp` 给 H5）都合法，');
+  lines.push(' *    扩展名取决于**消费端的平台**，不是图标本身的属性 —— 让消费方拼，这里只存公共前缀。');
+  lines.push(' *    具体拼法见 `utils/catIcon.ts` 的 `catIconSrc()`。');
+  lines.push(' */');
   lines.push('export const CAT_ICON_FILES: Record<string, string> = {');
   for (const n of names) {
     lines.push(`  ${JSON.stringify(n)}: ${JSON.stringify(mapping[n])},`);
@@ -235,7 +320,17 @@ function buildMetaTs() {
 
 fs.writeFileSync(META_OUT, buildMetaTs(), 'utf8');
 
-console.log(`已生成 ${path.relative(ROOT, OUT_DIR)}/ 共 ${names.length} 张 PNG`);
-console.log(`  边长 ${SIZE}×${SIZE}，合计 ${(totalBytes / 1024 / 1024).toFixed(1)} MB`);
-console.log(`  （源文件 39 MB；按需加载，单张约 ${(totalBytes / names.length / 1024).toFixed(0)} KB）`);
-console.log(`已生成 ${path.relative(ROOT, META_OUT)}（元数据：名字清单 + 名字→文件名映射）`);
+const kb = (n) => (n / 1024).toFixed(0);
+const mb = (n) => (n / 1024 / 1024).toFixed(3);
+
+console.log(`已生成 ${path.relative(ROOT, OUT_DIR)}/ 共 ${names.length} 组（每组 PNG + WebP 各一张）`);
+console.log(`  边长 ${SIZE}×${SIZE}，按需 HTTP 加载，源文件 39 MB`);
+/*
+ * 两套产物的体积对比直接打出来：这是"为什么要维护两份"的唯一论据，
+ * 也是回归信号 —— 哪天 WebP 不再明显更小（参数写错、输出成了别的东西），
+ * 看这一行就能立刻发现，而不必去跑校验脚本。
+ */
+console.log(`  · PNG  （小程序/App）合计 ${mb(pngBytes)} MB，单张约 ${kb(pngBytes / names.length)} KB`);
+console.log(`  · WebP （H5）        合计 ${mb(webpBytes)} MB，单张约 ${kb(webpBytes / names.length)} KB`);
+console.log(`  → WebP 省 ${(100 - (webpBytes / pngBytes) * 100).toFixed(1)}%（quality ${WEBP.quality} / effort ${WEBP.effort}）`);
+console.log(`已生成 ${path.relative(ROOT, META_OUT)}（元数据：名字清单 + 名字→基名映射，值不含扩展名）`);
