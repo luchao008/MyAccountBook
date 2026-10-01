@@ -756,11 +756,19 @@ function autoScrollTick() {
  *    `window` 监听同理：不卸掉的话，下一个用同样处理的页面会收到上一个页面的回调。
  */
 function teardownDrag() {
-  window.removeEventListener('touchmove', onDragMove);
-  window.removeEventListener('touchend', onDragEnd);
-  window.removeEventListener('touchcancel', onDragEnd);
-  window.removeEventListener('mousemove', onDragMove);
-  window.removeEventListener('mouseup', onDragEnd);
+  /*
+   * ⚠️ `typeof window` 守卫是必要的：本函数现在也被 `onUnmounted` **无条件**调用，
+   *    而小程序 / App 端的运行时没有 `window`（拖拽本来也起不来，因为挂监听那一步
+   *    同样在 `window` 上）。不守卫的话，每次离开分类管理页都会抛一次
+   *    ReferenceError —— 而且是在清除逻辑之前抛，下面的 `clearInterval` 反而跑不到。
+   */
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('touchmove', onDragMove);
+    window.removeEventListener('touchend', onDragEnd);
+    window.removeEventListener('touchcancel', onDragEnd);
+    window.removeEventListener('mousemove', onDragMove);
+    window.removeEventListener('mouseup', onDragEnd);
+  }
   if (autoScrollTimer) {
     clearInterval(autoScrollTimer);
     autoScrollTimer = 0;

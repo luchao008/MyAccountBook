@@ -139,7 +139,16 @@ export const useCategoryStore = defineStore('category', {
      */
     async doLoad(accountId: string) {
       try {
-        this.list = await getCategories(accountId);
+        const list = await getCategories(accountId);
+        /*
+         * ⚠️ 迟到响应保护（2026-10-01）：请求期间账本可能已经切走。
+         *    `inflight` 只挡住"新账本复用旧请求"，挡不住"旧请求**晚于**新账本落地" ——
+         *    那种情况下 store 里会变成账本 A 的分类、而 currentId 已是 B，
+         *    用户切进 B 却看到 A 的分类（各消费点 `await load()` 后会自愈，
+         *    但中间那一帧是错的，而且分类错了可能被当成 B 的分类继续用）。
+         */
+        if (this.currentAccountId() !== accountId) return;
+        this.list = list;
         this.loaded = true;
         this.loadedAccountId = accountId;
         // 落盘缓存：离线记账时「记一笔」页需要能读到分类（否则选择器是空的）
@@ -148,6 +157,8 @@ export const useCategoryStore = defineStore('category', {
         // 离线兜底：读上一次的缓存。没有缓存时保持空（调用方展示空选择器）
         const cached = uni.getStorageSync(CACHE_PREFIX + accountId);
         if (Array.isArray(cached) && cached.length) {
+          // 同样要防迟到：这里写的是**旧账本**的缓存内容
+          if (this.currentAccountId() !== accountId) throw err;
           this.list = cached;
           this.loaded = true;
           this.loadedAccountId = accountId;

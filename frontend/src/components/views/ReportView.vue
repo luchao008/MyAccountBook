@@ -276,6 +276,24 @@ const accountStore = useAccountStore();
  *   设 0 让骨架立刻顶上；二次进入（chunk 已缓存）时组件同步就绪，骨架实际只存在一帧。
  *
  * 用 loadingComponent 而非 `<Suspense>`：Suspense 在 uni-app 小程序端不支持（见模板注释）。
+ *
+ * ⛔ **已知代价：小程序端的趋势图不显示**（2026-10-01 决策：H5 优先，暂不管小程序端）。
+ *    `import()` 在这套工具链下**没法按端分叉**，三种写法都用真实构建验过：
+ *      ① 直接 `defineAsyncComponent`（本文件当前做法）：H5 ✅；小程序 ❌ ——
+ *         mp 构建把动态 import 编成**裸字符串**（`dist/build/mp-weixin/utils/colorIcon.js` 里
+ *         就是 `"../constants/color-icons.js".then(...)`，对字符串取 `.then` 必 TypeError）。
+ *      ② 在 `.vue` 里用 `#ifdef H5` / `#ifndef H5` 给**脚本**分叉：H5 ❌ ——
+ *         uni 对 `<template>` 做条件编译，但**对 `<script setup>` 块不做**，
+ *         `#ifndef H5` 的静态 import 原样留在 H5 产物里，图表库又被拉回页面 chunk（15 → 268 KB）。
+ *      ③ 把分叉挪进 `.ts`（两端都预处理）、模板只写 `<TrendChartAsync>`：小程序 ❌ ——
+ *         mp 编译器需要**静态登记**组件，实测 `components/views/ReportView.json` 的
+ *         `usingComponents` 里 `trend-chart` **直接消失**（代码被内联但标签无法解析）
+ *         → 趋势图静默不显示，而构建照样成功。
+ *    ⚠️ 我独立复现过 ③ 的坏法（git worktree 拉 HEAD 构建 mp-weixin，比对两个 JSON）。
+ *    结论：**这个组件在这套工具链下无法按端异步**。真要减这一页的体积，方向是
+ *    **换掉 qiun-data-charts**（同项目「图表」页用自研 SVG `RingChart` 只有 13 KB / gzip 4 KB），
+ *    而不是在加载策略上绕。真要在小程序端恢复趋势图，把本组件改回静态 import 即可
+ *    （代价是 H5 报表页首帧从 15 KB 回到 266 KB）。
  */
 const TrendChartAsync = defineAsyncComponent({
   loader: () => import('@/components/TrendChart.vue'),

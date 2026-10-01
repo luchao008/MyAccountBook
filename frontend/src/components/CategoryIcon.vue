@@ -41,7 +41,7 @@
  *    本组件顺带承担"触发加载"的职责：页面里出现**彩色图标**（`<集合>:<名字>`）实例时，
  *    分包才会被拉起 —— 只有彩色形态真正需要那份正文（见 onMounted 的注释）。
  */
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, watch } from 'vue';
 import ColorIcon from '@/components/ColorIcon.vue';
 import SvgIcon from '@/components/SvgIcon.vue';
 import { colorIconsReady, getColorIcon, isColorIconKey, loadColorIcons } from '@/utils/colorIcon';
@@ -92,6 +92,23 @@ onMounted(() => {
    */
   if (isColorIconKey(props.name)) void loadColorIcons();
 });
+
+/*
+ * 补一条 watch：**挂载之后** name 才变成彩色 key 的情况。
+ *
+ * ⚠️ 为什么 onMounted 一次不够：守卫收紧成 `isColorIconKey` 之后，只覆盖"挂载那一刻
+ *    已经是彩色 key"。而"新建分类"页的图标是**先给一个默认单色图标、用户后来才换成
+ *    彩色图标**（category-new 里 icon 从 FALLBACK_ICON 变），那条路径上组件早已挂载，
+ *    不会再跑 onMounted —— `useColor` 会按形态判定为"该渲染彩色"，而正文永远不来，
+ *    结果是渲染成**空 SVG**：不报错、只是看不见（本项目反复踩过的静默失败）。
+ *    `loadColorIcons()` 本身幂等，重复调用只共用同一个 Promise，零成本。
+ */
+watch(
+  () => props.name,
+  (n) => {
+    if (isColorIconKey(n)) void loadColorIcons();
+  }
+);
 
 const useColor = computed(() => {
   // ① 形态判定（同步）。数据未就绪时先按彩色渲染 —— 尺寸是对的，内容待分包到达后填入
