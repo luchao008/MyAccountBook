@@ -4,6 +4,10 @@
     挂载一次的实测成本（4x 降速）：月历 3 格 + swiper ≈ 220ms，而再次打开 ≈ 2ms ——
     日期选择器是记账时反复要用的东西，第二次之后必须是无感的。
     （隐藏期间不留任何副作用：状态在 watch(visible) 里统一归位。）
+
+    ⚠️ 正因为 DOM 常驻，**重渲染**也很频繁（切面板、展开年月滚轮、滚时分滚轮都会重渲染），
+    所以月历格子不能再靠模板里现调函数去算：格子状态走 `grids` computed 预算，「今天」
+    每次打开只取一次（`todayDate`）。改动前后的静态计数见 `buildCells` 的注释。
   -->
   <view v-if="everOpened" v-show="visible" class="mask" @click="close">
     <view class="sheet" @click.stop>
@@ -55,27 +59,28 @@
             <view class="week-row">
               <text v-for="w in weekLabels" :key="w" class="week-label">{{ w }}</text>
             </view>
+            <!--
+              ⚠️ 格子内容全部来自 grids 里预算好的 m.cells，**不要再在下面写函数调用**：
+              模板表达式没有缓存，每格每次渲染都要重判「今 / 选中」，而本组件 v-show
+              常驻不销毁 —— 连切面板、滚时分滚轮这种与月历无关的重渲染也会重算三张月历。
+              （这段注释特意放在 v-for **外面**：写进 swiper-item 里会变成每格一个注释节点。）
+            -->
             <swiper
               class="month-swiper"
               :current="swiperIndex"
               :duration="swipeDuration"
               @animationfinish="onSwipeSettle"
             >
-              <swiper-item v-for="(m, i) in swiperMonths" :key="i">
+              <swiper-item v-for="(m, i) in grids" :key="i">
                 <view class="day-grid">
-                  <view v-for="(d, j) in monthCells(m.year, m.month)" :key="j" class="day-cell">
+                  <view v-for="(cell, j) in m.cells" :key="j" class="day-cell">
                     <view
-                      v-if="d"
+                      v-if="cell"
                       class="day"
-                      :class="{
-                        today: isTodayOf(m.year, m.month, d) && !isSelectedOf(m.year, m.month, d),
-                        selected: isSelectedOf(m.year, m.month, d),
-                      }"
-                      @click="selectOf(m.year, m.month, d)"
+                      :class="{ today: cell.isToday, selected: cell.isSelected }"
+                      @click="selectOf(m.year, m.month, cell.day)"
                     >
-                      <text class="day-text">{{
-                        isTodayOf(m.year, m.month, d) && !isSelectedOf(m.year, m.month, d) ? '今' : d
-                      }}</text>
+                      <text class="day-text">{{ cell.text }}</text>
                     </view>
                   </view>
                 </view>
@@ -164,6 +169,17 @@ const viewYear = ref(2026);
 const viewMonth = ref(0);
 const selectedDate = ref('');
 
+/**
+ * 「今天」的 YYYY-MM-DD，**每次打开弹层时取一次**（见 watch(visible)），不再每格现算。
+ *
+ * ⚠️ 取舍：跨午夜的那一瞬间。用户如果开着弹层跨过 0 点，「今」会停在打开那一天，
+ *    要到关掉重开（或确认后再开）才更新。这没有把行为改差：改前虽然每格都调
+ *    `todayStr()`（= 每格一次 `new Date()`），但 0 点到来本身**不触发重渲染**，
+ *    所以旧值同样会一直挂到下一次渲染为止 —— 只是"碰巧可能更新"，现在是明确约定。
+ *    真要修得挂定时器，为一个 500ms 内就该关掉的弹层不值。
+ */
+const todayDate = ref(todayStr());
+
 /** swiper 下标：0/1/2 = 前 / 当前 / 后月。平时恒为 1（中线），只在滑动动画期间短暂偏离 */
 const swiperIndex = ref(1);
 
@@ -236,23 +252,80 @@ function dateStr(y: number, m: number, d: number): string {
   return y + '-' + pad(m + 1) + '-' + pad(d);
 }
 
-/** 某年月的日历格子（前置空白补齐到周日起始） */
-function monthCells(y: number, m: number): (number | null)[] {
+/**
+ * 单个日期格：模板直接消费的**纯数据**，不含任何需要再判定的东西。
+ * `isToday` 的含义是「今天**且未选中**」—— 选中优先，与原模板
+ * `today: isTodayOf(...) && !isSelectedOf(...)` 完全等价（同一天既今天又选中时只走 selected）。
+ */
+interface DayCell {
+  day: number;
+  isToday: boolean;
+  isSelected: boolean;
+  /** 格子文字：今天（未选中）显示「今」，其余显示日期数字 */
+  text: string;
+}
+
+/**
+ * 某年月的日历格子（周日起始，前置空白位补 `null` 对齐星期列）。
+ *
+ * ⚠️ 为什么把 isToday / isSelected / 文字全在这里算完（改前是在模板里现调的）：
+ *    模板里的函数调用**没有缓存**，每个格子每次渲染都要判 5 次（today class 2 次、
+ *    selected class 1 次、文字 2 次），每次判定都现拼一个 `YYYY-MM-DD`，
+ *    而 `isTodayOf` 内部还要再调一次 `todayStr()` —— 那里有一次 `new Date()`。
+ *    按 2026-09 为基准月、3 格共 92 个日期格静态计数（改前 → 改后一次 computed）：
+ *      · `new Date()`      190 → 6
+ *      · `padStart` 拼接   1288 → 184
+ *      · 判定调用          460 → 0（模板只读属性）
+ *    更关键的是频率：本组件 v-show 常驻，改前**每次渲染**都付上面这份成本，
+ *    改后只在 selectedDate / 视图年月 / offsets 变化时付一次。
+ */
+function buildCells(y: number, m: number): (DayCell | null)[] {
   const first = new Date(y, m, 1);
   const startWeek = first.getDay();
   const days = new Date(y, m + 1, 0).getDate();
-  const arr: (number | null)[] = Array.from({ length: startWeek }, () => null);
-  for (let d = 1; d <= days; d++) arr.push(d);
-  return arr;
+  const out: (DayCell | null)[] = Array.from({ length: startWeek }, () => null);
+  for (let d = 1; d <= days; d++) {
+    // 一个日期串同时服务「今 / 选中」两个判定（改前是两个判定各拼一次串）
+    const date = dateStr(y, m, d);
+    const isSelected = date === selectedDate.value;
+    const isToday = !isSelected && date === todayDate.value;
+    out.push({ day: d, isToday, isSelected, text: isToday ? '今' : String(d) });
+  }
+  return out;
 }
 
-function isTodayOf(y: number, m: number, d: number): boolean {
-  return dateStr(y, m, d) === todayStr();
-}
-
-function isSelectedOf(y: number, m: number, d: number): boolean {
-  return dateStr(y, m, d) === selectedDate.value;
-}
+/**
+ * swiper 三格的数据源：`{ year, month, cells }[]`，与 `swiperMonths` 一一对应。
+ *
+ * 为什么用 computed 而不是在 v-for 里直接调函数：
+ *   computed 有缓存，且**只在依赖变化时**重算；模板每次渲染只是读属性。
+ *   这样「三格各算一遍」变成「一次算三格」，更重要的是 panel / showMonthPicker /
+ *   hour / minute 这些与月历无关的状态引起的重渲染，不再牵动月历。
+ *
+ * ⚠️ 每格 `:key` 仍是下标 —— 位置槽语义（见 offsets 的注释），不能换成 month 之类的
+ *    业务 key：那样滑动换月时会按新 key 重建 DOM 而不是原地改 class/文字。
+ */
+const grids = computed(() => {
+  /*
+   * 单次计算内按 (年,月) 去重：滑动落定那一帧 offsets 会把落点复制成基准月
+   * （[-1,0,0] / [0,0,1]，见 onSwipeSettle），三格里有**两格是同一个月**，
+   * 不去重就白算 30 个格子（2026-09 基准：6 次 new Date → 4 次、184 次 padStart → 122 次）。
+   *
+   * ⚠️ 只做**单次计算内**去重，刻意不做跨次缓存：跨次缓存必须把 selectedDate 与
+   *    todayDate 一起编进 key（否则选中态会残留成"上次选的那天"），那就等价于没有缓存；
+   *    而这个组件常驻不销毁，一层只增不减的 Map 反倒成了内存泄漏。
+   */
+  const cache = new Map<string, (DayCell | null)[]>();
+  return swiperMonths.value.map((m) => {
+    const key = m.year + '-' + m.month;
+    let cells = cache.get(key);
+    if (!cells) {
+      cells = buildCells(m.year, m.month);
+      cache.set(key, cells);
+    }
+    return { year: m.year, month: m.month, cells };
+  });
+});
 
 function selectOf(y: number, m: number, d: number) {
   selectedDate.value = dateStr(y, m, d);
@@ -397,6 +470,11 @@ watch(
     showMonthPicker.value = false;
     panel.value = 'date';
     /*
+     * 「今天」每次打开刷新一次（整个开着的期间就用这一个值，见 todayDate 的注释）。
+     * ⚠️ 必须排在下面对 todayDate 的取用之前：无有效日期时日历默认落在今天。
+     */
+    todayDate.value = todayStr();
+    /*
      * 组件实例本身不在 v-if 里（销毁重建的是模板根节点），所以以下状态会跨次打开存活。
      * 万一上次是「滑动/复位还没落定就点了完成或遮罩」，swiper 可能停在 0/2 上、
      * offsets 还留着临时复制 —— 那这次打开就会错位。每次打开一律归位。
@@ -411,10 +489,15 @@ watch(
       viewMonth.value = parts[1] - 1;
       selectedDate.value = props.date;
     } else {
-      const now = new Date();
-      viewYear.value = now.getFullYear();
-      viewMonth.value = now.getMonth();
-      selectedDate.value = todayStr();
+      /*
+       * 没有有效日期 → 默认落在「今天」。年月由 todayDate 反解，而**不是**再取一次
+       * `new Date()`：两次取"当前时刻"若正好跨过午夜（或月末），会出现
+       * 「高亮格写着今天、日历却停在昨天那个月」的错位。
+       */
+      const [ty, tm] = todayDate.value.split('-').map(Number);
+      viewYear.value = ty;
+      viewMonth.value = tm - 1;
+      selectedDate.value = todayDate.value;
     }
 
     timeEnabled.value = !!props.time;

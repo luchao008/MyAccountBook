@@ -153,7 +153,21 @@
         <!-- 月度收支趋势（仅年粒度） -->
         <view v-if="report.granularity === 'year' && report.trend.length" class="panel">
           <text class="panel-title">月度收支趋势</text>
-          <TrendChart :trend="report.trend" />
+          <!--
+            异步组件 + 占位骨架（2026-10-01）。
+            ⚠️ 必须有这一层：TrendChart 用的是 qiun-data-charts，它会连带拉进
+               u-charts（整份打进 statistics 页 chunk，实测该 chunk 267 KB / gzip 72 KB）
+               并在 H5 首次渲染时**动态注入** echarts.min.js（730 KB / gzip 243 KB）。
+               静态 import 的后果是：报表页要等这近 1 MB 全部下载 + 解析完才**开始**渲染，
+               而「报表」是 TabBar 一级入口，每次点都付这个成本。
+               改成异步后，页面壳子、KPI、环形图、排行榜先出来，趋势图随后补上。
+               实测对比：同项目的图表页用自研 SVG RingChart 只有 13 KB / gzip 4 KB。
+
+            ⚠️ 用 defineAsyncComponent 的 loadingComponent，**不要用 `<Suspense>`**：
+               Suspense 在 uni-app 的小程序端不受支持（H5 能用，小程序/App 不行），
+               而本项目要出多个端。loadingComponent 走的是普通组件渲染，各端一致。
+          -->
+          <TrendChartAsync :trend="report.trend" />
         </view>
       </template>
 
@@ -234,13 +248,13 @@
  *
  * 三种状态统一由一次请求驱动（/statistics/report 是聚合接口，不会有"一半转圈"）。
  */
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, defineAsyncComponent } from 'vue';
 import SvgIcon from '@/components/SvgIcon.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import Skeleton from '@/components/Skeleton.vue';
 import RankList from '@/components/RankList.vue';
 import RingChart from '@/components/RingChart.vue';
-import TrendChart from '@/components/TrendChart.vue';
+import TrendChartSkeleton from '@/components/TrendChartSkeleton.vue';
 import PeriodPicker from '@/components/PeriodPicker.vue';
 import { useAccountStore } from '@/store/account';
 import { getReport, type ReportData, type ReportCategory } from '@/api/statistics';
@@ -248,6 +262,26 @@ import { CHART_SERIES, CHART_OTHER_COLOR } from '@/constants/chart';
 import { formatMoney } from '@/utils/format';
 
 const accountStore = useAccountStore();
+
+/**
+ * 趋势图改为**异步组件**（2026-10-01）。
+ *
+ * 为什么要异步：TrendChart 依赖 qiun-data-charts，那一位会把 u-charts 整份打进本页 chunk
+ *   （实测 statistics 页 chunk 267 KB / gzip 72 KB，是第二大页面 chunk 的 8 倍），
+ *   并在 H5 首次渲染时动态注入 730 KB 的 echarts.min.js。静态 import 意味着
+ *   报表页要等这近 1 MB 下载 + 解析完才开始渲染。
+ *
+ * `delay: 0` 而不是默认的 200ms：本页是 TabBar 一级入口，趋势图只在**年粒度**下出现，
+ *   而首页进来默认是月粒度 —— 若用默认 delay，切到年粒度时的加载会先闪一下空白再出骨架。
+ *   设 0 让骨架立刻顶上；二次进入（chunk 已缓存）时组件同步就绪，骨架实际只存在一帧。
+ *
+ * 用 loadingComponent 而非 `<Suspense>`：Suspense 在 uni-app 小程序端不支持（见模板注释）。
+ */
+const TrendChartAsync = defineAsyncComponent({
+  loader: () => import('@/components/TrendChart.vue'),
+  loadingComponent: TrendChartSkeleton,
+  delay: 0,
+});
 
 /**
  * 点分类排行某一行 → 跳流水页，带上「当前时段 + 该分类」。

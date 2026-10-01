@@ -16,6 +16,22 @@ import { getCategoryCandidates, importCategories } from '@/api/account';
 const CACHE_PREFIX = 'categoryCache:';
 
 /**
+ * 正在飞行中的加载（**并发合并**用），按账本 id 区分。
+ *
+ * ⚠️ 为什么需要：`loaded` 守卫只挡得住"已经加载完之后"的重复调用，
+ *    挡不住**同一时刻**的并发。实测确实存在这种并发：
+ *    `HomeView.activate()` 里 `categoryStore.load()` 是"点火即忘"（没 await），
+ *    用户立刻点进流水页，flow 挂载时 `loaded` 还是 false → 再发一次 `GET /categories`。
+ *
+ * ⚠️ 必须按 `accountId` 配对：切账本的瞬间可能有一次旧账本的请求在飞，
+ *    新账本不能复用它（否则会把旧账本的分类铺到新账本上）。
+ *
+ * ⚠️ 放在模块作用域而不是 `state`：state 是响应式的，Promise 放进去没有意义
+ *    （理由同 store/account.ts）。`reset()` 会清掉它。
+ */
+let inflight: { accountId: string; promise: Promise<void> } | null = null;
+
+/**
  * 分类 store。
  *
  * ⚠️ **分类自 2026-09-16 起为账本级隔离**：每个账本有独立的一套分类。
@@ -88,6 +104,10 @@ export const useCategoryStore = defineStore('category', {
     /**
      * 加载当前账本的分类。
      * 若已加载的账本与当前账本不一致，会强制重新加载（切账本后无需手动 reset）。
+     *
+     * ⚠️ 2026-10-01 起**同一账本的并发调用会合并成一次请求**（见模块顶部的 `inflight`）。
+     *    注意 `force` 只在"是否跳过缓存"这一步生效；一旦决定要发请求，
+     *    后来的并发调用会直接搭上那一次，不会因为自己传了 force 就再发一个。
      */
     async load(force = false) {
       const accountId = this.currentAccountId();
@@ -98,6 +118,26 @@ export const useCategoryStore = defineStore('category', {
         return;
       }
       if (this.loaded && !force && this.loadedAccountId === accountId) return;
+
+      // 并发合并：同一账本已在飞 → 直接复用（先到的那个的 force 生效）
+      if (inflight && inflight.accountId === accountId) return inflight.promise;
+
+      const promise = this.doLoad(accountId);
+      inflight = { accountId, promise };
+      try {
+        await promise;
+      } finally {
+        // 只清掉自己那一次，避免把后来者的 pending 覆盖掉
+        if (inflight?.promise === promise) inflight = null;
+      }
+    },
+
+    /**
+     * 真正发请求 + 落缓存的那一段（由 `load()` 调用，不要直接调用）。
+     * 拆出来是为了让"并发合并"只包住请求本身，并保住原有的离线兜底语义：
+     * 请求失败时读上一次的缓存，且**把错误继续抛出去**（调用方靠它展示失败态）。
+     */
+    async doLoad(accountId: string) {
       try {
         this.list = await getCategories(accountId);
         this.loaded = true;
@@ -199,6 +239,8 @@ export const useCategoryStore = defineStore('category', {
       this.list = [];
       this.loaded = false;
       this.loadedAccountId = '';
+      // 登出/切账号时把在飞的那次也丢掉，避免下一个账号复用到上一个账号的结果
+      inflight = null;
     },
   },
 });

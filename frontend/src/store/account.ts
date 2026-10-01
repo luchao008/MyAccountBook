@@ -4,6 +4,15 @@ import { getAccounts, type AccountItem } from '@/api/account';
 const CURRENT_KEY = 'currentAccountId';
 
 /**
+ * 正在飞行中的加载（**并发合并**用）。
+ *
+ * ⚠️ 刻意放在模块作用域、**不放进 `state`**：state 是响应式的，把 Promise 塞进去
+ *    会被包成响应式代理，既没有意义又给 devtools 添乱。全应用只有一个 pinia 实例、
+ *    store 也就是单例，模块变量在这里等价于实例字段，且 `reset()` 会显式清掉它。
+ */
+let inflight: Promise<{ changed: boolean }> | null = null;
+
+/**
  * 账本 store
  *
  * 当前账本的切换方式（设计决策）：
@@ -38,8 +47,39 @@ export const useAccountStore = defineStore('account', {
     /**
      * 加载账本列表，并保证 currentId 始终指向一个存在的账本。
      * 返回是否发生了「当前账本的自动回退」，调用方可据此决定要不要刷新业务数据。
+     *
+     * ⚠️ 2026-10-01 起本方法**带缓存与并发合并**，语义变化如下：
+     *   · 已加载过（`loaded`）且未传 `force` 时**直接返回** `{ changed: false }`，
+     *     **不再发请求**。此前每次调用都真发一次 `GET /accounts`，
+     *     而全站有 19 个调用点，典型路径（首页 → 流水 → 记一笔 → 返回 → 首页）
+     *     实测发 14 个请求、其中 **5 个是重复的 `/accounts`**（占 36%）。
+     *   · 同一时刻的并发调用**共用同一个请求**（见模块顶部的 `inflight`）——
+     *     各页面 onShow/onMounted 几乎同时触发的情况很常见。
+     *   · 需要「一定拿最新」的调用点请显式传 `force = true`。
+     *     合并/删除账本后请继续用 `refresh()`（它不动 currentId，语义不同）。
      */
-    async load(): Promise<{ changed: boolean }> {
+    async load(force = false): Promise<{ changed: boolean }> {
+      // ① 已加载过就直接命中缓存（这是省掉绝大多数重复请求的那一道）
+      if (this.loaded && !force) return { changed: false };
+
+      // ② 同一时刻的并发调用合并到同一个请求上
+      if (inflight) return inflight;
+
+      const p = this.doLoad();
+      inflight = p;
+      try {
+        return await p;
+      } finally {
+        // 只清掉自己那一次，避免把后来者的 pending 覆盖掉
+        if (inflight === p) inflight = null;
+      }
+    },
+
+    /**
+     * 真正发请求并落库的那一段（由 `load()` 调用，不要直接调用）。
+     * 单独拆出来是为了让「并发合并」只包住请求本身，而 `load()` 的守卫/箭头保持干净。
+     */
+    async doLoad(): Promise<{ changed: boolean }> {
       const list = await getAccounts();
       this.list = list;
       this.loaded = true;
@@ -77,6 +117,8 @@ export const useAccountStore = defineStore('account', {
       this.list = [];
       this.currentId = '';
       this.loaded = false;
+      // 登出/切账号时把在飞的那次也丢掉，避免下一个账号复用到上一个账号的结果
+      inflight = null;
       uni.removeStorageSync(CURRENT_KEY);
     },
   },

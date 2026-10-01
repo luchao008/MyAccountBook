@@ -3,7 +3,14 @@
     三个渲染器按 `icon` 值的形态分流，顺序有讲究：
     图片图标必须排最前 —— `img:` key 也含冒号，先判形态才不会被误放进彩色分支的判定。
   -->
-  <image v-if="imgSrc" class="image-icon" :src="imgSrc" :style="imgStyle" mode="aspectFit" />
+  <image
+    v-if="imgSrc"
+    class="image-icon"
+    :src="imgSrc"
+    :style="imgStyle"
+    mode="aspectFit"
+    lazy-load
+  />
   <!-- 彩色图标：颜色写死在 SVG 里，要保住彩色 -->
   <ColorIcon v-else-if="useColor" :name="name" :size="size" />
   <!-- 其余一律交给 SvgIcon：它已兼容单色 key 与 emoji，解析收敛在 resolveIconName 一处 -->
@@ -31,8 +38,8 @@
  *      ② 数据到位后再查一次索引，**取不到就退回单色渲染**。
  *    少了第 ② 步，一个陈旧 / 拼错的彩色 key 会渲染成**空白**（不报错、只是看不见）。
  *
- *    本组件顺带承担"触发加载"的职责：页面里出现**非图片图标**的实例时，分包才会被拉起
- *    （图片图标不吃彩色分包，见 onMounted 的注释）。
+ *    本组件顺带承担"触发加载"的职责：页面里出现**彩色图标**（`<集合>:<名字>`）实例时，
+ *    分包才会被拉起 —— 只有彩色形态真正需要那份正文（见 onMounted 的注释）。
  */
 import { computed, onMounted } from 'vue';
 import ColorIcon from '@/components/ColorIcon.vue';
@@ -68,11 +75,22 @@ const imgStyle = computed(() => ({ width: `${imgSize.value}px`, height: `${imgSi
 onMounted(() => {
   /*
    * 幂等：多个实例只会真正发起一次请求。
-   * ⚠️ 图片图标**不需要**彩色分包 —— 分类默认图标大多是 `img:` 后，
-   *    若不跳过，含分类图标的每一页（首页/流水/日历…）都会白白拉那 212 KB。
-   *    同一页里只要有一个"非图片图标"的实例，分包照样会被拉起。
+   *
+   * ⚠️ 判据必须是「**彩色** key」，**不能**放宽成「非图片图标」（2026-10-01 改）：
+   *    上一版写的是 `if (!imgSrc.value)` —— 即"只要不是 `img:` 就拉"，
+   *    于是 **单色 key 与 emoji 也会把那份文本拉下来**（596 KB / gzip 207 KB），
+   *    而这两种形态走的是 SvgIcon，**一个字节都用不上**。
+   *
+   *    这不是理论问题：真实库里每个账本的二级分类里**恰好有 1 个 emoji**
+   *    （如 `🧦`，它自己就是 icon 值），而 `CategoryPicker` 在记一笔页是**常驻挂载**的
+   *    （那一页没用 `v-if`，弹层内部又是 `v-show`），
+   *    于是"进记一笔页"就等于白下 207 KB —— 全量流水 15312 条的那个账号实测如此。
+   *    彩色 key 在真实数据里的使用量是 0，也就是说这份正文从头到尾没被真正需要过。
+   *
+   *    收紧成 `isColorIconKey` 之后：彩色 key 照旧**预加载**（首帧就能按形态渲染，
+   *    数据到达后复核一次），`img:` / 单色 key / emoji 一律不触发。
    */
-  if (!imgSrc.value) void loadColorIcons();
+  if (isColorIconKey(props.name)) void loadColorIcons();
 });
 
 const useColor = computed(() => {

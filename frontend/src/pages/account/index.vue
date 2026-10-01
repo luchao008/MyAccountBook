@@ -166,7 +166,9 @@ async function onDelete(item: AccountItem) {
       }
       try {
         const result = await deleteAccount(item.id, input);
-        await accountStore.load(); // 可能触发当前账本回退，用 load 而非 refresh
+        // 必须 force：删除后**要重跑"当前账本是否还存在"的回退校验**，
+        // 而 load() 带缓存后，不 force 就会直接命中缓存、把校验跳过。
+        await accountStore.load(true); // 可能触发当前账本回退，用 load 而非 refresh
         uni.showToast({
           title: `已删除（连带 ${result.deletedTransactions} 笔）`,
           icon: 'none',
@@ -242,7 +244,8 @@ async function doMerge(source: AccountItem, target: AccountItem) {
 async function execMerge(source: AccountItem, target: AccountItem) {
   try {
     const result = await mergeAccounts(target.id, source.id);
-    await accountStore.load();
+    // 同上：合并可能删掉了"当前账本"，必须 force 才会重跑回退校验
+    await accountStore.load(true);
     uni.showModal({
       title: '合并完成',
       content: `已把「${result.sourceName}」并入目标账本：迁入 ${result.willMove} 笔，去重 ${result.willSkip} 笔。`,

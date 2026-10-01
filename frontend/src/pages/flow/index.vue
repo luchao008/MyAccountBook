@@ -198,6 +198,31 @@
                 </uni-swipe-action-item>
               </uni-swipe-action>
             </view>
+
+            <!--
+              「加载更多」（2026-10-01 新增）。
+
+              ⚠️ 这一块是修**正确性**，不是装饰：
+                组头的结余/收入/支出来自 summary 的**全量**聚合，而明细单请求最多 100 条
+                （后端 DTO 的 size 上限就是 100）。没有这个入口时，超过 100 条的月份会出现
+                **组头写 259 笔、明细只列出 100 笔**，而用户没有任何办法看到剩下的流水，
+                也没有任何提示 —— 表现为"组头金额和明细加起来对不上"。
+                真实库里用户 2 的 2025-08 就是 259 条（我实测过）。
+                文案里带上「已显示 x / y 条」，让这个差异**显式可见**而不是静默截断。
+
+              ⚠️ 样式只加布局属性、复用 `.state-text` 的字号与颜色：
+                `scripts/check-contrast.mjs` 会校验 .vue 里的 font-size 必须落在
+                `$font-*` / `$icon-*` 阶梯内，并有色值字面量扫描 —— 不新增最省事。
+            -->
+            <view v-if="hasMoreDetail(g.key)" class="detail-more" @click.stop="loadMoreDetail(g)">
+              <text class="state-text">
+                {{
+                  isDetailLoadingMore(g.key)
+                    ? '加载中…'
+                    : `加载更多（已显示 ${detailLoaded(g.key)} / ${detailTotal(g.key)} 条）`
+                }}
+              </text>
+            </view>
           </template>
         </view>
       </view>
@@ -712,6 +737,29 @@ const expanded = ref<Set<string>>(new Set());
 const details = ref<Record<string, { date: string; items: TransactionItem[] }[]>>({});
 const loadingDetail = ref<Set<string>>(new Set());
 
+/**
+ * 每组明细的**分页状态**。
+ *
+ * ⚠️ 存在的理由（2026-10-01）：组头的结余/收入/支出取的是 summary 的**全量**聚合，
+ *    而明细一次只取 `PAGE_SIZE` 条（后端 `size` 上限也是 100，见
+ *    `src/transaction/dto/transaction.dto.ts`）。此前 details 只存"当前拿到的这几条"，
+ *    没有 total 的概念，于是超过 100 条的月份会出现
+ *    **组头写 259 笔、明细只列出 100 笔、用户也没法看到剩下的** ——
+ *    真实库里最多的一个月实测就是 259 条（用户 2 / 2025-08）。
+ *    存下 `total` 之后，模板才能显示「加载更多（已显示 100 / 259 条）」。
+ *
+ * ⚠️ `page` 必须**显式记下来**，不能用 `floor(loaded / PAGE_SIZE) + 1` 反推：
+ *    反推只在"每一页都恰好返回 PAGE_SIZE 条"时才成立。一旦某页返回不满
+ *    （并发删除、后端 offset 与 total 不同步等），反推出来的页码会**退回上一页**，
+ *    于是同一页被追加两次、列表出现重复行。记页码则永远单调递增。
+ */
+const detailPaging = ref<
+  Record<string, { loaded: number; total: number; page: number; loadingMore: boolean }>
+>({});
+
+/** 明细每页条数。**与后端 size 上限一致**（DTO 里 max(100)），调大没有意义 */
+const PAGE_SIZE = 100;
+
 const UNIT_OPTIONS: { value: SummaryUnit; label: string }[] = [
   { value: 'year', label: '年' },
   { value: 'quarter', label: '季' },
@@ -827,18 +875,29 @@ async function loadGroups() {
     await accountStore.load();
     groups.value = await getTransactionSummary(baseParams());
     /*
-     * 默认展开第一个分组（luchao 要求）—— 进页面就能直接看到最近的明细，
-     * 不必再点一次。用 `toggleGroup` 而不是直接塞进 expanded：
-     * 它会顺带把该组的明细拉回来，避免"展开了但内容是空的"。
+     * 骨架到这一行为止（2026-10-01 改）。
+     *
+     * 组头（结余/收入/支出）、分组列表所需的**全部数据**在上一行就齐了；
+     * 而下面默认展开第一个分组还要再等一个明细请求。此前它是 `await` 的，
+     * 于是「骨架时间 = summary + 明细」= **两个串行 RTT**，
+     * 用户对着骨架白等多一整个往返，而那时页面其实已经有东西可画。
+     *
+     * 改成不 await：骨架在 summary 到手时立即撤掉，
+     * 明细由该组自己的「加载中…」占位兜住（模板里的 `loadingDetail`），
+     * 「进页面就能看到最近的明细」这个行为不变，只是明细晚一个 RTT 出现。
+     * `void` 是刻意的：toggleGroup 内部自己 catch（失败时落成空数组），不会抛。
      */
-    if (groups.value.length) {
-      await toggleGroup(groups.value[0]);
-    }
     loaded.value = true;
+    loading.value = false;
+    skeleton.value = false;
+    if (groups.value.length) {
+      void toggleGroup(groups.value[0]);
+    }
   } catch (err) {
     console.error('[flow] 分组加载失败', err);
     error.value = true;
   } finally {
+    // 兜底：异常路径下也必须把骨架撤掉（正常路径上面已经提前撤过一次，重复赋值无害）
     loading.value = false;
     skeleton.value = false;
   }
@@ -848,6 +907,7 @@ async function loadGroups() {
 function reloadAll() {
   expanded.value = new Set();
   details.value = {};
+  detailPaging.value = {};
   loadGroups();
 }
 
@@ -866,38 +926,14 @@ async function toggleGroup(g: SummaryItem) {
   loadingDetail.value.add(key);
   loadingDetail.value = new Set(loadingDetail.value);
   try {
-    /*
-     * 展开明细要按**该组自己的口径**去查：
-     *   · 时间维度 → 用该组的日期区间（不是全局筛选的 start/end，两者语义不同）
-     *   · 分类维度 → 用该分类 id（一级要连带其下二级，后端 categoryIds 已支持）
-     * 所以先把 baseParams 里与"分组"有关的字段剔掉，再补上本组的条件。
-     */
-    /*
-     * ⚠️ **分类维度必须补上全局的 start/end**（2026-09-24 修）。
-     *    `filterOnlyParams()` 不含时间条件（时间只在 baseParams 里加，那是给分组汇总用的），
-     *    所以早先展开分类组时明细**不带时间限制** —— 表现为
-     *    "筛本月私家车，展开却冒出别的月份的记录"（汇总金额对、明细不对，就是这个原因）。
-     *    时间维度分支不受影响：它用 periodRange(key, unit) 自带该组区间。
-     */
-    const rest = filterOnlyParams();
-
-    const page =
-      g.unit === 'category'
-        ? await getTransactions({
-            ...rest,
-            start: filterModel.start || undefined,
-            end: filterModel.end || undefined,
-            categoryIds: key === '__none__' ? undefined : key,
-            size: 100,
-            order: order.value,
-          })
-        : await getTransactions({
-            ...rest,
-            ...periodRange(key, g.unit as SummaryUnit),
-            size: 100,
-            order: order.value,
-          });
+    const page = await getTransactions({ ...detailQuery(g), size: PAGE_SIZE });
     details.value[key] = groupByDay(page.list);
+    detailPaging.value[key] = {
+      loaded: page.list.length,
+      total: page.total ?? page.list.length,
+      page: 1,
+      loadingMore: false,
+    };
   } catch (err) {
     console.error('[flow] 明细加载失败', err);
     details.value[key] = [];
@@ -905,6 +941,104 @@ async function toggleGroup(g: SummaryItem) {
     loadingDetail.value.delete(key);
     loadingDetail.value = new Set(loadingDetail.value);
   }
+}
+
+/**
+ * 某一组明细的查询条件。
+ *
+ * 展开明细要按**该组自己的口径**去查：
+ *   · 时间维度 → 用该组的日期区间（不是全局筛选的 start/end，两者语义不同）
+ *   · 分类维度 → 用该分类 id（一级要连带其下二级，后端 categoryIds 已支持）
+ * 所以先把 baseParams 里与"分组"有关的字段剔掉，再补上本组的条件。
+ *
+ * ⚠️ **分类维度必须补上全局的 start/end**（2026-09-24 修）。
+ *    `filterOnlyParams()` 不含时间条件（时间只在 baseParams 里加，那是给分组汇总用的），
+ *    所以早先展开分类组时明细**不带时间限制** —— 表现为
+ *    "筛本月私家车，展开却冒出别的月份的记录"（汇总金额对、明细不对，就是这个原因）。
+ *    时间维度分支不受影响：它用 periodRange(key, unit) 自带该组区间。
+ *
+ * ⚠️ 拆成独立函数是 2026-10-01 为了「加载更多」复用：翻页必须用**完全一样**的
+ *    查询条件，否则第 2 页会和第 1 页不是同一个结果集（顺序、筛选都会漂）。
+ */
+function detailQuery(g: SummaryItem) {
+  const rest = filterOnlyParams();
+  if (g.unit === 'category') {
+    return {
+      ...rest,
+      start: filterModel.start || undefined,
+      end: filterModel.end || undefined,
+      categoryIds: g.key === '__none__' ? undefined : g.key,
+      order: order.value,
+    };
+  }
+  return {
+    ...rest,
+    ...periodRange(g.key, g.unit as SummaryUnit),
+    order: order.value,
+  };
+}
+
+/**
+ * 加载某一组明细的**下一页**（模板里的「加载更多」）。
+ *
+ * 为什么需要它：组头金额来自 summary 的**全量**聚合，而明细单次最多 100 条 ——
+ * 没有这个入口时，超过 100 条的月份会出现"组头 259 笔、明细只有 100 笔"的数字不一致，
+ * 而且用户**没有任何办法**看到剩下的流水（后端 size 上限就是 100）。
+ * 真实库里用户 2 的 2025-08 正是 259 条。
+ *
+ * 追加策略：把「已加载的扁平列表 + 新一页」重新归组。
+ *   · 后端按时间倒序返回，分页顺序拼接后整体顺序仍然正确；
+ *   · `groupByDay` 用 Map，日期桶按**首次出现顺序**排列，所以跨页时同一天会被合进同一个桶；
+ *   · 代价是 O(已加载条数) 的一次重排 —— 几百条量级可忽略。
+ */
+async function loadMoreDetail(g: SummaryItem) {
+  const key = g.key;
+  const st = detailPaging.value[key];
+  if (!st || st.loadingMore || st.loaded >= st.total) return;
+
+  st.loadingMore = true;
+  try {
+    // 用记录下来的页码 +1，而不是从 loaded 反推（理由见 detailPaging 的注释）
+    const nextPage = st.page + 1;
+    const page = await getTransactions({
+      ...detailQuery(g),
+      size: PAGE_SIZE,
+      page: nextPage,
+    });
+    const existing = (details.value[key] || []).flatMap((d) => d.items);
+    const merged = [...existing, ...page.list];
+    details.value[key] = groupByDay(merged);
+    /*
+     * 空页 = 到此为止：把 total 收到实际条数，按钮随之消失。
+     * 不这么做的话，遇到"total 大于真实条数"（并发删除等）会永远点得动、每次都白拉一次空页。
+     * 其余情况仍以服务端的 total 为准（它才是"组头金额对应的总笔数"）。
+     */
+    detailPaging.value[key] = {
+      loaded: merged.length,
+      total: page.list.length === 0 ? merged.length : (page.total ?? st.total),
+      page: nextPage,
+      loadingMore: false,
+    };
+  } catch (err) {
+    console.error('[flow] 明细加载更多失败', err);
+    st.loadingMore = false;
+    uni.showToast({ title: '加载失败，请重试', icon: 'none' });
+  }
+}
+
+/** 该组是否还有未加载的明细（模板判据） */
+function hasMoreDetail(key: string): boolean {
+  const st = detailPaging.value[key];
+  return !!st && st.loaded < st.total;
+}
+function detailLoaded(key: string): number {
+  return detailPaging.value[key]?.loaded ?? 0;
+}
+function detailTotal(key: string): number {
+  return detailPaging.value[key]?.total ?? 0;
+}
+function isDetailLoadingMore(key: string): boolean {
+  return !!detailPaging.value[key]?.loadingMore;
 }
 
 /** 明细按日分组（后端已按时间倒序，这里只做归组，保持顺序） */
@@ -1836,6 +1970,20 @@ onShow(() => {
 }
 
 .detail-loading {
+  padding: $space-4;
+  text-align: center;
+}
+
+/*
+ * 「加载更多」入口（见模板里的长注释）。
+ * 只写布局：字号/颜色复用 `.state-text`，避免动 font-size 阶梯与色值扫描。
+ * `min-height: 44px` 是为了满足项目一贯的触控目标下限（见 docs 的无障碍约定）。
+ */
+.detail-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
   padding: $space-4;
   text-align: center;
 }

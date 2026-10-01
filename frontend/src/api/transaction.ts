@@ -128,9 +128,26 @@ export function restoreTransaction(id: string): Promise<TransactionItem> {
   return http.post(`/transactions/${id}/restore`) as any;
 }
 
-/** 流水回收站列表（7 天内删除的） */
-export function getDeletedTransactions(): Promise<TransactionItem[]> {
-  return http.get('/transactions/deleted') as any;
+/** 回收站查询参数：该接口**没有筛选维度**（能筛的只有"已删除"这一条），只有分页 */
+export interface DeletedQueryParams {
+  page?: number;
+  size?: number;
+}
+
+/**
+ * 流水回收站列表（7 天内删除的）。**分页返回**。
+ *
+ * ⚠️ 2026-10-01 起返回 `PageResult`（此前是**全量数组**）：回收站是唯一会随
+ *    "批量删除"无界增长的列表，"一次拉全量、无上限"迟早会拖死首屏。
+ *
+ * ⚠️ `params` 声明成**必填**（不是可选）：后端虽然对缺省有 1 / 20 的默认值，
+ *    但前端一律显式传 —— 默认值只该是"没传时的兜底"，真实分页行为写在调用侧，
+ *    否则哪天后端调了默认值，前端会**悄悄**跟着变，而这种变化没人会注意到。
+ */
+export function getDeletedTransactions(
+  params: DeletedQueryParams
+): Promise<PageResult<TransactionItem>> {
+  return http.get('/transactions/deleted', { params }) as any;
 }
 
 export function updateTransaction(

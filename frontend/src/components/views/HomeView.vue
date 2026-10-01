@@ -404,7 +404,8 @@ async function activate() {
 
 /** 容器转发下来的下拉刷新 */
 async function onPullDownRefresh() {
-  await accountStore.load();
+  // 用户主动要求刷新 → 必须 force，否则 load() 的缓存守卫会让这次刷新变成空操作
+  await accountStore.load(true);
   loadData();
 }
 

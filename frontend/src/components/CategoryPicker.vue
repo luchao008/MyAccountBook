@@ -1,5 +1,16 @@
 <template>
-  <view v-show="visible" class="mask" @click="close">
+  <!--
+    ⚠️ `v-if="everOpened"` 是**必要的**，不是冗余：只有 `v-show` 时它不阻止子树渲染
+       （只是 `display:none`），于是本组件在记一笔页**一挂载**就把整张分类网格建出来
+       —— 15 个左栏项 + 十几个分组 + 每个二级分类一个 grid-item（内含一个 CategoryIcon），
+       实测约 85 个节点/组件实例，而用户**从没打开过**这个弹层。
+       首次打开后才真挂载，关掉之后仅 `v-show` 隐藏、DOM 留着复用
+       （滚动位置与左侧高亮都依赖"关掉不销毁"，所以不能改成每次开关都销毁重建）。
+       同目录的 DateTimePicker.vue 是同一个坑的既有解法，两处保持一致。
+       实测依据：DateTimePicker 首次挂载（含 3 格月历 + swiper）在 4x 降速下约 220ms，
+       而再次打开约 2ms —— 成本全在"首次挂载"这一侧，推迟它才有收益。
+  -->
+  <view v-if="everOpened" v-show="visible" class="mask" @click="close">
     <view class="sheet" @click.stop>
       <!-- 顶部工具条 -->
       <view class="toolbar">
@@ -138,7 +149,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, getCurrentInstance } from 'vue';
+import { ref, computed, watch, nextTick, getCurrentInstance, onUnmounted } from 'vue';
 import SvgIcon from '@/components/SvgIcon.vue';
 import CategoryIcon from '@/components/CategoryIcon.vue';
 import { useCategoryStore } from '@/store/category';
@@ -147,6 +158,13 @@ import type { CategoryItem } from '@/api/category';
 const RECENT_KEY = 'recentCategoryIds';
 /** 最近使用最多记录 10 个 */
 const RECENT_MAX = 10;
+
+/**
+ * 是否**曾经打开过**。只用于根节点的 `v-if`：首次打开前不挂载那张分类网格
+ * （省下约 85 个节点/组件实例 + 一次彩色图标分包的误触发，见模板顶部注释）。
+ * 一旦为 true 就不再回退 —— 之后靠 `v-show` 隐藏，DOM 与滚动位置都保留。
+ */
+const everOpened = ref(false);
 
 /** 左侧第一项固定是「最近使用」，用一个不会与真实 ID 冲突的 key */
 const RECENT_KEY_ANCHOR = 'recent';
@@ -371,6 +389,23 @@ function animateSidebarScroll(scroller: HTMLElement, from: number, to: number) {
   sidebarAnimRAF = requestAnimationFrame(step);
 }
 
+/*
+ * 组件卸载时取消未跑完的侧栏动画。
+ *
+ * ⚠️ 为什么需要：`animateSidebarScroll` 只在**下一次滚动**时才会取消上一个 rAF
+ *    （见上方的 `if (sidebarAnimRAF) cancelAnimationFrame(...)`），也就是说
+ *    动画跑完之后没有任何人负责收尾。动画本身只有 260ms，最坏情况也就是多跑 260ms，
+ *    但此时 `scroller` 指向的 DOM 可能已经随页面一起被销毁 —— 继续写 `scrollTop`
+ *    属于对已卸载节点动手，在小程序端会产生告警。顺手收掉，成本为零。
+ *    这里不引入 `onUnmounted` 之外的新依赖，也不影响"新的滚动会取消上一个"的既有语义。
+ */
+onUnmounted(() => {
+  if (sidebarAnimRAF) {
+    cancelAnimationFrame(sidebarAnimRAF);
+    sidebarAnimRAF = 0;
+  }
+});
+
 /**
  * 找某个 scroll-view 内**真正可滚**的元素。
  * ⚠️ scroll-view 外层不可滚，真实滚动在内层 div 上（实测）；
@@ -541,14 +576,16 @@ watch(
   () => props.visible,
   async (v) => {
     if (!v) return;
+    // 首次打开：让根节点的 v-if 放行，把分类网格真正挂载出来（见模板顶部注释）
+    everOpened.value = true;
     loadRecent();
     searching.value = false;
     keyword.value = '';
 
     /*
      * 已定位过：保持用户浏览到的位置。
-     * 弹窗用 v-show（不是 v-if），DOM 与滚动位置在关闭时都保留 ——
-     * 所以这里直接 return 即可，无需手动恢复 scrollTop。
+     * 弹窗在**首次打开之后**只靠 `v-show` 隐藏（`v-if` 放行过就不再回退），
+     * DOM 与滚动位置在关闭时都保留 —— 所以这里直接 return 即可，无需手动恢复 scrollTop。
      */
     if (positioned) return;
     positioned = true;

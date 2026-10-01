@@ -272,7 +272,7 @@
  *   D9 开始拖一级时**自动收起**它的二级 —— 让「被拖的永远是一个单行」成立。
  * ────────────────────────────────────────────────────────────────────────
  */
-import { ref, reactive, computed, getCurrentInstance, nextTick } from 'vue';
+import { ref, reactive, computed, getCurrentInstance, nextTick, onUnmounted } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import EmptyState from '@/components/EmptyState.vue';
 import SvgIcon from '@/components/SvgIcon.vue';
@@ -744,10 +744,18 @@ function autoScrollTick() {
   updateTargetIndex();
 }
 
-/** 松手：卸监听 → 把顺序写进待提交层（不落库，D4） */
-function onDragEnd() {
-  if (!drag.id) return;
-
+/**
+ * 卸掉拖动期间挂在 `window` 上的监听 + 停掉 16ms 自动滚动定时器。
+ *
+ * ⚠️ 抽成独立函数是为了让 `onDragEnd` 与 `onUnmounted` 用**同一份**清理逻辑：
+ *    此前只有 `onDragEnd` 里那一段（原来的 751-759 行），于是**拖着的时候离开页面**
+ *    （navigateBack / H5 路由切换 / 小程序页面回收）会留下一个 60Hz 的 `setInterval`
+ *    永久泄漏 —— 它每 16ms 就写一次 `listScrollTop`、重建 `drag.rects`、全表跑
+ *    `updateTargetIndex()`，用户看到的是"返回上一页之后手机还在发烫"，
+ *    而且这种问题极难归因到具体页面。
+ *    `window` 监听同理：不卸掉的话，下一个用同样处理的页面会收到上一个页面的回调。
+ */
+function teardownDrag() {
   window.removeEventListener('touchmove', onDragMove);
   window.removeEventListener('touchend', onDragEnd);
   window.removeEventListener('touchcancel', onDragEnd);
@@ -757,6 +765,21 @@ function onDragEnd() {
     clearInterval(autoScrollTimer);
     autoScrollTimer = 0;
   }
+}
+
+/*
+ * 页面卸载兜底：拖动过程中离开页面时把定时器与监听一起收掉。
+ * 幂等 —— 正常路径下 `onDragEnd` 已经清过，这里再清一次是空操作。
+ */
+onUnmounted(() => {
+  teardownDrag();
+});
+
+/** 松手：卸监听 → 把顺序写进待提交层（不落库，D4） */
+function onDragEnd() {
+  if (!drag.id) return;
+
+  teardownDrag();
 
   const { parentId, index, targetIndex } = drag;
 

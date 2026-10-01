@@ -417,23 +417,45 @@ function monthRange(y: number, m0: number): { start: string; end: string; key: s
   return { start: `${key}-01`, end: `${key}-${pad(last)}`, key };
 }
 
-/** 确保 [fromY,fromM] ~ [toY,toM] 区间的日聚合已加载 */
+/**
+ * **只算 key**，不碰 `Date`。
+ *
+ * ⚠️ 为什么需要它（2026-10-01）：`ensureRange` 由 `onListScroll` 调用，而滚动是 60Hz、
+ *    H5 的 `@scroll` 又不自动节流。`monthRange` 里那句 `new Date(y, m0+1, 0).getDate()`
+ *    是为了取"这个月有几天"，纯粹为拼 `start`/`end` 服务 —— 但判定"这个月加载过没有"
+ *    只需要 key。走 `monthRange` 的话，每个滚动事件都要白白分配几个 `Date`。
+ */
+function monthKey(y: number, m0: number): string {
+  return `${y}-${pad(m0 + 1)}`;
+}
+
+/**
+ * 确保 [fromY,fromM] ~ [toY,toM] 区间的日聚合已加载。
+ *
+ * ⚠️ 2026-10-01 优化：**不再用 `Date` 当游标**，改成 (年, 月) 的整数运算。
+ *    旧写法 `new Date(...)` + `setMonth(...)` 有两个问题：
+ *      ① 每个滚动事件都要分配 2 个 Date 并逐月推进（实测约 3 个月 × 若干次分配）；
+ *      ② **即使这一段的月份全都已加载，也要走完整圈才在最后 return** ——
+ *         而"全都已加载"恰恰是滚动时的绝大多数情况（用户只是在同一屏里滑动）。
+ *    现在用纯算术 + `monthKey`（无 Date）+ 提前 return，滚动热路径上只剩几次整数运算和
+ *    最多 3 次 `Set` 查找。
+ */
 async function ensureRange(fromY: number, fromM0: number, toY: number, toM0: number) {
   // 找出所有未加载的月份，合成**一段**区间去请求（一次覆盖多个月）
   let firstMissing: { y: number; m: number } | null = null;
   let lastMissing: { y: number; m: number } | null = null;
-  const cursor = new Date(fromY, fromM0, 1);
-  const end = new Date(toY, toM0, 1);
-  while (cursor <= end) {
-    const y = cursor.getFullYear();
-    const m = cursor.getMonth();
-    const { key } = monthRange(y, m);
-    if (!loadedMonths.has(key)) {
+  // 月份序号 = 年 * 12 + 月（月从 0 起），于是"逐月推进"就是整数自增
+  const fromIdx = fromY * 12 + fromM0;
+  const toIdx = toY * 12 + toM0;
+  for (let idx = fromIdx; idx <= toIdx; idx++) {
+    const y = Math.floor(idx / 12);
+    const m = idx - y * 12;
+    if (!loadedMonths.has(monthKey(y, m))) {
       if (!firstMissing) firstMissing = { y, m };
       lastMissing = { y, m };
     }
-    cursor.setMonth(cursor.getMonth() + 1);
   }
+  // 这一段全都在缓存里 → 立刻返回（滚动时的常见路径）
   if (!firstMissing || !lastMissing) return;
 
   const s = monthRange(firstMissing.y, firstMissing.m);
