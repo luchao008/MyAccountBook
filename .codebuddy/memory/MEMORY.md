@@ -51,7 +51,9 @@
 - 验收判据：**nginx 返回的字节数 == 磁盘上 `.gz` 的字节数**（只有相等才证明走的是 `gzip_static` 预压缩，而不是"看起来也压了"的动态压缩）；另需单独造一个没有 `.gz` 的文件，验动态兜底路径确实生效。
 
 ## 已核实「不必再查」的性能结论（2026-10-01 实测，别重复排查）
-- **报表页那个 747 KB 的 ECharts 从不加载**：注入路径 `ecinit` 只挂在 `<block v-if="echarts">` 内，而 `echarts` 仅由 `echartsH5` / `echartsApp` 两个 **prop 默认 `false` 且全项目无人传**（三个 grep 全空）置真。它只是产物里的死重量。报表页真实成本 = 壳 **4.7 KB gz** + 异步图表格 **69 KB gz**。
+- **报表页那个 747 KB 的 ECharts 从不加载**：注入路径 `ecinit` 只挂在 `<block v-if="echarts">` 内，而 `echarts` 仅由 `echartsH5` / `echartsApp` 两个 **prop 默认 `false` 且全项目无人传**（三个 grep 全空）置真。它只是产物里的死重量。**报表页真实成本是单个 chunk 266 KB raw / 71 KB gz**（qiun / uCharts 占绝大部分，那 747 KB 不在其中）—— 别去砍那 747 KB，真要减得**换掉 `qiun-data-charts`**（同项目图表页的自研 SVG `RingChart` 只有 4 KB gz）。
+- ⛔ **报表页 TrendChart 异步化：已回退，别再试**：曾用 `defineAsyncComponent` 拆异步 chunk（H5 首帧 266→15 KB），但**三种写法各有一端静默失效** —— ① `defineAsyncComponent`：小程序把动态 import 编成**裸字符串**、坏；② 在 `.vue` 里用 `#ifdef H5` 分叉：H5 的 `<script setup>` **不做条件编译**、静态 import 仍在、白做；③ 把分叉挪进 `.ts`：小程序产物 `ReportView.json` 里 **`trend-chart` 组件登记消失** → 趋势图静默不显示。**不该为了 H5 省 67 KB gz 而在小程序端埋静默失效。**
+- ⚠️ **验证一个开关/参数时，不能只看"调用点传了没有"，还要看"传进去后它真的改变了行为吗"** —— 2026-10-01 实测踩到：`accountStore.load(true)` 的 `force` 当时**没有绕过 in-flight 合并**，于是 force 请求可能复用到 mutation 之前发出的过期响应。
 - **`<image lazy-load>` 在 H5 是 no-op**：`uni-h5.es.js` 里 `lazyLoad` 只出现 1 次（prop 声明本身）、读取 `.lazyLoad` **0 次**。H5 想懒加载只能自己上 IntersectionObserver 或"只渲染可视区"（小程序端该属性有效）。
 - **`admin-web` 的 antd 注册表是超集，但量级没有传言那么大**：对照构建实测（裁掉 16/21 个注册）只省 **−235 KiB raw / −70 KB gz**，不是 423 KB。admin 真正的大头是首屏必须的 `bootstrap` chunk **415 KB gz**；用户列表页 `list` chunk 560 KiB 里几乎全是 `vxe-table`（但它是懒加载、不伤首屏）。
 - **接口响应字段不用精简**（审计实测，我**未复现**）：100 条 raw 42.8 → 31.1 KB，但 **gzip 只从 4.3 → 2.8 KB** —— 嵌套的 `account` 对象 100 行完全相同，正是 gzip 最擅长消掉的冗余。结论方向可信（gzip 已开的前提下收益很小），但**这两个数字要引用前请先自己测一遍**。
