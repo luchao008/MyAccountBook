@@ -5,6 +5,7 @@ import { TransactionService } from './transaction.service';
 import { TransactionImportService } from './transaction-import.service';
 import {
   CreateTransactionDTO,
+  DeletedTransactionQueryDTO,
   UpdateTransactionDTO,
   QueryTransactionDTO,
   SummaryQueryDTO,
@@ -60,16 +61,28 @@ export class TransactionController {
   }
 
   @ApiOperation({
-    summary: '流水回收站',
+    summary: '流水回收站（分页）',
     description:
-      '返回 7 天内删除的流水（软删除）。' +
+      '返回 7 天内删除的流水（软删除），按删除时间倒序，分页形状与列表接口一致。' +
       '⚠️ 本接口会**惰性真删**超期记录（deleted_at < NOW() - 7d），' +
-      '因此「7 天内可恢复」的文案与行为严格一致。',
+      '因此「7 天内可恢复」的文案与行为严格一致。' +
+      '⚠️ 2026-10-01 起改为**分页**返回（`{ list, total, page, size }`，page/size 缺省 1/20）——' +
+      '此前是全量数组：回收站是唯一会随"批量删除"无界增长的列表，全量拉取没有上限。',
   })
-  @ApiResponse({ status: 200, description: '查询成功' })
+  @ApiResponse({ status: 200, type: TransactionPageResponseVO, description: '查询成功' })
+  @ApiResponse({
+    status: 422,
+    type: ErrorResponseVO,
+    description: '参数校验失败（page/size 越界）',
+  })
   @Get('/deleted')
-  async listDeleted() {
-    return this.transactionService.listDeleted(this.userId);
+  async listDeleted(@Query() query: DeletedTransactionQueryDTO) {
+    /*
+     * ⚠️ 这里**总是**把 query 传下去（`page`/`size` 由 DTO 的 `.default()` 补齐），
+     *    所以 HTTP 路径永远走 service 的分页分支 —— 不会有人"忘了传参数"
+     *    就悄悄退回全量拉取。service 里保留的数组分支只服务既有直接调用方（单测）。
+     */
+    return this.transactionService.listDeleted(this.userId, query);
   }
 
   @ApiOperation({

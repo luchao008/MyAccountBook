@@ -230,6 +230,27 @@ export class QueryTransactionDTO {
   size: number;
 }
 
+/**
+ * 回收站查询（GET /transactions/deleted）。
+ *
+ * 只有分页参数，**刻意不继承 QueryTransactionDTO**：回收站里"能被筛的"只有
+ * `deleted_at IS NOT NULL` 这一条，没有时间 / 分类 / 金额维度可筛。
+ * 若图省事复用那个 DTO，`start` / `keyword` 这类参数会被**静默忽略**
+ * —— 传了没效果比"不支持"更糟（用户以为筛过了）。
+ *
+ * `page` / `size` 的规则与 `QueryTransactionDTO` **完全照抄**（含 `.max(100)` 上限与
+ * `.default()`）：两处约定不同，迟早出现"列表页翻页正常、回收站翻页行为诡异"。
+ */
+export class DeletedTransactionQueryDTO {
+  @ApiProperty({ description: '页码，从 1 开始', example: 1, required: false })
+  @Rule(RuleType.number().integer().min(1).default(1))
+  page: number;
+
+  @ApiProperty({ description: '每页条数，1-100', example: 20, required: false })
+  @Rule(RuleType.number().integer().min(1).max(100).default(20))
+  size: number;
+}
+
 /** 流水分组的粒度 */
 export type SummaryUnit = 'year' | 'quarter' | 'month' | 'week' | 'day';
 

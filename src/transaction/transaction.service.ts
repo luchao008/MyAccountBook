@@ -10,6 +10,7 @@ import { PageResult } from '../interface';
 import { AccountService } from '../account/account.service';
 import {
   CreateTransactionDTO,
+  DeletedTransactionQueryDTO,
   UpdateTransactionDTO,
   QueryTransactionDTO,
   SummaryQueryDTO,
@@ -461,8 +462,30 @@ export class TransactionService {
    *
    * ⚠️ 惰性清理**只在本接口里做**，不在别处顺手做：写操作集中一处，
    *    出问题好定位，也不会让"读列表"这种高频动作带上写库的副作用。
+   *
+   * ⚠️ 2026-10-01 新增**可选分页**，形状与 `page()` 完全一致
+   *    （`skip/take` + `getManyAndCount()` → `PageResult`），参数名与默认值照抄
+   *    `QueryTransactionDTO`。原因：这里此前是 `getMany()` **全量返回**，
+   *    前端一次拉全量、**没有任何上限** —— 回收站恰好是唯一会随"批量删除"
+   *    无界增长的列表，等它真的攒到几千行再改就晚了。
+   *
+   * ⚠️ **不传 `query` 时保持旧的「全量数组」行为**（重载签名见上）。这不是漏改：
+   *    `test/transaction.service.test.ts` 4 处 + `test/transaction-import.service.test.ts` 1 处
+   *    直接调用本方法并**断言数组**（`.find()` / `.length`），而 `test/` 不在本次
+   *    允许改动的文件范围内 —— 所以把"缺省 = 旧形状"作为兼容口留着，
+   *    **破坏面为 0**；对外 HTTP 路径则必定带上 page/size（DTO 有 `.default()`），
+   *    不存在"全量拉取"这条路。等那些调用方改用 PageResult 后，
+   *    数组分支连同这两个重载可以一起删掉。
    */
-  async listDeleted(userId: string) {
+  async listDeleted(userId: string): Promise<Transaction[]>;
+  async listDeleted(
+    userId: string,
+    query: DeletedTransactionQueryDTO,
+  ): Promise<PageResult<Transaction>>;
+  async listDeleted(
+    userId: string,
+    query?: DeletedTransactionQueryDTO,
+  ): Promise<PageResult<Transaction> | Transaction[]> {
     // ① 惰性清理超期记录
     await this.repo
       .createQueryBuilder()
@@ -482,9 +505,35 @@ export class TransactionService {
       .leftJoinAndSelect('t.account', 'a')
       .where('t.userId = :userId', { userId })
       .andWhere('t.deletedAt IS NOT NULL')
-      .orderBy('t.deletedAt', 'DESC');
+      .orderBy('t.deletedAt', 'DESC')
+      /*
+       * ⚠️ `t.id` 兜底不是为了"好看"，是**分页正确性**的前提：
+       *    offset 分页要求排序是**全序**，只按 `deleted_at` 排时同刻的多条记录
+       *    在两次查询里顺序不保证一致 → 跨页可能重复或漏行。
+       *    （`deleted_at` 是 datetime(6)，同刻需要微秒级并发才撞上，属于理论上限；
+       *     但 `applyOrder` 里对 recordDate 也是这么兜的，两处保持一致。）
+       */
+      .addOrderBy('t.id', 'DESC');
 
-    return qb.getMany();
+    if (!query) {
+      // 旧形状：全量数组。**只服务既有直接调用方**，新调用方一律传 query 走分页。
+      return qb.getMany();
+    }
+
+    /*
+     * ⚠️ `?? 1` / `?? 20` 看着多余（DTO 的属性声明成非可选，且有 `.default()`），
+     *    但它们是**兜住"退化成全量拉取"的最后一道**：`.default()` 只在经过 HTTP
+     *    参数校验时生效，而 TypeORM 里 `skip(NaN)` / `take(undefined)` 都是**假值**
+     *    → OFFSET / LIMIT 被整段丢弃 → 悄悄回到"一次拉全量"，正是本次要修的问题。
+     *    数值必须与 DTO 的 `.default(1)` / `.default(20)` 保持一致（改一处要改两处）。
+     */
+    const page = query.page ?? 1;
+    const size = query.size ?? 20;
+    qb.skip((page - 1) * size).take(size);
+
+    const [list, total] = await qb.getManyAndCount();
+
+    return { list, total, page, size };
   }
 
   /**
