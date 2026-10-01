@@ -1,7 +1,7 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import { resolve } from 'path';
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import uni from '@dcloudio/vite-plugin-uni';
 
 // 后端地址：开发时用本机，可用环境变量覆盖
@@ -59,9 +59,109 @@ function catIconVersion(): string {
 
 const CAT_ICON_VERSION = catIconVersion();
 
+/**
+ * 「哪个端用哪套图标」的**唯一**声明处（改平台策略就改这里，连同 `src/utils/catIcon.ts`）。
+ *
+ * 两套产物像素完全一致，只是容器不同（来龙去脉见 `scripts/gen-cat-icons.mjs` 头部）：
+ *   · H5  → **WebP**：体积只有 PNG 的 11.4%（94 张 1.884 MB → 0.215 MB，省 88.6%）；
+ *   · 其它端（小程序 / App / 快应用…）→ **PNG**：无法离线确认这些端能否加载**包内 webp**
+ *     （`<image>` 加载包内文件走各端原生实现、不是浏览器内核，不支持时只是安静地显示空白）。
+ *
+ * ⚠️ 这张表必须与 `src/utils/catIcon.ts` 里 `#ifdef H5` 的条件编译**保持一致**：
+ *   前者决定"产物里留哪套"，后者决定"运行时请求哪套"。两边一旦不一致，
+ *   就会出现"端上请求 `.png`、而产物里只有 `.webp`" → 图标整片空白（静默失败）。
+ */
+const ICON_FORMATS = {
+  h5: { keep: 'webp', drop: 'png' },
+  other: { keep: 'png', drop: 'webp' },
+} as const;
+
+/**
+ * 构建产物裁剪：删掉「本端永远不会请求」的那套图标（2026-10-01）。
+ *
+ * ── 为什么需要 ──────────────────────────────────────────────────────
+ * uni-app 把 `src/static/` **原样**拷进每个端的产物、不按端裁剪
+ * （见 `@dcloudio/vite-plugin-uni/dist/plugins/copy.js`）。于是实测（H5 干净构建）：
+ *   · 不裁剪整包 **4.50 MB**，裁剪后 **2.61 MB** —— 删掉的 1.88 MB 是永远不请求的 PNG（占 42%）；
+ *   · 小程序包里则多出 94 个用不到的 WebP（0.21 MB）。
+ * H5 用户**实际下载**的早已只有 WebP（URL 由 `catIconSrc()` 拼），但那堆 PNG 仍会
+ * 进部署目录、进 CDN、进镜像，删掉是纯赚。
+ *
+ * ⚠️ 为什么不用 uni 自带的平台目录（`static/<platform>/`）代替这一步：
+ *   copy.js 只认「**平台名**」目录（`static/h5/`、`static/mp-weixin/`…），
+ *   而我们要按**格式**切分，且"除 H5 之外的全部"这一侧没法用一个平台名表达。
+ *
+ * ⚠️ 为什么挂在 `closeBundle`：`static` 的拷贝发生在 `uni:copy` 的 `writeBundle`
+ *   （而且它会 await 文件监听器完成）。rollup 保证**所有** `writeBundle` 跑完才进
+ *   `closeBundle`，所以那一刻文件必定已就位。若写进 `writeBundle`，就是和自己的拷贝赛跑。
+ *
+ * ⚠️ **只动产物，绝不动源目录**：`src/static/cat-icons/` 必须始终两套齐全 ——
+ *   同一个源目录要供**所有**端的构建使用，删源文件等于毁掉另一端的构建。
+ *
+ * ⚠️ 安全阀：只删「**同名另一套确实存在**」的文件。若某张图只有被删的那一侧
+ *   （生成器出问题、手工塞进来的），就**不删、只告警** —— 宁可留一个多余文件，
+ *   也不能让某个图标凭空消失（`<image>` 会安静地显示空白，是本项目反复踩过的坑）。
+ */
+function pruneUnusedIconFormat(): Plugin {
+  let iconDir = '';
+  return {
+    name: 'prune-unused-cat-icon-format',
+    apply: 'build',
+    configResolved(config) {
+      iconDir = resolve(config.root, config.build.outDir, 'static/cat-icons');
+    },
+    closeBundle() {
+      /* 平台判定与 vite-plugin-uni 自身一致：它也用 `process.env.UNI_PLATFORM || 'h5'` 兜底 */
+      const platform = process.env.UNI_PLATFORM || 'h5';
+      const { keep, drop } = platform === 'h5' ? ICON_FORMATS.h5 : ICON_FORMATS.other;
+
+      if (!existsSync(iconDir)) {
+        /*
+         * 目录不存在有两种可能，**都值得吵**（静默跳过会让"优化没生效"没人知道）：
+         *   ① 图标没生成 / 目录改了名 → 产物里压根没有图标；
+         *   ② 本插件的时机早于 uni:copy → 裁剪失效。
+         */
+        console.warn(`[cat-icons] 产物里没有 ${iconDir}，跳过裁剪（图标没生成？还是拷贝时机变了？）`);
+        return;
+      }
+
+      const files = readdirSync(iconDir);
+      const orphans: string[] = [];
+      let dropped = 0;
+      let freed = 0;
+      for (const name of files) {
+        if (!name.endsWith(`.${drop}`)) continue;
+        const base = name.slice(0, -(drop.length + 1));
+        if (!files.includes(`${base}.${keep}`)) {
+          orphans.push(name);
+          continue;
+        }
+        freed += statSync(resolve(iconDir, name)).size;
+        rmSync(resolve(iconDir, name));
+        dropped++;
+      }
+
+      console.log(
+        `[cat-icons] ${platform} 产物：删除 ${dropped} 个 .${drop}` +
+          `（省 ${(freed / 1024 / 1024).toFixed(2)} MB），保留 .${keep}`
+      );
+      if (orphans.length) {
+        console.warn(
+          `[cat-icons] ${orphans.length} 个 .${drop} 找不到对应的 .${keep}，已保留未删` +
+            `（不该出现，请检查 scripts/gen-cat-icons.mjs）：${orphans.slice(0, 3).join('、')}`
+        );
+      }
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [uni()],
+  /*
+   * ⚠️ `pruneUnusedIconFormat()` 必须排在 `uni()` **之后**：插件钩子按数组顺序执行，
+   *    而它依赖 uni:copy 已经把 `static/` 拷进产物（见上面的长注释）。
+   */
+  plugins: [uni(), pruneUnusedIconFormat()],
   define: {
     /*
      * 分类图标的版本号，构建期文本替换进代码（见上面 catIconVersion()）。
@@ -112,8 +212,11 @@ export default defineConfig({
     host: '0.0.0.0',
     // 端口被占用时直接报错，避免静默换到 5174 让代理配置对不上
     strictPort: true,
-    // 后端未配置 CORS，H5 开发时用代理绕过跨域。
-    // 前端请求 /api 即可，不要写死后端地址（见 src/utils/request.ts）
+    // 后端**已配 CORS 白名单**（后端 src/config/config.default.ts 的 `cors.origin`，
+    // 默认放行 localhost:5173 / 127.0.0.1:5173）。这里仍然保留代理，是为了：
+    //   ① 开发时前端只认相对路径 `/api`，不必区分环境写死后端地址（见 src/utils/request.ts）；
+    //   ② 真机 / 局域网调试时，连的是本机 IP，与 CORS 白名单里的 localhost 不是同一个 Origin。
+    // 独立域名部署时改后端的 CORS_ORIGINS 即可，不需要动这里。
     proxy: {
       '/api': {
         target: BACKEND,

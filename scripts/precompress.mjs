@@ -18,9 +18,11 @@
  *    PNG / WebP / WOFF2 / ICO 这些本身已是压缩格式，再 gzip 纯属浪费
  *    CPU 和时间，产物还几乎不缩。
  *
- *    `static/cat-icons/` 下的图标就是典型：**两套都不压**，各有各的原因 ——
- *      · `.png`（小程序 / App 用）：160×160 插画，单张 11–27 KB（均值 20.5 KB），gzip 压不动；
- *      · `.webp`（H5 用）：本身已经是压缩格式，gzip 更压不动。
+ *    `static/cat-icons/` 下的图标就是典型 —— **本脚本一个都不压**，两侧各有各的原因：
+ *      · `.png`（只出现在小程序 / App 产物里）：160×160 插画，单张 11–27 KB（均值 20.5 KB），gzip 压不动；
+ *      · `.webp`（只出现在 H5 产物里）：本身已经是压缩格式，gzip 更压不动。
+ *    （构建期已按平台剔除本端用不到的那一套，见 vite.config.ts 的 pruneUnusedIconFormat()，
+ *      所以**同一个 dist 里不会两套并存**。）
  *    这类"图太大"的问题**不是靠压缩解决的**：H5 端已改成加载 WebP
  *    （94 张 1.884 MB → 0.215 MB，省 88.6%；见 scripts/gen-cat-icons.mjs 与
  *    frontend/src/utils/catIcon.ts 的平台分支），而这份脚本只负责把
