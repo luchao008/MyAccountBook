@@ -31,6 +31,37 @@ function clearSessionCaches() {
   useCategoryStore().reset();
 }
 
+/**
+ * 登录成功后**立刻预热** `GET /accounts`（2026-10-02）。
+ *
+ * ── 省的是哪一段 ────────────────────────────────────────────────────
+ * 冷启动的串行链是：
+ *   HTML → 入口 chunk(103 KB gz) → 登录页 chunk → [用户输入] →
+ *   **登录成功 → reLaunch → 主页面 chunk → `/accounts` → (`/categories` ∥ `summary`)**
+ * 从「登录成功」到「首页有数字」之间，`/accounts` 之前全是可以提前的等待 ——
+ * 预热把这次请求挪到 reLaunch 期间进行，等于**省掉 1 个 RTT**（移动网 100~300 ms）。
+ *
+ * ── ⚠️ 为什么必须在这里调用（而不是更早、或由登录页调用）────────────
+ * `utils/request.ts` 的请求拦截器是**从 storage 读 token** 的。
+ * 抢跑（比如在 `setSession` 之前、或与 `setStorageSync` 并行）会让这次请求
+ * 不带 `Authorization` → 401 → 而拦截器对 401 的处理是
+ * `reLaunch('/pages/login/index')` —— 用户会看到**刚登录成功就被踢回登录页**。
+ * 所以调用点必须在两行 `setStorageSync` **之后**。这一点没有别的写法能替代。
+ *
+ * ── 为什么 fire-and-forget ─────────────────────────────────────────
+ * 预热失败不该影响登录本身，也不该让用户看到任何提示（那不是他发起的操作）。
+ * 真失败了，页面自己的 `load()` 会正常报错并展示失败态。
+ * 并发上也是安全的：`accountStore.load()` 自带 **in-flight 合并**，
+ * 紧接着页面发起的 `load()` 会直接搭上这一次，不会多发一个请求。
+ */
+function preheatAccounts() {
+  void useAccountStore()
+    .load()
+    .catch(() => {
+      /* 静默：预热不是用户操作，失败由页面自己的加载去暴露 */
+    });
+}
+
 export const useUserStore = defineStore('user', {
   state: () => ({
     token: (uni.getStorageSync('token') || '') as string,
@@ -65,6 +96,8 @@ export const useUserStore = defineStore('user', {
       this.userInfo = res.user;
       uni.setStorageSync('token', res.token);
       uni.setStorageSync('userInfo', res.user);
+      // ⚠️ 必须在上面两行**之后**（理由见 preheatAccounts 的注释：抢跑会 401 被踢回登录页）
+      preheatAccounts();
     },
 
     logout() {

@@ -1,104 +1,110 @@
 <template>
-  <view v-if="visible" class="mask" @click="close">
-    <view class="sheet" @click.stop>
-      <view class="header">
-        <text class="header-title">筛选</text>
-        <view class="header-close" @click="close"><SvgIcon name="icon-close" :size="20" /></view>
-      </view>
+  <transition name="sheet">
+    <view v-if="visible" class="mask" @click="close">
+      <view class="sheet" @click.stop>
+        <view class="header">
+          <text class="header-title">筛选</text>
+          <view class="header-close" @click="close"><SvgIcon name="icon-close" :size="20" /></view>
+        </view>
 
-      <scroll-view class="body" scroll-y>
-        <!--
+        <scroll-view class="body" scroll-y>
+          <!--
           时间：**两行**（参考图形态）——
           第一行是预设名（本月 / 上月 / 自定义…），第二行是具体日期区间。
           一行放不下"2026年09月01日 - 2026年09月30日"，硬塞会把预设名挤掉。
         -->
-        <view class="row" @click="openTimePicker">
-          <SvgIcon class="row-icon" name="icon-clock" :size="18" />
-          <text class="row-label">时间</text>
-          <view class="row-main">
-            <text class="row-value">{{ timeLabel }}</text>
-            <text v-if="rangeText" class="row-sub">{{ rangeText }}</text>
+          <view class="row" @click="openTimePicker">
+            <SvgIcon class="row-icon" name="icon-clock" :size="18" />
+            <text class="row-label">时间</text>
+            <view class="row-main">
+              <text class="row-value">{{ timeLabel }}</text>
+              <text v-if="rangeText" class="row-sub">{{ rangeText }}</text>
+            </view>
+            <SvgIcon class="row-arrow" name="icon-chevron-right" :size="16" />
           </view>
-          <SvgIcon class="row-arrow" name="icon-chevron-right" :size="16" />
-        </view>
 
-        <!--
+          <!--
           分类：**多选弹层**（参考图形态），点开 FlowCategoryPicker。
           ⚠️ 与流水类型同一套语义：**空数组 = 不过滤**，显示「全部」。
           ⚠️ 与底栏的「分类」分组维度**不冲突** —— 那里是"换个方式组织"，
              这里是"过滤掉一部分"（用户已确认两者共存）。
         -->
-        <view class="row" @click="emit('pick-category-filter')">
-          <SvgIcon class="row-icon" name="icon-tag" :size="18" />
-          <text class="row-label">分类</text>
-          <view class="row-main">
-            <text class="row-value">{{ categoryLabel }}</text>
+          <view class="row" @click="emit('pick-category-filter')">
+            <SvgIcon class="row-icon" name="icon-tag" :size="18" />
+            <text class="row-label">分类</text>
+            <view class="row-main">
+              <text class="row-value">{{ categoryLabel }}</text>
+            </view>
+            <SvgIcon class="row-arrow" name="icon-chevron-right" :size="16" />
           </view>
-          <SvgIcon class="row-arrow" name="icon-chevron-right" :size="16" />
-        </view>
 
-        <!--
+          <!--
           流水类型：**多选弹层**（参考图形态），点开 FlowTypePicker。
           ⚠️ 全选 / 全不选都视为「不过滤」，所以全选时右侧不显示具体类型名，
              而是回落到「全部」—— 如实反映"当前没有按类型过滤"。
         -->
-        <view class="row" @click="emit('pick-type')">
-          <SvgIcon class="row-icon" name="icon-filter" :size="18" />
-          <text class="row-label">类型</text>
-          <view class="row-main">
-            <text class="row-value">{{ typeLabel }}</text>
+          <view class="row" @click="emit('pick-type')">
+            <SvgIcon class="row-icon" name="icon-filter" :size="18" />
+            <text class="row-label">类型</text>
+            <view class="row-main">
+              <text class="row-value">{{ typeLabel }}</text>
+            </view>
+            <SvgIcon class="row-arrow" name="icon-chevron-right" :size="16" />
           </view>
-          <SvgIcon class="row-arrow" name="icon-chevron-right" :size="16" />
-        </view>
 
-        <!--
+          <!--
           分类**不在这里** —— 它已经是底部栏的「分组维度」（一级/二级），与「时间」平级。
           筛选面板里再放一个分类，两个入口的语义会打架（一个是"换个方式分组"、
           一个是"过滤掉一部分"），用户分不清当前到底在按什么看。
         -->
 
-        <!-- 金额区间 -->
-        <view class="row">
-          <SvgIcon class="row-icon" name="icon-card" :size="18" />
-          <text class="row-label">金额</text>
-          <view class="amount-range">
+          <!-- 金额区间 -->
+          <view class="row">
+            <SvgIcon class="row-icon" name="icon-card" :size="18" />
+            <text class="row-label">金额</text>
+            <view class="amount-range">
+              <input
+                class="amount-input"
+                type="digit"
+                placeholder="最低"
+                :value="draft.minAmount"
+                @input="onAmountInput('minAmount', $event)"
+              />
+              <text class="amount-sep">-</text>
+              <input
+                class="amount-input"
+                type="digit"
+                placeholder="最高"
+                :value="draft.maxAmount"
+                @input="onAmountInput('maxAmount', $event)"
+              />
+            </view>
+          </view>
+
+          <!-- 备注关键词 -->
+          <view class="row">
+            <SvgIcon class="row-icon" name="icon-tag" :size="18" />
+            <text class="row-label">备注</text>
             <input
-              class="amount-input"
-              type="digit"
-              placeholder="最低"
-              :value="draft.minAmount"
-              @input="onAmountInput('minAmount', $event)"
-            />
-            <text class="amount-sep">-</text>
-            <input
-              class="amount-input"
-              type="digit"
-              placeholder="最高"
-              :value="draft.maxAmount"
-              @input="onAmountInput('maxAmount', $event)"
+              class="note-input"
+              placeholder="填写备注关键词"
+              :value="draft.keyword"
+              @input="onKeywordInput"
             />
           </view>
-        </view>
+        </scroll-view>
 
-        <!-- 备注关键词 -->
-        <view class="row">
-          <SvgIcon class="row-icon" name="icon-tag" :size="18" />
-          <text class="row-label">备注</text>
-          <input
-            class="note-input"
-            placeholder="填写备注关键词"
-            :value="draft.keyword"
-            @input="onKeywordInput"
-          />
+        <view class="footer">
+          <view class="btn btn-reset" @click="reset"
+            ><text class="btn-text reset-text">重置</text></view
+          >
+          <view class="btn btn-confirm" @click="confirm"
+            ><text class="btn-text confirm-text">确定</text></view
+          >
         </view>
-      </scroll-view>
-
-      <view class="footer">
-        <view class="btn btn-reset" @click="reset"><text class="btn-text reset-text">重置</text></view>
-        <view class="btn btn-confirm" @click="confirm"><text class="btn-text confirm-text">确定</text></view>
       </view>
     </view>
-  </view>
+  </transition>
 </template>
 
 <script setup lang="ts">
@@ -155,7 +161,7 @@ watch(
   () => props.visible,
   (v) => {
     if (v) Object.assign(draft, props.model);
-  }
+  },
 );
 
 /*
@@ -188,7 +194,7 @@ watch(
     draft.types = [...(props.model.types || [])];
     draft.categoryIds = [...(props.model.categoryIds || [])];
   },
-  { deep: true }
+  { deep: true },
 );
 
 const timeLabel = computed(() => draft.timeLabel || '全部时间');

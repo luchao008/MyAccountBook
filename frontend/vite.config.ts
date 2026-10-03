@@ -155,13 +155,179 @@ function pruneUnusedIconFormat(): Plugin {
   };
 }
 
+/**
+ * 给「前两个屏」的 chunk 注入 `<link rel="modulepreload">`（2026-10-02）。
+ *
+ * ── 省的是哪一段 ────────────────────────────────────────────────────
+ * 入口 chunk（`index-*.js`，103 KB gz）是**自包含**的（0 条静态 import），
+ * 页面靠 `import("./pages-login-index…")` 动态拉。所以浏览器必须先：
+ *   下载入口 → 解析 → **执行到那一行** → 才发现"哦还要下登录页 chunk"
+ * —— 这是串行的第二跳。modulepreload 让它在解析 HTML 时就开始下，两跳变一跳。
+ * 高延迟网络（移动网 RTT 100~300 ms）省约 1 个 RTT。
+ *
+ * ── 为什么只 preload 前两屏 ─────────────────────────────────────────
+ * 登录页与主页面是 App 的**前两个屏**，用户必定经过。其余 17 个页面是"按需才去"，
+ * 给它们也 preload 等于**变相全量预下载**，反而把首屏带宽抢走。
+ *
+ * ── ⚠️ 为什么必须由插件注入、不能手写 ───────────────────────────────
+ * 文件名带内容 hash（`pages-login-index.CWwSO0eq.js`），每次构建都变。
+ * 手写进 `index.html` 必然在下次构建后漂移成 404 —— 而 404 的 modulepreload
+ * **不会报错**（浏览器只是白下一次），所以这种坏法只能靠人肉发现。
+ *
+ * ── 为什么用 `order: 'post'` ────────────────────────────────────────
+ * 需要 `ctx.bundle` 才知道 chunk 的真实文件名；而 build 模式下 `ctx.bundle`
+ * 只在 post 阶段可用。同时 post 保证跑在 uni 自己把 `<!--preload-links-->`
+ * 等标记替换掉之后（实测产物里那三个标记已全部消失），不会互相覆盖。
+ */
+function preloadFirstScreens(): Plugin {
+  /**
+   * 需要 preload 的页面 chunk 名称片段。
+   * ⚠️ 改动这里之前先想清楚"这个页面是不是用户进 App 就一定会到"。
+   */
+  const FIRST_SCREENS = ['pages-login-index', 'pages-main-index'];
+
+  return {
+    name: 'preload-first-screens',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, ctx) {
+        // ⚠️ 非 H5 端产物里没有 index.html（或形状不同）→ 直接放过
+        if (!ctx.bundle) return html;
+
+        const links: string[] = [];
+        for (const [fileName, output] of Object.entries(ctx.bundle)) {
+          if (output.type !== 'chunk') continue;
+          if (!FIRST_SCREENS.some((frag) => fileName.includes(frag))) continue;
+          /*
+           * `crossorigin` 不能省：入口 `<script type="module">` 也是 crossorigin，
+           * 二者的取回模式必须一致，否则浏览器会把它们当成两份资源**再下一次**。
+           */
+          links.push(`    <link rel="modulepreload" crossorigin href="/${fileName}">`);
+        }
+
+        if (!links.length) {
+          /*
+           * ⚠️ 必须吵。找不到 = 要么页面改名了、要么 vite 的 bundle 形状变了。
+           *    静默跳过的话，这条优化会**无声失效**，而产物看起来完全正常。
+           */
+          console.warn(
+            `[preload] 产物里找不到这些页面 chunk：${FIRST_SCREENS.join(' / ')}` +
+              ` —— 首屏预加载**没有生效**，请检查页面是否改名`
+          );
+          return html;
+        }
+
+        console.log(`[preload] 已注入 ${links.length} 条首屏 modulepreload`);
+        return html.replace('</head>', `${links.join('\n')}\n  </head>`);
+      },
+    },
+  };
+}
+
+/**
+ * 是否在 H5 产物里剔除 `echarts.min.js`（730 KB）。
+ *
+ * ⚠️ **将来要开启 H5 端 echarts 时必须先把它改成 `false`**，否则
+ *    qiun-data-charts 运行时注入的那个 `<script>` 会 404，而图表
+ *    **静默不显示**（它没有任何 error 分支会把这件事暴露给用户）。
+ */
+const PRUNE_UNUSED_ECHARTS = true;
+
+/**
+ * H5 产物裁剪：删掉 `uni_modules/qiun-data-charts/static/h5/echarts.min.js`。
+ *
+ * ── 为什么能删 ──────────────────────────────────────────────────────
+ * 该文件由 qiun-data-charts **运行时**注入，而注入点在
+ * `if (this.echarts) {...}` 分支里，`echarts` 只会因为 `echartsH5 === true`
+ * 而被置真 —— 这两个 prop 的默认值是 `false`，且全项目没有任何调用点传过它们
+ * （H5 端实际走 `u-charts`）。所以它是**从不被请求的净重**。
+ *
+ * ── 收益口径（别报错方向）──────────────────────────────────────────
+ * **用户侧收益 = 0**（反正不下载）。省的是部署目录、镜像层、CDN 存储与传输：
+ * H5 产物 3.9 MB → 约 3.2 MB。
+ *
+ * ── ⚠️ 三条硬约束 ──────────────────────────────────────────────────
+ * 1. **只删产物，绝不删源文件**。`src/uni_modules/qiun-data-charts/static/`
+ *    要供所有端的构建使用（App 端要 `static/app-plus/` 那份），删源还会被
+ *    包管理重装覆盖回来。
+ * 2. **连 `.gz` 一起删**。产物里可能残留上一轮 `scripts/precompress.mjs`
+ *    压出来的 `echarts.min.js.gz` —— 只删 `.js` 会留下一个孤儿压缩包，
+ *    逻辑上"文件已删"、磁盘上还占着。
+ * 3. **找不到目标要吵**，不能静默跳过 —— 但只在"源文件确实存在"时吵。
+ *    否则源被移除（正常情况）或本函数执行时机变了都会误报，噪音会把真问题淹掉。
+ *
+ * ⚠️ 时机同 `pruneUnusedIconFormat`：必须放在 `closeBundle`，
+ *    rollup 保证所有 `writeBundle`（uni 的 `static` 拷贝在其中）跑完才进这里。
+ */
+function pruneUnusedEcharts(): Plugin {
+  /** 源文件：用来判断"产物里没有目标"到底是正常（源也没了）还是异常（拷贝漏了）*/
+  const SRC = resolve(
+    __dirname,
+    'src/uni_modules/qiun-data-charts/static/h5/echarts.min.js'
+  );
+  /** 产物里的相对路径（与 uni 拷贝时保持的结构一致）*/
+  const REL = 'uni_modules/qiun-data-charts/static/h5/echarts.min.js';
+
+  let outDir = '';
+  return {
+    name: 'prune-unused-echarts',
+    apply: 'build',
+    configResolved(config) {
+      outDir = config.build.outDir;
+    },
+    closeBundle() {
+      /* 其他端不拷贝 static/h5/，也就没有可剔的；不吵 */
+      if ((process.env.UNI_PLATFORM || 'h5') !== 'h5') return;
+
+      if (!PRUNE_UNUSED_ECHARTS) {
+        console.log(
+          '[echarts] 剔除已关闭（PRUNE_UNUSED_ECHARTS=false）—— 产物里会保留约 730 KB 的 echarts.min.js'
+        );
+        return;
+      }
+
+      const base = resolve(outDir, REL);
+      const targets = [base, `${base}.gz`];
+      let removed = 0;
+      let freed = 0;
+      for (const t of targets) {
+        if (!existsSync(t)) continue;
+        freed += statSync(t).size;
+        rmSync(t);
+        removed += 1;
+      }
+
+      if (removed === 0) {
+        if (existsSync(SRC)) {
+          console.warn(
+            `[echarts] 源文件在、但产物里没有 ${REL} —— 剔除**没有生效**。` +
+              `请检查 uni 的拷贝路径或本插件的执行时机`
+          );
+        }
+        return;
+      }
+
+      console.log(
+        `[echarts] H5 产物已剔除 echarts.min.js（${removed} 个文件，省 ${(freed / 1024 / 1024).toFixed(2)} MB）`
+      );
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   /*
    * ⚠️ `pruneUnusedIconFormat()` 必须排在 `uni()` **之后**：插件钩子按数组顺序执行，
    *    而它依赖 uni:copy 已经把 `static/` 拷进产物（见上面的长注释）。
+   *    后面两个同理（`pruneUnusedEcharts` 也读产物文件）。
    */
-  plugins: [uni(), pruneUnusedIconFormat()],
+  plugins: [
+    uni(),
+    pruneUnusedIconFormat(),
+    preloadFirstScreens(),
+    pruneUnusedEcharts(),
+  ],
   define: {
     /*
      * 分类图标的版本号，构建期文本替换进代码（见上面 catIconVersion()）。

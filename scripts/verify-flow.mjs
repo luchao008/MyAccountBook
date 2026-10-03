@@ -14,13 +14,18 @@ const pw = await import(PW);
 const { chromium } = pw.default ?? pw;
 function findChrome() {
   const root = `${process.env.HOME}/Library/Caches/ms-playwright`;
-  for (const d of fs.readdirSync(root).filter(x=>x.startsWith('chromium-')).sort().reverse())
-    for (const arch of ['chrome-mac-arm64','chrome-mac-x64']) {
+  for (const d of fs
+    .readdirSync(root)
+    .filter((x) => x.startsWith('chromium-'))
+    .sort()
+    .reverse())
+    for (const arch of ['chrome-mac-arm64', 'chrome-mac-x64']) {
       const p = `${root}/${d}/${arch}/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`;
       if (fs.existsSync(p)) return p;
     }
 }
-let pass=0, fail=0;
+let pass = 0,
+  fail = 0;
 const check = (n, ok, extra = '') => {
   if (ok) {
     pass += 1;
@@ -31,19 +36,23 @@ const check = (n, ok, extra = '') => {
   }
 };
 
-const browser = await chromium.launch({ executablePath: findChrome(), args: ['--no-proxy-server'] });
-const page = await (await browser.newContext({ viewport:{width:375,height:812} })).newPage();
-page.on('pageerror', e => console.log('[pageerror]', e.message.slice(0,150)));
+const browser = await chromium.launch({
+  executablePath: findChrome(),
+  args: ['--no-proxy-server'],
+});
+const page = await (await browser.newContext({ viewport: { width: 375, height: 812 } })).newPage();
+page.on('pageerror', (e) => console.log('[pageerror]', e.message.slice(0, 150)));
 
-await page.goto('http://127.0.0.1:5173', { waitUntil:'domcontentloaded' });
+await page.goto('http://127.0.0.1:5173', { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(1500);
 if (page.url().includes('/pages/login')) {
   const inputs = page.locator('input');
-  await inputs.nth(0).fill('demo'); await inputs.nth(1).fill('123456');
-  await page.getByText('登录',{exact:true}).last().click();
+  await inputs.nth(0).fill('demo');
+  await inputs.nth(1).fill('123456');
+  await page.getByText('登录', { exact: true }).last().click();
   await page.waitForTimeout(2500);
 }
-await page.goto('http://127.0.0.1:5173/#/pages/flow/index', { waitUntil:'domcontentloaded' });
+await page.goto('http://127.0.0.1:5173/#/pages/flow/index', { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(3000);
 
 console.log('[1] 展开分组');
@@ -77,7 +86,9 @@ console.log('[1.5] 吸顶与变色');
    * ⚠️ 不能用 `el.scrollTop = N` 设滚动位置（uni-app 会回写），
    *    这里用 `window.scrollTo` —— 实测它能生效且不被重置。
    */
-  const navH = await page.evaluate(() => Math.round(document.querySelector('.nav').getBoundingClientRect().height));
+  const navH = await page.evaluate(() =>
+    Math.round(document.querySelector('.nav').getBoundingClientRect().height),
+  );
 
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.waitForTimeout(400);
@@ -110,7 +121,7 @@ console.log('[1.5] 吸顶与变色');
   check(
     '组头吸在顶栏下方',
     scrolled.ghTop === navH && scrolled.ghSticky === 'sticky',
-    'ghTop=' + scrolled.ghTop + ' navH=' + navH + ' pos=' + scrolled.ghSticky
+    'ghTop=' + scrolled.ghTop + ' navH=' + navH + ' pos=' + scrolled.ghSticky,
   );
   await page.screenshot({ path: '/tmp/flow-sticky.png' });
 }
@@ -135,7 +146,7 @@ console.log('[3] 分组粒度弹层');
   await page.locator('.filter-item').first().click();
   await page.waitForTimeout(700);
   const t = await page.evaluate(() => document.body.innerText);
-  for (const u of ['年','季','月','周','天']) check('粒度选项 ' + u, t.includes(u));
+  for (const u of ['年', '季', '月', '周', '天']) check('粒度选项 ' + u, t.includes(u));
   // 选「天」
   await page.locator('.sheet-item-text', { hasText: '天' }).first().click();
   await page.waitForTimeout(2500);
@@ -155,7 +166,7 @@ console.log('[4] 分类维度弹层（一级 / 二级）');
   check(
     '弹层只有「一级分类 / 二级分类」两行',
     JSON.stringify(sheet.items) === '["一级分类","二级分类"]',
-    JSON.stringify(sheet.items)
+    JSON.stringify(sheet.items),
   );
   // 参考图里这个弹层没有「确定」—— 它选的是分组维度，点即生效
   check('无「确定」按钮（点即生效）', sheet.confirm === 0, 'confirm=' + sheet.confirm);
@@ -170,7 +181,11 @@ console.log('[4] 分类维度弹层（一级 / 二级）');
     const s = document.querySelector('.sheet').getBoundingClientRect();
     return { sheetBottom: Math.round(s.bottom), vh: window.innerHeight };
   });
-  check('分类层级弹层贴屏幕底边（不留底栏高度）', lay.sheetBottom >= lay.vh - 1, JSON.stringify(lay));
+  check(
+    '分类层级弹层贴屏幕底边（不留底栏高度）',
+    lay.sheetBottom >= lay.vh - 1,
+    JSON.stringify(lay),
+  );
 
   // ⚠️ 先关掉分类层级弹层（它没有 header，点遮罩关闭），检查完再重新打开
   await page.mouse.click(187, 60);
@@ -184,7 +199,7 @@ console.log('[4] 分类维度弹层（一级 / 二级）');
   check(
     '「更多操作」弹层贴屏幕底边',
     !!flush && flush.bottom >= flush.vh - 1,
-    JSON.stringify(flush)
+    JSON.stringify(flush),
   );
   await page.locator('.sheet-cancel').click();
   await page.waitForTimeout(500);
@@ -197,11 +212,17 @@ console.log('[4] 分类维度弹层（一级 / 二级）');
   await page.locator('.sheet-item-text', { hasText: '二级分类' }).first().click();
   await page.waitForTimeout(3000);
   const g = await page.evaluate(() => ({
-    titles: [...document.querySelectorAll('.group-title')].slice(0, 3).map((e) => e.textContent.trim()),
+    titles: [...document.querySelectorAll('.group-title')]
+      .slice(0, 3)
+      .map((e) => e.textContent.trim()),
     subs: [...document.querySelectorAll('.group-sub')].slice(0, 3).map((e) => e.textContent.trim()),
     bar: document.querySelector('.filter-bar').textContent.trim(),
   }));
-  check('分组标题是分类名（非时间段）', g.titles.length > 0 && !/^\d+月$/.test(g.titles[0]), JSON.stringify(g.titles));
+  check(
+    '分组标题是分类名（非时间段）',
+    g.titles.length > 0 && !/^\d+月$/.test(g.titles[0]),
+    JSON.stringify(g.titles),
+  );
   check('底栏显示「二级分类」', g.bar.includes('二级分类'), g.bar);
 
   // 切回时间维度
@@ -243,13 +264,15 @@ console.log('[5] 搜索');
   check(
     '搜索后进入确定结果态（分组 / 空 / 非错误）',
     !state.err && !state.loading && (state.groups > 0 || state.empty),
-    JSON.stringify(state)
+    JSON.stringify(state),
   );
 }
 
 console.log('[6] 日历页');
 {
-  await page.goto('http://127.0.0.1:5173/#/pages/calendar/index', { waitUntil:'domcontentloaded' });
+  await page.goto('http://127.0.0.1:5173/#/pages/calendar/index', {
+    waitUntil: 'domcontentloaded',
+  });
   await page.waitForTimeout(3000);
   const cells = await page.evaluate(() => document.querySelectorAll('.day').length);
   check('日历格子渲染', cells >= 28, 'cells=' + cells);
@@ -260,6 +283,177 @@ console.log('[6] 日历页');
   await page.screenshot({ path: '/tmp/calendar.png', fullPage: true });
 }
 
+/*
+ * [7] 滚到底自动加载下一批
+ *
+ * ⚠️ 这段**必须伪造 total**，否则测不到 —— demo 账号最多的分组只有 15 条，
+ *    不到 `PAGE_SIZE`(100)，真实情况下永远不会出现「还有更多」。
+ *    这是"探针得能造出目标状态"的一个例子。
+ *
+ * ⚠️ **page=2 必须返回非空，且数据要取自 page=1**（page=2 的真实响应是空数组，
+ *    demo 的 15 条全在 page=1 —— 从它 slice 出来只会得到空数组，等于没伪造）。
+ *    否则 `loadMoreDetail` 会把 total 收窄成实际条数、按钮随之消失，
+ *    之后几次触底都找不到目标 —— 那么"只发了 1 次请求"的真正原因就成了
+ *    **按钮没了**，而**不是节流生效**。**归因错误会让人以为测到了节流。**
+ *
+ * ⚠️ 压测节流的方式是**在底部反复抖动**（`scrollBy(0,1)` 每次都会再触发
+ *    `onReachBottom`）。只滚一次的话"只发 1 个请求"是必然的，什么都测不到。
+ *
+ * pattern 刻意**不含 `/summary`** —— 分组聚合走 `/api/transactions/summary?…`，
+ * 不会被拦到，所以组头的笔数/金额仍是真实值（伪造 total 不会污染它）。
+ */
+/*
+ * [7] 预加载：接近底部就自动补下一批（而不是等触底）
+ *
+ * 核心判据是「**未触底就已发出 page=2**」—— 这正是预加载与"触底加载"的唯一区别。
+ *
+ * ⚠️ 这段**必须伪造 total**，否则测不到 —— demo 账号最多的分组只有 15 条，
+ *    不到 `PAGE_SIZE`(100)，真实情况下永远不会出现「还有更多」。
+ *
+ * ⚠️ **page=2 的真实响应里 `list` 是空数组**（demo 的 15 条全在 page=1），
+ *    从它 slice 出来只会得到空数组 = 等于没伪造 ⇒ 必须**缓存 page=1 的 list** 再回喂。
+ *    而且要覆盖**所有** page>=2：page=3 返回空会让 total 被收窄、按钮消失，
+ *    后续滚动就找不到目标，判据会**因为按钮没了而假通过**。
+ *
+ * ⚠️ page>=3 时刻意把 `total` 收到「实际累计条数」来**制造末页**，
+ *    好验证"已到末页后不再发无效请求"。
+ *
+ * pattern 刻意**不含 `/summary`** —— 分组聚合走 `/api/transactions/summary?…`，
+ * 不会被拦到，所以组头的笔数/金额仍是真实值（伪造 total 不会污染它）。
+ */
+console.log('[7] 预加载（接近底部就自动补下一批）');
+{
+  const detailReqs = [];
+  let cachedFirstPage = null;
+  const handler = async (route) => {
+    const res = await route.fetch();
+    const url = decodeURIComponent(route.request().url());
+    detailReqs.push(url);
+    try {
+      const body = await res.json();
+      if (body?.data && typeof body.data.total === 'number') {
+        if (Array.isArray(body.data.list)) {
+          if (cachedFirstPage === null && body.data.list.length) cachedFirstPage = body.data.list;
+          const pm = /[?&]page=(\d+)(&|$)/.exec(url);
+          const p = pm ? Number(pm[1]) : 1;
+          if (p >= 2) {
+            // 每页回喂 5 条；第 3 页起把 total 收到"实际累计条数"⇒ 制造末页
+            body.data.total = p >= 3 ? 15 + 5 * (p - 1) : 200;
+            body.data.list = (cachedFirstPage || [])
+              .slice(0, 5)
+              .map((t, i) => ({ ...t, id: 'auto' + p + '-' + i }));
+          } else {
+            body.data.total = 200; // 首屏：伪造"还有 185 条"
+          }
+        }
+        await route.fulfill({ response: res, body: JSON.stringify(body) });
+        return;
+      }
+      await route.fulfill({ response: res });
+    } catch {
+      await route.fulfill({ response: res });
+    }
+  };
+  await page.route('**/api/transactions?*', handler);
+
+  /*
+   * ⚠️ **必须 reload**：上一段停在日历页，而这里只是把 hash 换成 flow ——
+   *    浏览器对"同文档、仅 hash 不同"的 goto **不会重新加载文档**，
+   *    于是页面没真正切过去（实测：明细行数 0、按钮不出现）。
+   *    与登录后那次 goto 的区别正在于此：那次 hash 是从别的路径变成 flow，等于换页。
+   */
+  await page.goto('http://127.0.0.1:5173/#/pages/flow/index', { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(800);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(3000);
+  const btnText = () =>
+    page.evaluate(() => {
+      const el = document.querySelector('.detail-more');
+      return el ? el.innerText.replace(/\s+/g, ' ').trim() : null;
+    });
+
+  const before = await btnText();
+  check(
+    '伪造 total 后出现「加载更多」并写明已显示 / 总数',
+    !!before && /已显示 \d+ \/ 200 条/.test(before),
+    before || '(无)',
+  );
+
+  const countPage = (n) =>
+    detailReqs.filter((u) => new RegExp(`[?&]page=${n}(&|$)`).test(u)).length;
+
+  /*
+   * ⚠️ 滚动目标算错过一次，务必注意：
+   *   我原来写「滚到距底部 0.8 屏」—— 但 **0.8 屏 < 1 屏**，那个位置落在**最大滚动位置之外**，
+   *   浏览器只能滚到 maxScrollTop（= 触底）⇒ 触发的是 `onReachBottom` 兜底，
+   *   而"未触底就预取"那条判据**照样是绿的**（负向验证把阈值设成 0 也没红）。
+   *   ⇒ **负向验证救了一次假绿。**
+   *
+   * 正确做法：滚到「距底部 0.9 **屏**」—— 0.9vh 这个位置在 maxScrollTop **之内**
+   *   （maxScrollTop 距底部只有 1 屏），所以可达、且**确实还没触底**；
+   *   阈值是 1.5 屏 ⇒ 0.9 屏 < 1.5 屏，仍在预取范围内。
+   */
+  await page.evaluate(() => {
+    const el = document.documentElement;
+    const gap = window.innerHeight * 0.9;
+    window.scrollTo(0, Math.max(0, el.scrollHeight - window.innerHeight - gap));
+  });
+  await page.waitForTimeout(1500);
+
+  /*
+   * "未触底"的判据用「**还能继续往下滚**」（`scrollY < maxScrollTop`）。
+   * ⚠️ **不要**用"预取完成后的距底部距离"—— 预取会追加内容、抬高 maxScrollTop，
+   *    那个数字会被"内容变长"掩盖（我第一次就是这么被骗的：距离只剩 138px，看着像没触底）。
+   *    `scrollY` 不会因为下方追加内容而改变，所以这个判据是稳的。
+   */
+  const pos = await page.evaluate(() => {
+    const el = document.documentElement;
+    return { y: Math.round(window.scrollY), max: Math.round(el.scrollHeight - window.innerHeight) };
+  });
+  const p2 = countPage(2);
+  check(
+    '**未触底**就已预取第 2 页（这正是预加载与"触底加载"的唯一区别）',
+    p2 >= 1,
+    `page=2 请求 ${p2} 次`,
+  );
+  check(
+    '发请求时**还能继续往下滚**（证明确实"提前"了，不是滑到底才发）',
+    pos.y < pos.max,
+    `scrollY=${pos.y} / maxScrollTop=${pos.max}（还有 ${pos.max - pos.y}px 可滚）`,
+  );
+  const rowAfterPrefetch = await page.locator('.txn').count();
+  check(
+    '预取的数据已追加进列表（到达底部时无需等待）',
+    rowAfterPrefetch >= 20,
+    `明细行数 ${rowAfterPrefetch}`,
+  );
+
+  // ② 继续滚动（> PREFETCH_CASCADE_GUARD_PX = 24px）⇒ 触发条件应重置，接着预取第 3 页
+  await page.evaluate(() => window.scrollBy(0, 40));
+  await page.waitForTimeout(1500);
+  const p3 = countPage(3);
+  check('继续滚动后接着预取第 3 页（触发条件已重置，可持续预取）', p3 >= 1, `page=3 请求 ${p3} 次`);
+
+  // ③ 末页：page=3 已把 total 收到实际条数 ⇒ 之后不该再有 page=4
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await page.waitForTimeout(1000);
+  await page.evaluate(() => window.dispatchEvent(new Event('scroll')));
+  await page.waitForTimeout(1000);
+  const p4 = countPage(4);
+  check('已到末页后不再发无效请求', p4 === 0, `page=4 请求 ${p4} 次`);
+
+  const after = await btnText();
+  /*
+   * 末页时按钮**应该消失**（`v-if="hasMoreDetail(g.key)"` 为 false）——
+   * 这本身就是"末页判断正确"的一部分：既不发无效请求，也不留一个点不动的按钮。
+   * ⚠️ 我先前把判据写成「文案更新为『已显示 25 / 25 条』」，那是**想反了**：
+   *     `loaded(25) >= total(25)` ⇒ 按钮整个不渲染，文案根本不会出现。
+   */
+  check('到末页后按钮消失（不留一个点不动的入口）', after === null, after || '(已消失 ✅)');
+
+  await page.unroute('**/api/transactions?*', handler);
+}
+
 console.log(`\n结果：PASS=${pass} FAIL=${fail}`);
 await browser.close();
-process.exit(fail>0?1:0);
+process.exit(fail > 0 ? 1 : 0);

@@ -105,11 +105,16 @@ export function periodLabel(key: string, unit: string): { title: string; sub: st
 }
 
 /**
- * 日期 → 「13日 周一」这种日期头（明细按日分组时用）。
+ * 日期 → 「13日 周一」/「9月13日 周一」这种日期头（流水页明细按日分组时用）。
  *
- * `withMonth`：**分类维度下必须传 true**。分类维度的组头是分类名（如「餐饮」），
- * 它下面的明细会横跨多个月 —— 只写「13日」根本看不出是哪个月（8 月 13 和 9 月 13 长得一样）。
- * 时间维度下组头本身已经带月份（「9月」），再加一次就是重复信息，所以默认不加。
+ * `withMonth` 的判据**不在本函数里**，由调用方决定 —— 流水页是 `dayHeadWithMonth`
+ * （见 `pages/flow/index.vue`）。规则（2026-10-03 luchao 定）：
+ *   · **只有「时间维度 × 月粒度」传 false** —— 组头已经是「9月」，明细必然同月，再加是重复
+ *   · 其余一律传 true：年 / 季 / 分类（明细横跨多个月）、
+ *     周（**ISO 周会跨月**，如 9月30 ~ 10月6）、天（与组头重复，但规则统一）
+ *
+ * 核心问题是"**仅看这一行文字，能不能确定是哪一天**"：
+ *   8月13 与 9月13 的日头如果都写「13日 周三」，两者完全同形，无法区分。
  */
 export function dayHeader(dateStr: string, withMonth = false): string {
   const [y, m, d] = dateStr.split('-').map(Number);

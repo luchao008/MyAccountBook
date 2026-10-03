@@ -9,45 +9,50 @@
     所以月历格子不能再靠模板里现调函数去算：格子状态走 `grids` computed 预算，「今天」
     每次打开只取一次（`todayDate`）。改动前后的静态计数见 `buildCells` 的注释。
   -->
-  <view v-if="everOpened" v-show="visible" class="mask" @click="close">
-    <view class="sheet" @click.stop>
-      <view class="header">
-        <text />
-        <text class="done" @click="confirm">完成</text>
-      </view>
+  <transition name="sheet">
+    <view v-if="everOpened" v-show="visible" class="mask" @click="close">
+      <view class="sheet" @click.stop>
+        <view class="header">
+          <text />
+          <text class="done" @click="confirm">完成</text>
+        </view>
 
-      <!-- ===== 日期面板：日历在上，「时刻」行在下 ===== -->
-      <view v-if="panel === 'date'" class="panel">
-        <view class="cal">
-          <view class="cal-header">
-            <view class="cal-nav" @click="shiftBy(-1)"><SvgIcon name="icon-chevron-left" :size="20" /></view>
-            <view class="cal-title" @click="toggleMonthPicker">
-              <text class="cal-title-text">{{ viewYear }} 年 {{ viewMonth + 1 }} 月</text>
-              <SvgIcon
-                class="cal-title-caret"
-                :name="showMonthPicker ? 'icon-chevron-up' : 'icon-chevron-down'"
-                :size="16"
-              />
+        <!-- ===== 日期面板：日历在上，「时刻」行在下 ===== -->
+        <view v-if="panel === 'date'" class="panel">
+          <view class="cal">
+            <view class="cal-header">
+              <view class="cal-nav" @click="shiftBy(-1)"
+                ><SvgIcon name="icon-chevron-left" :size="20"
+              /></view>
+              <view class="cal-title" @click="toggleMonthPicker">
+                <text class="cal-title-text">{{ viewYear }} 年 {{ viewMonth + 1 }} 月</text>
+                <SvgIcon
+                  class="cal-title-caret"
+                  :name="showMonthPicker ? 'icon-chevron-up' : 'icon-chevron-down'"
+                  :size="16"
+                />
+              </view>
+              <view class="cal-nav" @click="shiftBy(1)"
+                ><SvgIcon name="icon-chevron-right" :size="20"
+              /></view>
             </view>
-            <view class="cal-nav" @click="shiftBy(1)"><SvgIcon name="icon-chevron-right" :size="20" /></view>
-          </view>
 
-          <!-- 年月快速选择 -->
-          <view v-if="showMonthPicker" class="month-picker">
-            <picker-view class="wheel" :value="monthWheelValue" @change="onMonthWheelChange">
-              <picker-view-column>
-                <view v-for="y in years" :key="'y' + y" class="wheel-item">{{ y }} 年</view>
-              </picker-view-column>
-              <picker-view-column>
-                <view v-for="m in 12" :key="'m' + m" class="wheel-item">{{ m }} 月</view>
-              </picker-view-column>
-            </picker-view>
-            <view class="confirm" @click="confirmMonthPicker">
-              <text class="confirm-text">确定</text>
+            <!-- 年月快速选择 -->
+            <view v-if="showMonthPicker" class="month-picker">
+              <picker-view class="wheel" :value="monthWheelValue" @change="onMonthWheelChange">
+                <picker-view-column>
+                  <view v-for="y in years" :key="'y' + y" class="wheel-item">{{ y }} 年</view>
+                </picker-view-column>
+                <picker-view-column>
+                  <view v-for="m in 12" :key="'m' + m" class="wheel-item">{{ m }} 月</view>
+                </picker-view-column>
+              </picker-view>
+              <view class="confirm" @click="confirmMonthPicker">
+                <text class="confirm-text">确定</text>
+              </view>
             </view>
-          </view>
 
-          <!--
+            <!--
             日历网格：swiper 固定 3 项（前 / 当前 / 后月），滑完复位到中间再换数据。
             ⚠️ 这是本组件**弹出速度的命门**：早先版本一次性渲染 2000 ~ MAX_YEAR 的
                全部 384 个月（384 个 swiper-item + 5 张月历），真机会把主线程堵住 1s 以上，
@@ -55,81 +60,82 @@
                （原生手势 + 惯性仍在），挂载成本降两个数量级。
                与日历页 `pages/calendar/index.vue` 收起态是同一套做法。
           -->
-          <view v-else class="cal-grid">
-            <view class="week-row">
-              <text v-for="w in weekLabels" :key="w" class="week-label">{{ w }}</text>
-            </view>
-            <!--
+            <view v-else class="cal-grid">
+              <view class="week-row">
+                <text v-for="w in weekLabels" :key="w" class="week-label">{{ w }}</text>
+              </view>
+              <!--
               ⚠️ 格子内容全部来自 grids 里预算好的 m.cells，**不要再在下面写函数调用**：
               模板表达式没有缓存，每格每次渲染都要重判「今 / 选中」，而本组件 v-show
               常驻不销毁 —— 连切面板、滚时分滚轮这种与月历无关的重渲染也会重算三张月历。
               （这段注释特意放在 v-for **外面**：写进 swiper-item 里会变成每格一个注释节点。）
             -->
-            <swiper
-              class="month-swiper"
-              :current="swiperIndex"
-              :duration="swipeDuration"
-              @animationfinish="onSwipeSettle"
-            >
-              <swiper-item v-for="(m, i) in grids" :key="i">
-                <view class="day-grid">
-                  <view v-for="(cell, j) in m.cells" :key="j" class="day-cell">
-                    <view
-                      v-if="cell"
-                      class="day"
-                      :class="{ today: cell.isToday, selected: cell.isSelected }"
-                      @click="selectOf(m.year, m.month, cell.day)"
-                    >
-                      <text class="day-text">{{ cell.text }}</text>
+              <swiper
+                class="month-swiper"
+                :current="swiperIndex"
+                :duration="swipeDuration"
+                @animationfinish="onSwipeSettle"
+              >
+                <swiper-item v-for="(m, i) in grids" :key="i">
+                  <view class="day-grid">
+                    <view v-for="(cell, j) in m.cells" :key="j" class="day-cell">
+                      <view
+                        v-if="cell"
+                        class="day"
+                        :class="{ today: cell.isToday, selected: cell.isSelected }"
+                        @click="selectOf(m.year, m.month, cell.day)"
+                      >
+                        <text class="day-text">{{ cell.text }}</text>
+                      </view>
                     </view>
                   </view>
-                </view>
-              </swiper-item>
-            </swiper>
+                </swiper-item>
+              </swiper>
+            </view>
           </view>
-        </view>
 
-        <!-- 时刻行（在日历下方；年月滚轮展开时隐藏） -->
-        <view v-if="!showMonthPicker" class="row" @click="onTimeRowClick">
-          <text class="row-label">时刻</text>
-          <view class="row-right">
-            <text v-if="timeEnabled" class="row-value">{{ timeText }}</text>
-            <view class="switch-wrap" @click.stop>
-              <switch :checked="timeEnabled" color="#CF4A12" @change="onTimeSwitch" />
+          <!-- 时刻行（在日历下方；年月滚轮展开时隐藏） -->
+          <view v-if="!showMonthPicker" class="row" @click="onTimeRowClick">
+            <text class="row-label">时刻</text>
+            <view class="row-right">
+              <text v-if="timeEnabled" class="row-value">{{ timeText }}</text>
+              <view class="switch-wrap" @click.stop>
+                <switch :checked="timeEnabled" color="#CF4A12" @change="onTimeSwitch" />
+              </view>
             </view>
           </view>
         </view>
-      </view>
 
-      <!-- ===== 时刻面板：日期行 + 时刻行 + 时分滚轮在下 ===== -->
-      <view v-else class="panel">
-        <view class="row" @click="onDateRowClick">
-          <text class="row-label">日期</text>
-          <view class="row-right">
-            <text class="row-value">{{ dateText }}</text>
-            <SvgIcon class="row-arrow" name="icon-chevron-right" :size="16" />
-          </view>
-        </view>
-        <view class="row" @click="onTimeRowClick">
-          <text class="row-label">时刻</text>
-          <view class="row-right">
-            <text class="row-value">{{ timeText }}</text>
-            <view class="switch-wrap" @click.stop>
-              <switch :checked="timeEnabled" color="#CF4A12" @change="onTimeSwitch" />
+        <!-- ===== 时刻面板：日期行 + 时刻行 + 时分滚轮在下 ===== -->
+        <view v-else class="panel">
+          <view class="row" @click="onDateRowClick">
+            <text class="row-label">日期</text>
+            <view class="row-right">
+              <text class="row-value">{{ dateText }}</text>
+              <SvgIcon class="row-arrow" name="icon-chevron-right" :size="16" />
             </view>
           </view>
+          <view class="row" @click="onTimeRowClick">
+            <text class="row-label">时刻</text>
+            <view class="row-right">
+              <text class="row-value">{{ timeText }}</text>
+              <view class="switch-wrap" @click.stop>
+                <switch :checked="timeEnabled" color="#CF4A12" @change="onTimeSwitch" />
+              </view>
+            </view>
+          </view>
+          <picker-view class="wheel" :value="wheelValue" @change="onWheelChange">
+            <picker-view-column>
+              <view v-for="h in 24" :key="'h' + h" class="wheel-item">{{ pad(h - 1) }}</view>
+            </picker-view-column>
+            <picker-view-column>
+              <view v-for="m in 60" :key="'m' + m" class="wheel-item">{{ pad(m - 1) }}</view>
+            </picker-view-column>
+          </picker-view>
         </view>
-        <picker-view class="wheel" :value="wheelValue" @change="onWheelChange">
-          <picker-view-column>
-            <view v-for="h in 24" :key="'h' + h" class="wheel-item">{{ pad(h - 1) }}</view>
-          </picker-view-column>
-          <picker-view-column>
-            <view v-for="m in 60" :key="'m' + m" class="wheel-item">{{ pad(m - 1) }}</view>
-          </picker-view-column>
-        </picker-view>
       </view>
     </view>
-  </view>
+  </transition>
 </template>
 
 <script setup lang="ts">

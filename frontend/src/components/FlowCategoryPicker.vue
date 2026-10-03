@@ -1,62 +1,66 @@
 <template>
-  <view v-if="visible" class="mask" @click="close">
-    <view class="sheet" @click.stop>
-      <view class="header">
-        <view class="header-btn" @click="close"><SvgIcon name="icon-close" :size="20" /></view>
-        <text class="header-title">{{ title || '选择分类' }}</text>
-        <view class="header-btn header-action" @click="toggleAll">
-          <text class="header-action-text">{{ allSelected ? '取消全选' : '全选' }}</text>
+  <transition name="sheet">
+    <view v-if="visible" class="mask" @click="close">
+      <view class="sheet" @click.stop>
+        <view class="header">
+          <view class="header-btn" @click="close"><SvgIcon name="icon-close" :size="20" /></view>
+          <text class="header-title">{{ title || '选择分类' }}</text>
+          <view class="header-btn header-action" @click="toggleAll">
+            <text class="header-action-text">{{ allSelected ? '取消全选' : '全选' }}</text>
+          </view>
         </view>
-      </view>
 
-      <!--
+        <!--
         高度**由 JS 算出**（见 bodyHeight），不依赖 flex 推导。
         ⚠️ uni-app 的 scroll-view 不吃 flex：`flex:1 + min-height:0` 会按内容撑开，
            溢出并**盖住底部「确定」按钮**（用户实测报过）；`flex:1 + height:0` 会把
            footer 挤出容器。项目里时间弹层踩过同样三轮，最终都是 JS 算高度。
       -->
-      <scroll-view class="body" scroll-y :style="{ height: bodyHeight + 'px' }">
-        <template v-for="root in roots" :key="root.id">
-          <!-- 一级：点整行 = 勾选/取消（连带其下全部二级）；点箭头 = 折叠 -->
-          <view class="row" @click="toggleRoot(root)">
-            <SvgIcon
-              class="row-caret"
-              :name="isExpanded(root.id) ? 'icon-chevron-up' : 'icon-chevron-down'"
-              :size="14"
-              @click.stop="toggleExpand(root.id)"
-            />
-            <CategoryIcon class="row-icon" :name="root.icon" :size="28" />
-            <text class="row-label">{{ root.name }}</text>
+        <scroll-view class="body" scroll-y :style="{ height: bodyHeight + 'px' }">
+          <template v-for="root in roots" :key="root.id">
+            <!-- 一级：点整行 = 勾选/取消（连带其下全部二级）；点箭头 = 折叠 -->
+            <view class="row" @click="toggleRoot(root)">
+              <SvgIcon
+                class="row-caret"
+                :name="isExpanded(root.id) ? 'icon-chevron-up' : 'icon-chevron-down'"
+                :size="14"
+                @click.stop="toggleExpand(root.id)"
+              />
+              <CategoryIcon class="row-icon" :name="root.icon" :size="28" />
+              <text class="row-label">{{ root.name }}</text>
+              <view
+                class="checkbox"
+                :class="{ checked: isRootChecked(root), indeterminate: isRootIndeterminate(root) }"
+              >
+                <SvgIcon v-if="isRootChecked(root)" name="icon-check" :size="14" />
+                <view v-else-if="isRootIndeterminate(root)" class="checkbox-dash" />
+              </view>
+            </view>
+
+            <!-- 二级（缩进） -->
             <view
-              class="checkbox"
-              :class="{ checked: isRootChecked(root), indeterminate: isRootIndeterminate(root) }"
+              v-for="child in isExpanded(root.id) ? childrenOf(root.id) : []"
+              :key="child.id"
+              class="row row-child"
+              @click="toggleChild(root, child.id)"
             >
-              <SvgIcon v-if="isRootChecked(root)" name="icon-check" :size="14" />
-              <view v-else-if="isRootIndeterminate(root)" class="checkbox-dash" />
+              <CategoryIcon class="row-icon" :name="child.icon" :size="24" />
+              <text class="row-label">{{ child.name }}</text>
+              <view class="checkbox" :class="{ checked: draft.includes(child.id) }">
+                <SvgIcon v-if="draft.includes(child.id)" name="icon-check" :size="14" />
+              </view>
             </view>
-          </view>
+          </template>
+        </scroll-view>
 
-          <!-- 二级（缩进） -->
-          <view
-            v-for="child in isExpanded(root.id) ? childrenOf(root.id) : []"
-            :key="child.id"
-            class="row row-child"
-            @click="toggleChild(root, child.id)"
+        <view class="footer">
+          <view class="btn btn-confirm" @click="confirm"
+            ><text class="btn-text confirm-text">确定</text></view
           >
-            <CategoryIcon class="row-icon" :name="child.icon" :size="24" />
-            <text class="row-label">{{ child.name }}</text>
-            <view class="checkbox" :class="{ checked: draft.includes(child.id) }">
-              <SvgIcon v-if="draft.includes(child.id)" name="icon-check" :size="14" />
-            </view>
-          </view>
-        </template>
-      </scroll-view>
-
-      <view class="footer">
-        <view class="btn btn-confirm" @click="confirm"><text class="btn-text confirm-text">确定</text></view>
+        </view>
       </view>
     </view>
-  </view>
+  </transition>
 </template>
 
 <script setup lang="ts">
@@ -192,12 +196,12 @@ watch(
     // 空数组 = 不过滤 = 全选
     draft.value = props.model.length ? expandModel(props.model) : allIds();
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 /** 全选 = 所有一级都被选中（不变量保证其二级也都在） */
 const allSelected = computed(
-  () => roots.value.length > 0 && roots.value.every((r) => draft.value.includes(r.id))
+  () => roots.value.length > 0 && roots.value.every((r) => draft.value.includes(r.id)),
 );
 
 function isRootChecked(root: CategoryItem): boolean {

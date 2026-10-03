@@ -1,77 +1,79 @@
 <template>
-  <view v-if="visible" class="mask" @click="close">
-    <view class="sheet" @click.stop>
-      <view class="sheet-header">
-        <view class="sheet-header-btn" @click="close">
-          <SvgIcon name="icon-close" :size="20" />
+  <transition name="sheet">
+    <view v-if="visible" class="mask" @click="close">
+      <view class="sheet" @click.stop>
+        <view class="sheet-header">
+          <view class="sheet-header-btn" @click="close">
+            <SvgIcon name="icon-close" :size="20" />
+          </view>
+          <text class="sheet-header-title">选择时间</text>
+          <view class="sheet-header-btn" />
         </view>
-        <text class="sheet-header-title">选择时间</text>
-        <view class="sheet-header-btn" />
-      </view>
 
-      <!--
+        <!--
         中间内容（预设列表 + 自定义滚轮）放在 scroll-view 里：
         否则「自定义」展开后总高超过 .sheet 的 max-height，会把底部「确定」挤出屏幕。
         ⚠️ 高度由 JS 算出，不依赖 flex 推导（uni-app 的 scroll-view 不吃 flex）。
       -->
-      <scroll-view class="sheet-body" scroll-y :style="{ height: bodyHeight + 'px' }">
-        <view
-          v-for="opt in presets"
-          :key="opt.label"
-          class="sheet-item sheet-item-row"
-          @click="pickPreset(opt)"
-        >
-          <text class="sheet-item-text" :class="{ 'sheet-item-active': label === opt.label }">
-            {{ opt.label }}
-          </text>
-          <SvgIcon v-if="label === opt.label" class="sheet-check" name="icon-check" :size="18" />
-        </view>
+        <scroll-view class="sheet-body" scroll-y :style="{ height: bodyHeight + 'px' }">
+          <view
+            v-for="opt in presets"
+            :key="opt.label"
+            class="sheet-item sheet-item-row"
+            @click="pickPreset(opt)"
+          >
+            <text class="sheet-item-text" :class="{ 'sheet-item-active': label === opt.label }">
+              {{ opt.label }}
+            </text>
+            <SvgIcon v-if="label === opt.label" class="sheet-check" name="icon-check" :size="18" />
+          </view>
 
-        <!--
+          <!--
           自定义区间：选「自定义」后就地展开 ——
           上方两个可点的开始/结束、下方三列滚轮、底部「确定」。
           ⚠️ 这两处日期与滚轮是双向绑定的：点上方切换编辑对象、滚轮改的是同一个值。
         -->
-        <view v-if="customOpen" class="range-panel">
-          <view class="range-tabs">
-            <view class="range-tab" @click="switchEnd('start')">
-              <text class="range-tab-label">开始时间</text>
-              <text class="range-tab-value" :class="{ active: activeEnd === 'start' }">
-                {{ formatCn(customStart) }}
-              </text>
-              <view v-if="activeEnd === 'start'" class="range-tab-line" />
+          <view v-if="customOpen" class="range-panel">
+            <view class="range-tabs">
+              <view class="range-tab" @click="switchEnd('start')">
+                <text class="range-tab-label">开始时间</text>
+                <text class="range-tab-value" :class="{ active: activeEnd === 'start' }">
+                  {{ formatCn(customStart) }}
+                </text>
+                <view v-if="activeEnd === 'start'" class="range-tab-line" />
+              </view>
+              <text class="range-sep">-</text>
+              <view class="range-tab" @click="switchEnd('end')">
+                <text class="range-tab-label">结束时间</text>
+                <text class="range-tab-value" :class="{ active: activeEnd === 'end' }">
+                  {{ formatCn(customEnd) }}
+                </text>
+                <view v-if="activeEnd === 'end'" class="range-tab-line" />
+              </view>
             </view>
-            <text class="range-sep">-</text>
-            <view class="range-tab" @click="switchEnd('end')">
-              <text class="range-tab-label">结束时间</text>
-              <text class="range-tab-value" :class="{ active: activeEnd === 'end' }">
-                {{ formatCn(customEnd) }}
-              </text>
-              <view v-if="activeEnd === 'end'" class="range-tab-line" />
-            </view>
+
+            <picker-view class="range-wheel" :value="wheelValue" @change="onWheelChange">
+              <picker-view-column>
+                <view v-for="y in RANGE_YEARS" :key="'y' + y" class="wheel-item">{{ y }}年</view>
+              </picker-view-column>
+              <picker-view-column>
+                <view v-for="m in 12" :key="'m' + m" class="wheel-item">{{ m }}月</view>
+              </picker-view-column>
+              <picker-view-column>
+                <view v-for="d in wheelDays" :key="'d' + d" class="wheel-item">{{ d }}日</view>
+              </picker-view-column>
+            </picker-view>
           </view>
+        </scroll-view>
 
-          <picker-view class="range-wheel" :value="wheelValue" @change="onWheelChange">
-            <picker-view-column>
-              <view v-for="y in RANGE_YEARS" :key="'y' + y" class="wheel-item">{{ y }}年</view>
-            </picker-view-column>
-            <picker-view-column>
-              <view v-for="m in 12" :key="'m' + m" class="wheel-item">{{ m }}月</view>
-            </picker-view-column>
-            <picker-view-column>
-              <view v-for="d in wheelDays" :key="'d' + d" class="wheel-item">{{ d }}日</view>
-            </picker-view-column>
-          </picker-view>
-        </view>
-      </scroll-view>
-
-      <view class="sheet-footer">
-        <view class="btn btn-confirm" @click="confirm">
-          <text class="btn-text confirm-text">确定</text>
+        <view class="sheet-footer">
+          <view class="btn btn-confirm" @click="confirm">
+            <text class="btn-text confirm-text">确定</text>
+          </view>
         </view>
       </view>
     </view>
-  </view>
+  </transition>
 </template>
 
 <script setup lang="ts">
@@ -201,7 +203,7 @@ watch(
     customStart.value = props.modelValue.start || todayStr;
     customEnd.value = props.modelValue.end || todayStr;
     switchEnd('start');
-  }
+  },
 );
 
 /** 切换编辑对象：把滚轮同步到那一端当前的值 */

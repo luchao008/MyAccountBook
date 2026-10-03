@@ -1,35 +1,39 @@
 <template>
-  <view v-if="visible" class="mask" @click="close">
-    <view class="sheet" @click.stop>
-      <view class="header">
-        <view class="header-btn" @click="close"><SvgIcon name="icon-close" :size="20" /></view>
-        <text class="header-title">选择流水类型</text>
-        <view class="header-btn header-action" @click="toggleAll">
-          <text class="header-action-text">{{ allSelected ? '取消全选' : '全选' }}</text>
+  <transition name="sheet">
+    <view v-if="visible" class="mask" @click="close">
+      <view class="sheet" @click.stop>
+        <view class="header">
+          <view class="header-btn" @click="close"><SvgIcon name="icon-close" :size="20" /></view>
+          <text class="header-title">选择流水类型</text>
+          <view class="header-btn header-action" @click="toggleAll">
+            <text class="header-action-text">{{ allSelected ? '取消全选' : '全选' }}</text>
+          </view>
         </view>
-      </view>
 
-      <!--
+        <!--
         高度**由 JS 算出**（见 bodyHeight），不依赖 flex 推导。
         ⚠️ uni-app 的 scroll-view 不吃 flex：`flex:1 + min-height:0` 会按内容撑开，
            溢出并**盖住底部「确定」**；`flex:1 + height:0` 会把 footer 挤出容器。
            本项目时间弹层踩过同样三轮，最终都是 JS 算高度。
            本弹层目前只有 2 项、看起来正常，但选项一多就会复现，故一并修。
       -->
-      <scroll-view class="body" scroll-y :style="{ height: bodyHeight + 'px' }">
-        <view v-for="opt in options" :key="opt.value" class="row" @click="toggle(opt.value)">
-          <text class="row-label">{{ opt.label }}</text>
-          <view class="checkbox" :class="{ checked: draft.includes(opt.value) }">
-            <SvgIcon v-if="draft.includes(opt.value)" name="icon-check" :size="14" />
+        <scroll-view class="body" scroll-y :style="{ height: bodyHeight + 'px' }">
+          <view v-for="opt in options" :key="opt.value" class="row" @click="toggle(opt.value)">
+            <text class="row-label">{{ opt.label }}</text>
+            <view class="checkbox" :class="{ checked: draft.includes(opt.value) }">
+              <SvgIcon v-if="draft.includes(opt.value)" name="icon-check" :size="14" />
+            </view>
           </view>
-        </view>
-      </scroll-view>
+        </scroll-view>
 
-      <view class="footer">
-        <view class="btn btn-confirm" @click="confirm"><text class="btn-text confirm-text">确定</text></view>
+        <view class="footer">
+          <view class="btn btn-confirm" @click="confirm"
+            ><text class="btn-text confirm-text">确定</text></view
+          >
+        </view>
       </view>
     </view>
-  </view>
+  </transition>
 </template>
 
 <script setup lang="ts">
@@ -96,12 +100,10 @@ watch(
   () => props.visible,
   (v) => {
     if (v) draft.splice(0, draft.length, ...props.model);
-  }
+  },
 );
 
-const allSelected = computed(
-  () => draft.length === options.length
-);
+const allSelected = computed(() => draft.length === options.length);
 
 function toggle(value: string) {
   const i = draft.indexOf(value);

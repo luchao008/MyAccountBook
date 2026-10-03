@@ -185,7 +185,7 @@
  * 范围：2000-01 ~ 2049-12（600 个月）。配合虚拟列表，滑动接近"无限"。
  */
 import { ref, reactive, computed, onMounted, nextTick } from 'vue';
-import { onShow } from '@dcloudio/uni-app';
+import { onShow, onUnload } from '@dcloudio/uni-app';
 import SvgIcon from '@/components/SvgIcon.vue';
 import CategoryIcon from '@/components/CategoryIcon.vue';
 import EmptyState from '@/components/EmptyState.vue';
@@ -195,6 +195,7 @@ import { useAccountStore } from '@/store/account';
 import { getTransactions, getTransactionSummary, type TransactionItem } from '@/api/transaction';
 import { useTxnSwipe } from '@/utils/txnSwipe';
 import { formatMoney } from '@/utils/format';
+import { createLatest } from '@/utils/latest';
 
 const WEEK_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -366,28 +367,55 @@ const dayItems = ref<TransactionItem[]>([]);
 const loadingDetail = ref(false);
 
 /**
+ * 当日明细的「最后写入者胜」守卫。
+ *
+ * ⚠️ 为什么必须有：切换日期是**连续快速点击**（用户来回比较两天）。
+ *    先点的那天若后返回，`dayItems` 会是**另一天**的流水 ——
+ *    而格子上高亮的是当前选中的那天。即「高亮 A 天、列出的却是 B 天的账」，
+ *    金额还都对得上（只是对的是另一天），极难被用户察觉是 bug。
+ */
+const detailGuard = createLatest();
+
+/**
  * 加载当日明细。
  *
  * @param silent 静默模式：不显示骨架屏，保留旧列表直到新数据就绪。
  *   切日期 / 从记账页返回时用它 —— 否则每次切换都闪一次骨架（即"闪烁"的来源）。
  *   首次进入（onMounted）不要用，那时没有旧内容可留。
  */
-async function loadDetail(silent = false) {
+function loadDetail(silent = false) {
   if (!silent) loadingDetail.value = true;
-  try {
-    const page = await getTransactions({
-      start: selectedDate.value,
-      end: selectedDate.value,
-      size: 100,
-      accountId: accountStore.currentId || undefined,
-    });
-    dayItems.value = page.list;
-  } catch (err) {
-    console.error('[calendar] 明细加载失败', err);
-    dayItems.value = [];
-  } finally {
-    if (!silent) loadingDetail.value = false;
-  }
+  // 日期与账本在调用时快照（理由见上：切日期是本页最高频的触发源）
+  const wantDate = selectedDate.value;
+  const wantAccountId = accountStore.currentId || undefined;
+  return detailGuard.run({
+    task: () =>
+      getTransactions({
+        start: wantDate,
+        end: wantDate,
+        size: 100,
+        accountId: wantAccountId,
+      }),
+    onSuccess: (page) => {
+      dayItems.value = page.list;
+    },
+    onError: (err) => {
+      console.error('[calendar] 明细加载失败', err);
+      dayItems.value = [];
+    },
+    onSettled: () => {
+      /*
+       * ⚠️ 这里**故意不看自己的 `silent`**（2026-10-02 自审时改的，初版写成 `if (!silent)`）。
+       *
+       * 理由：过期调用根本不会进 `onSettled`。于是「A 非静默（置了转圈）→ B 静默接管
+       *      → A 变成过期」这条路径里，A 的清理被跳过、B 又因为自己是静默的不肯清 ——
+       *      `loadingDetail` 会**永远停在 true**，转圈再也消失不了。
+       * 正确语义是「**谁是最新的谁负责收尾**」：最新的那一次无论静默与否，
+       * 都要把可能被前一次置上的转圈收掉 —— 因为前一次已经作废，它的转圈没有意义。
+       */
+      loadingDetail.value = false;
+    },
+  });
 }
 
 /** 当日合计：直接由明细列表累加（与格子里 dayAgg 的口径一致，避免两处对不上） */
@@ -668,6 +696,17 @@ onShow(() => {
   } else {
     ensureMonthsAround(selectedYear.value, selectedMonth.value);
   }
+});
+
+/**
+ * 页面卸载：让在飞请求作废。
+ *
+ * ⚠️ 日历是**最容易被"点完就走"**的页：用户点一天看一眼、立刻返回。
+ *    那种情况下在飞请求会在页面销毁后才失败，`onError` 里的日志与将来可能加的
+ *    提示就属于一个已经不存在的页面。让守卫整体作废，比指望每条回调自己判断可靠。
+ */
+onUnload(() => {
+  detailGuard.invalidate();
 });
 </script>
 

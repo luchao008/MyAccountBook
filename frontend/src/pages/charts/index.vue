@@ -258,18 +258,19 @@
  *   对应四种口径 —— **后端零改动**。
  */
 import { ref, computed, getCurrentInstance } from 'vue';
-import { onLoad, onPageScroll } from '@dcloudio/uni-app';
+import { onLoad, onPageScroll, onUnload, onHide } from '@dcloudio/uni-app';
 import SvgIcon from '@/components/SvgIcon.vue';
 import RingChart from '@/components/RingChart.vue';
 import NavDropdown from '@/components/NavDropdown.vue';
 import CategoryIcon from '@/components/CategoryIcon.vue';
 import EmptyState from '@/components/EmptyState.vue';
-import { getTransactionSummary, type SummaryItem } from '@/api/transaction';
+import { getTransactionSummary } from '@/api/transaction';
 import { useAccountStore } from '@/store/account';
 import { useUserStore } from '@/store/user';
 import { formatMoney } from '@/utils/format';
 import { granularityRange, type Granularity } from '@/utils/period';
 import { CHART_SERIES } from '@/constants/chart';
+import { createLatest } from '@/utils/latest';
 
 const userStore = useUserStore();
 const accountStore = useAccountStore();
@@ -468,6 +469,82 @@ const ringCenter = ref<{ cx: number; cy: number } | null>(null);
 const dragging = ref(false);
 let lastPointerAngle = 0;
 
+/**
+ * rAF 的跨端封装。
+ *
+ * ⚠️ 小程序端**没有** `requestAnimationFrame`（那不是浏览器环境），直接调用会
+ *    ReferenceError。`typeof` 对未声明的标识符是安全的（返回 'undefined'，不抛），
+ *    所以可以在模块顶层判定一次。回退到 16 ms 的 `setTimeout` —— 精度差一点，
+ *    但"每帧最多写一次"这个目的达到了。
+ */
+const hasRaf = typeof requestAnimationFrame === 'function';
+const rafTick = (cb: () => void): number =>
+  hasRaf ? requestAnimationFrame(cb) : (setTimeout(cb, 16) as unknown as number);
+const rafCancel = (id: number): void => {
+  if (hasRaf) cancelAnimationFrame(id);
+  else clearTimeout(id as unknown as ReturnType<typeof setTimeout>);
+};
+
+/**
+ * 待写入的指针角度 + 本帧的 rAF 句柄。
+ *
+ * ⚠️ 用**普通变量**而不是 ref：这两个值不参与渲染，走响应式只会让每次指针移动
+ *    都触发依赖通知 —— 正是这次要消掉的开销。
+ */
+let pendingAngle: number | null = null;
+let angleRafId = 0;
+
+/**
+ * 记下"指针到了某角度"，但**每帧最多写一次** `rotation.value`。
+ *
+ * ⚠️ 为什么需要它：桌面端 `mousemove` 的采样率可以是 500~1000 Hz（高回报率鼠标），
+ *    而屏幕只有 60 Hz。每个事件都写一次响应式 = 一帧内多次触发组件更新 + 反复重启
+ *    CSS transition，手感表现为"发飘、跟不上手"。
+ * ⚠️ **不能指望 uni-h5 节流**：已读源码确认 —— 它只对 **scroll** 做了 rAF 节流
+ *    （`onPageScroll` 一帧最多回调一次），对 touchmove / mousemove **不做任何节流**。
+ */
+function schedulePointerAngle(a: number) {
+  pendingAngle = a;
+  if (angleRafId) return; // 本帧已排队
+  angleRafId = rafTick(flushPointerAngle);
+}
+
+/** 把本帧攒下的角度真正写进 rotation（触底/松手前也要手动调一次，否则丢最后一帧） */
+function flushPointerAngle() {
+  angleRafId = 0;
+  if (pendingAngle === null) return;
+  const a = pendingAngle;
+  pendingAngle = null;
+  applyPointerAngle(a);
+}
+
+/**
+ * 结束拖拽的**唯一**出口：幂等，可以重复调用。
+ *
+ * ⚠️ 把"清监听 / 取消 rAF / 复位状态"收在一处，是因为它有三个调用点
+ *    （触摸松手、鼠标松手、页面卸载）。分开写就会出现"某个出口忘了清某一项"——
+ *    而漏掉的那一项不会报错，只会在特定操作序列下变成幽灵拖拽或监听泄漏。
+ */
+function teardownDrag() {
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('mousemove', onDocMouseMove);
+    document.removeEventListener('mouseup', onDocMouseUp);
+  }
+  if (angleRafId) {
+    rafCancel(angleRafId);
+    angleRafId = 0;
+  }
+  pendingAngle = null;
+  dragging.value = false;
+}
+
+/** 松手：先把最后一帧的角度补上，再收尾、再吸附（顺序不能换，否则吸附位置差一点） */
+function endDrag() {
+  flushPointerAngle();
+  teardownDrag();
+  snapToPicked();
+}
+
 /** setup 顶层留一份实例引用（async 里再调 getCurrentInstance 拿不到） */
 const inst = getCurrentInstance();
 
@@ -540,12 +617,11 @@ function onRingTouchMove(e: TouchEvent) {
   if (!dragging.value) return;
   const t = e.touches?.[0] || e.changedTouches?.[0];
   if (!t) return;
-  applyPointerAngle(angleFromPoint(t.clientX, t.clientY));
+  schedulePointerAngle(angleFromPoint(t.clientX, t.clientY));
 }
 
 function onRingTouchEnd() {
-  dragging.value = false;
-  snapToPicked();
+  endDrag();
 }
 
 /*
@@ -568,15 +644,11 @@ function onRingMouseDown(e: MouseEvent) {
 
 function onDocMouseMove(e: MouseEvent) {
   if (!dragging.value) return;
-  applyPointerAngle(angleFromPoint(e.clientX, e.clientY));
+  schedulePointerAngle(angleFromPoint(e.clientX, e.clientY));
 }
 
 function onDocMouseUp() {
-  dragging.value = false;
-  snapToPicked();
-  if (typeof document === 'undefined') return;
-  document.removeEventListener('mousemove', onDocMouseMove);
-  document.removeEventListener('mouseup', onDocMouseUp);
+  endDrag();
 }
 
 /* ── 条形图：滚动时总额块缩小吸顶 ── */
@@ -716,45 +788,70 @@ function shift(dir: -1 | 1) {
 }
 
 /* ── 数据加载 ── */
-async function loadData() {
+/**
+ * 图表数据的「最后写入者胜」守卫。
+ *
+ * ⚠️ 为什么必须有：切粒度（月/季/年/全部）、切方向（支出/收入）、
+ *    切分类层级、以及左右翻时段都会调 `loadData()`，而这几种**后端成本差异很大**
+ *    （`year` 与 `all` 的聚合量差几倍）。先发的响应后到时，`rows` 会被旧口径的数据覆盖 ——
+ *    而界面上的粒度/方向标签已经是新的，也就是**图例与数据对不上**；
+ *    更糟的是这里还有 `resetRotation()`，它会按错误的数据把转盘重新转正。
+ */
+const dataGuard = createLatest();
+
+function loadData() {
   loading.value = true;
-  try {
-    const list: SummaryItem[] = await getTransactionSummary({
-      groupBy: 'category',
-      level: level.value,
-      type: type.value,
-      // `all` 时 range 里没有 start/end → 传 undefined = 不限时间
-      start: range.value.start,
-      end: range.value.end,
-      accountId: accountStore.currentId || undefined,
-    });
+  /*
+   * ⚠️ 四个查询维度都在调用时快照。
+   *    若在 await 之后再读 `level.value` / `type.value` / `range.value`，
+   *    这次请求带的就是"用户后来改成的口径" —— 语义上说不清它代表哪一次意图。
+   */
+  const wantLevel = level.value;
+  const wantType = type.value;
+  const wantStart = range.value.start;
+  const wantEnd = range.value.end;
+  const wantAccountId = accountStore.currentId || undefined;
+  return dataGuard.run({
+    task: () =>
+      getTransactionSummary({
+        groupBy: 'category',
+        level: wantLevel,
+        type: wantType,
+        // `all` 时 range 里没有 start/end → 传 undefined = 不限时间
+        start: wantStart,
+        end: wantEnd,
+        accountId: wantAccountId,
+      }),
+    onSuccess: (list) => {
+      const raw = (list || [])
+        .map((it) => ({
+          key: String(it.key),
+          name: it.name || '未分类',
+          icon: it.icon || 'cat-misc',
+          // 该口径只看一个方向：支出口径取 expense、收入口径取 income
+          value: Number(wantType === 'expense' ? it.expense : it.income) || 0,
+          clickable: String(it.key) !== '__none__',
+        }))
+        .filter((r) => r.value > 0);
 
-    const raw = (list || [])
-      .map((it) => ({
-        key: String(it.key),
-        name: it.name || '未分类',
-        icon: it.icon || 'cat-misc',
-        // 该口径只看一个方向：支出口径取 expense、收入口径取 income
-        value: Number(type.value === 'expense' ? it.expense : it.income) || 0,
-        clickable: String(it.key) !== '__none__',
-      }))
-      .filter((r) => r.value > 0);
+      const total = raw.reduce((s, r) => s + r.value, 0);
+      rows.value = raw.map((r) => {
+        const ratio = total > 0 ? (r.value / total) * 100 : 0;
+        return { ...r, ratio, ratioText: ratio.toFixed(2) };
+      });
 
-    const total = raw.reduce((s, r) => s + r.value, 0);
-    rows.value = raw.map((r) => {
-      const ratio = total > 0 ? (r.value / total) * 100 : 0;
-      return { ...r, ratio, ratioText: ratio.toFixed(2) };
-    });
-
-    // 数据变了 → 让占比最大的那项重新正对三角
-    resetRotation();
-  } catch (err) {
-    console.error('[charts] 加载失败', err);
-    uni.showToast({ title: '加载失败', icon: 'none' });
-    rows.value = [];
-  } finally {
-    loading.value = false;
-  }
+      // 数据变了 → 让占比最大的那项重新正对三角
+      resetRotation();
+    },
+    onError: (err) => {
+      console.error('[charts] 加载失败', err);
+      uni.showToast({ title: '加载失败', icon: 'none' });
+      rows.value = [];
+    },
+    onSettled: () => {
+      loading.value = false;
+    },
+  });
 }
 
 onLoad(() => {
@@ -764,6 +861,29 @@ onLoad(() => {
   }
   accountStore.load();
   loadData();
+});
+
+/*
+ * 卸载 / 隐藏：把拖拽相关的资源全部收干净。
+ *
+ * ⚠️ 必须显式兜底，不能只靠 `mouseup`：
+ *    拖拽用的 `mousemove` / `mouseup` 是挂在 **document** 上的（为了让指针拖出环外
+ *    还能继续跟手），而移除它们的唯一路径原本是 `mouseup`。
+ *    若用户在**按住不放的状态下**页面被卸载（返回手势、程序化跳转），
+ *    这两个监听会永远留在 document 上，且 `dragging` 停在 true ——
+ *    之后再进本页会表现为"还没按下环就开始跟着鼠标转"的幽灵拖拽。
+ *    `teardownDrag()` 是幂等的，重复调用无副作用。
+ *
+ * ⚠️ `onHide` 也要：本页被 navigateTo 盖住时不会 unload，但用户显然已经不在拖了，
+ *    此时留着 `dragging = true` 与两个 document 监听没有任何意义。
+ */
+onUnload(() => {
+  dataGuard.invalidate();
+  teardownDrag();
+});
+
+onHide(() => {
+  teardownDrag();
 });
 </script>
 

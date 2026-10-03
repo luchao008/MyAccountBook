@@ -10,142 +10,141 @@
        实测依据：DateTimePicker 首次挂载（含 3 格月历 + swiper）在 4x 降速下约 220ms，
        而再次打开约 2ms —— 成本全在"首次挂载"这一侧，推迟它才有收益。
   -->
-  <view v-if="everOpened" v-show="visible" class="mask" @click="close">
-    <view class="sheet" @click.stop>
-      <!-- 顶部工具条 -->
-      <view class="toolbar">
-        <view class="tools">
-          <view class="tool" @click="onCreateChild">
-            <SvgIcon class="tool-icon" name="icon-plus" :size="20" />
-          </view>
-          <view class="tool" @click="toggleSearch">
-            <SvgIcon class="tool-icon" name="icon-search" :size="20" />
-          </view>
-        </view>
-        <view class="tool" @click="close">
-          <view class="tool-icon collapse"><SvgIcon name="icon-chevron-down" :size="20" /></view>
-        </view>
-      </view>
-
-      <!-- 搜索框 -->
-      <view v-if="searching" class="search-bar">
-        <input
-          v-model="keyword"
-          class="search-input"
-          placeholder="搜索二级分类"
-          focus
-          confirm-type="search"
-        />
-      </view>
-
-      <!-- 搜索结果：单独一屏，不做左右联动 -->
-      <scroll-view v-if="searching" class="search-result" scroll-y>
-        <view class="group">
-          <text class="group-title">搜索结果</text>
-          <view v-if="searchResults.length" class="grid">
-            <view
-              v-for="item in searchResults"
-              :key="item.id"
-              class="grid-item"
-              :class="{ picked: item.id === modelValue }"
-              @click="pick(item, item.parentId)"
-            >
-              <CategoryIcon class="icon" :name="item.icon" :size="iconSize" />
-              <text class="name">{{ item.name }}</text>
+  <transition name="sheet">
+    <view v-if="everOpened" v-show="visible" class="mask" @click="close">
+      <view class="sheet" @click.stop>
+        <!-- 顶部工具条 -->
+        <view class="toolbar">
+          <view class="tools">
+            <view class="tool" @click="onCreateChild">
+              <SvgIcon class="tool-icon" name="icon-plus" :size="20" />
+            </view>
+            <view class="tool" @click="toggleSearch">
+              <SvgIcon class="tool-icon" name="icon-search" :size="20" />
             </view>
           </view>
-          <view v-else class="empty">
-            <text class="empty-text">没有匹配的二级分类</text>
+          <view class="tool" @click="close">
+            <view class="tool-icon collapse"><SvgIcon name="icon-chevron-down" :size="20" /></view>
           </view>
         </view>
-      </scroll-view>
 
-      <!-- 左右联动主体 -->
-      <view v-else class="content">
-        <!-- 左侧：最近使用 + 各一级分类 -->
-        <scroll-view
-          class="sidebar"
-          scroll-y
-        >
-          <view
-            id="side-anchor-recent"
-            class="side-item"
-            :class="{ active: activeKey === 'recent' }"
-            @click="selectKey('recent')"
-          >
-            <text class="side-text">最近使用</text>
-          </view>
-          <view
-            v-for="g in groups"
-            :key="g.root.id"
-            :id="'side-anchor-' + g.root.id"
-            class="side-item"
-            :class="{ active: activeKey === g.root.id }"
-            @click="selectKey(g.root.id)"
-          >
-            <text class="side-text">{{ g.root.name }}</text>
-          </view>
-        </scroll-view>
+        <!-- 搜索框 -->
+        <view v-if="searching" class="search-bar">
+          <input
+            v-model="keyword"
+            class="search-input"
+            placeholder="搜索二级分类"
+            focus
+            confirm-type="search"
+          />
+        </view>
 
-        <!-- 右侧：全部分组的二级分类，滚动时反推左侧选中项 -->
-        <scroll-view
-          id="main-scroll"
-          class="main"
-          scroll-y
-          :scroll-into-view="mainIntoView"
-          scroll-with-animation
-          @scroll="onMainScroll"
-        >
-          <view v-if="recentItems.length" id="group-anchor-recent" class="group">
-            <text class="group-title">最近使用</text>
-            <view class="grid">
+        <!-- 搜索结果：单独一屏，不做左右联动 -->
+        <scroll-view v-if="searching" class="search-result" scroll-y>
+          <view class="group">
+            <text class="group-title">搜索结果</text>
+            <view v-if="searchResults.length" class="grid">
               <view
-                v-for="item in recentItems"
-                :key="'r-' + item.id"
-                class="grid-item"
-                :class="{ picked: pickedKey === 'recent' && item.id === modelValue }"
-                @click="pick(item, 'recent')"
-              >
-                <CategoryIcon class="icon" :name="item.icon" :size="iconSize" />
-                <text class="name">{{ item.name }}</text>
-              </view>
-            </view>
-          </view>
-
-          <view
-            v-for="g in groups"
-            :key="g.root.id"
-            :id="'group-anchor-' + g.root.id"
-            class="group"
-          >
-            <text class="group-title">{{ g.root.name }}</text>
-            <view v-if="g.children.length" class="grid">
-              <view
-                v-for="item in g.children"
+                v-for="item in searchResults"
                 :key="item.id"
                 class="grid-item"
-                :class="{ picked: pickedKey === g.root.id && item.id === modelValue }"
-                @click="pick(item, g.root.id)"
+                :class="{ picked: item.id === modelValue }"
+                @click="pick(item, item.parentId)"
               >
                 <CategoryIcon class="icon" :name="item.icon" :size="iconSize" />
                 <text class="name">{{ item.name }}</text>
               </view>
             </view>
-            <view v-else class="empty-inline">
-              <text class="empty-text">暂无二级分类</text>
+            <view v-else class="empty">
+              <text class="empty-text">没有匹配的二级分类</text>
             </view>
           </view>
         </scroll-view>
 
-        <!-- 自绘滚动条：绝对定位贴右侧，不依赖 uni-scroll-view 的内部 DOM -->
-        <view
-          v-if="barVisible"
-          class="scrollbar"
-          :style="{ top: barTop + 'px', height: barHeight + 'px' }"
-        />
+        <!-- 左右联动主体 -->
+        <view v-else class="content">
+          <!-- 左侧：最近使用 + 各一级分类 -->
+          <scroll-view class="sidebar" scroll-y>
+            <view
+              id="side-anchor-recent"
+              class="side-item"
+              :class="{ active: activeKey === 'recent' }"
+              @click="selectKey('recent')"
+            >
+              <text class="side-text">最近使用</text>
+            </view>
+            <view
+              v-for="g in groups"
+              :key="g.root.id"
+              :id="'side-anchor-' + g.root.id"
+              class="side-item"
+              :class="{ active: activeKey === g.root.id }"
+              @click="selectKey(g.root.id)"
+            >
+              <text class="side-text">{{ g.root.name }}</text>
+            </view>
+          </scroll-view>
+
+          <!-- 右侧：全部分组的二级分类，滚动时反推左侧选中项 -->
+          <scroll-view
+            id="main-scroll"
+            class="main"
+            scroll-y
+            :scroll-into-view="mainIntoView"
+            scroll-with-animation
+            @scroll="onMainScroll"
+          >
+            <view v-if="recentItems.length" id="group-anchor-recent" class="group">
+              <text class="group-title">最近使用</text>
+              <view class="grid">
+                <view
+                  v-for="item in recentItems"
+                  :key="'r-' + item.id"
+                  class="grid-item"
+                  :class="{ picked: pickedKey === 'recent' && item.id === modelValue }"
+                  @click="pick(item, 'recent')"
+                >
+                  <CategoryIcon class="icon" :name="item.icon" :size="iconSize" />
+                  <text class="name">{{ item.name }}</text>
+                </view>
+              </view>
+            </view>
+
+            <view
+              v-for="g in groups"
+              :key="g.root.id"
+              :id="'group-anchor-' + g.root.id"
+              class="group"
+            >
+              <text class="group-title">{{ g.root.name }}</text>
+              <view v-if="g.children.length" class="grid">
+                <view
+                  v-for="item in g.children"
+                  :key="item.id"
+                  class="grid-item"
+                  :class="{ picked: pickedKey === g.root.id && item.id === modelValue }"
+                  @click="pick(item, g.root.id)"
+                >
+                  <CategoryIcon class="icon" :name="item.icon" :size="iconSize" />
+                  <text class="name">{{ item.name }}</text>
+                </view>
+              </view>
+              <view v-else class="empty-inline">
+                <text class="empty-text">暂无二级分类</text>
+              </view>
+            </view>
+          </scroll-view>
+
+          <!-- 自绘滚动条：绝对定位贴右侧，不依赖 uni-scroll-view 的内部 DOM -->
+          <view
+            v-if="barVisible"
+            class="scrollbar"
+            :style="{ top: barTop + 'px', height: barHeight + 'px' }"
+          />
+        </view>
       </view>
     </view>
-  </view>
+  </transition>
 </template>
 
 <script setup lang="ts">
@@ -252,7 +251,7 @@ const barTop = computed(() => {
 
 const roots = computed(() =>
   // 用 selectable* 而不是全量：隐藏的分类不参与记账
-  categoryStore.selectableRoots(props.type)
+  categoryStore.selectableRoots(props.type),
 );
 
 /** 右侧分组：每个一级 + 其二级 */
@@ -260,7 +259,7 @@ const groups = computed(() =>
   roots.value.map((root) => ({
     root,
     children: categoryStore.selectableChildrenOf(root.id),
-  }))
+  })),
 );
 
 const searchResults = computed(() => {

@@ -136,10 +136,35 @@ const FLOW_OVERLAYS = [
   // ⚠️ 排序弹层里**没有**「排序」二字，只有三个排序选项（按时间 / 按金额…）。
   //    守卫文本必须取自实际会渲染出来的文案 —— 用标题去守卫会一直失败。
   ['flow-sort-sheet', [{ sel: NAV, nth: 0 }, { sel: '.sheet-item', text: '排序' }], '.sheet', '按金额'],
-].map(([name, steps, guard, guardText]) => [
+  /*
+   * 2026-10-03：明细「日头」在**年 / 分类**维度下带月份（「10月3日 周六」），
+   * 比默认月粒度的「3日 周六」长 3 个字符 —— 320px + 200% 字号下会不会压邻居，必须实测。
+   *
+   * ⚠️ 不加这两条 = 本次改动**零重排覆盖**：上面那批 `flow-*` 巡检的全是默认月粒度，
+   *    而日头变长这件事**只在非月粒度下发生**（"点不开就扫不到"的又一例）。
+   *
+   * ⚠️ guard 刻意要求日头**含「月」**：这样它同时验证了"切粒度真的生效"与"日头真的带月份" ——
+   *    旧内容「3日 周六」不含「月」，所以即使 `settle` 不够、DOM 还是上一屏的内容，
+   *    也会**硬失败**而不是假绿。（只 guard `.day-head-text` 存在 = 拿旧数据报绿。）
+   */
+  [
+    'flow-year-expanded',
+    [{ sel: '.filter-item', nth: 0 }, { sel: '.sheet-item-row', text: '年' }],
+    '.day-head-text',
+    '月',
+    3000,
+  ],
+  [
+    'flow-category-expanded',
+    [{ sel: '.filter-item', nth: 1 }, { sel: '.sheet-item-row', text: '一级分类' }],
+    '.day-head-text',
+    '月',
+    3000,
+  ],
+].map(([name, steps, guard, guardText, settle]) => [
   name,
   '#/pages/flow/index',
-  { steps, guard, guardText },
+  { steps, guard, guardText, settle },
 ]);
 
 /**
@@ -338,6 +363,14 @@ async function visit(name, hash, vp, opts = {}) {
     await loc.first().click();
     await page.waitForTimeout(450);
   }
+
+  /**
+   * ②′ 屏级静置：`steps` 每步只等 450ms，那是给"点开弹层"这种**纯本地**动作的。
+   * 一旦某步会**触发请求并重排列表**（切分组粒度就是），450ms 之后 DOM 里可能还是旧内容，
+   * 守卫就会对着上一屏的数据报绿 —— 又一种假绿。
+   * 所以这类屏显式给 `settle`（毫秒），在守卫之前多等一会儿。
+   */
+  if (opts.settle) await page.waitForTimeout(opts.settle);
 
   /**
    * ② 守卫：确认这一屏**真的**加载 / 点开了。

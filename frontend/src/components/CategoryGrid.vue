@@ -51,15 +51,35 @@ function onPick(id: string) {
   margin-bottom: 16px;
 }
 
+/*
+ * ⚠️ 过渡**只列具体属性**，不用 `all`（2026-10-02 改）。
+ *
+ * 为什么不能 `all`：`all` 会把 `border-width` 也纳入过渡 —— 而
+ * `border-width` 是**布局属性**，每帧都触发 layout + paint，不是合成层。
+ * 一屏最多 89 个格子各带一条这样的过渡，白白增加切换时的样式重算。
+ *
+ * 为什么基础态要先声明 `border: 2px solid transparent`（而不是留空、靠 `.icon-active` 加）：
+ *   留空的话，选中那一刻 `border-style` 从 none 变 solid、`border-color` 从
+ *   **初始值 currentColor**（深墨色）过渡到金色 —— 会先闪出一圈**深色描边**。
+ *   预置透明描边后，两态的 width/style 完全一致，只有颜色在动，没有闪烁。
+ *
+ * ⚠️ 几何不变的前提是 `box-sizing: border-box`（App.vue 全局给 view 设了）。
+ *    所以 48px 外框始终是 48px，只是内容区从 48 变成 44 —— 内部图标是固定 24px
+ *    且 flex 居中，位置与大小都不受影响。
+ *    **改这里之后要重跑 `scripts/reflow-audit.mjs`** 确认没有新的"压邻居"。
+ */
 .icon-box {
   width: 48px;
   height: 48px;
   border-radius: 50%;
   background: $v11-bg-inset;
+  border: 2px solid transparent;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
 }
 
 /*

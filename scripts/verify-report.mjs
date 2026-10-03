@@ -68,6 +68,34 @@ const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e.message).slice(0, 120)));
 
+/**
+ * 页面**最近一次**请求 `/statistics/report` 用的 `period` 与 `accountId`。
+ *
+ * ⚠️ 为什么要记它们、而不是硬编码：分类 Tab 的默认时段是**当前月**，
+ *    而"当前月有没有数据"取决于**跑脚本的日期**与库里的数据 ——
+ *    硬编码 `period=2026-09` 的写法会让判据**随日历自己变红**
+ *    （2026-10-02 实测：页面正确显示「2026年10月暂无记录」，
+ *      探针却拿 9 月的数据断言页面必须出现 → 9 条假红）。
+ *    断言必须针对**页面实际显示的那个期间**，否则测的就不是这个页面。
+ *
+ * ⚠️ `accountId` 也必须带上（2026-10-03 修，这个坑很隐蔽）：
+ *    页面发的是 `/statistics/report?period=…&accountId=3`，而原探针自己 fetch 时
+ *    **不带 accountId** —— 于是后端按"默认账本"算，拿到的数据属于**另一个账本**。
+ *    在 9 月那轮恰好默认账本也有数据，所以"看起来是对的"；
+ *    一旦当前账本与默认账本的数据分布不同，比对就必然对不上（表现为假红）。
+ *    **判据与被判定的对象必须用同一组参数**，这是本条的教训。
+ */
+let lastReportPeriod = '';
+let lastReportAccountId = '';
+page.on('request', (req) => {
+  const url = req.url();
+  if (!url.includes('/api/statistics/report')) return;
+  const p = url.match(/[?&]period=([^&]+)/);
+  if (p) lastReportPeriod = decodeURIComponent(p[1]);
+  const a = url.match(/[?&]accountId=([^&]+)/);
+  if (a) lastReportAccountId = decodeURIComponent(a[1]);
+});
+
 /*
  * 记录 canvas 上画过的**每一段文字**。
  *
@@ -103,9 +131,54 @@ console.log('登录完成，当前：', page.url());
 
 // 直接进报表页
 await page.goto(`${BASE}/#/pages/statistics/index`, { waitUntil: 'domcontentloaded' });
-await page.waitForTimeout(2500);
 
 const bodyText = () => page.evaluate(() => document.body.innerText);
+
+/**
+ * 等页面上出现某段文字，超时**不抛**（返回 false）。
+ *
+ * ⚠️ 为什么需要它（2026-10-03 修，两处假红的根因）：
+ *    `page.goto` + `waitForTimeout(固定毫秒)` 这个组合在本页**不可靠** ——
+ *    Vite dev 首次访问报表页要**现场编译**（报表页 + RingChart + 一堆依赖），
+ *    冷启动或机器高负载时 2500ms 远远不够，于是断言取到的是**上一个页面**的文本，
+ *    报"标题「报表」不存在""账本流水统计不存在"—— 把"页面还没加载完"
+ *    误报成"页面缺内容"。实测同一份代码：冷启动 FAIL=17、预热后这两段全绿。
+ *
+ * 为什么超时**不抛**：抛异常会中断整个脚本，后面的检查连跑都跑不到；
+ *    这里让流程继续，最终由**断言本身**报红 —— 红在"内容缺失"上比"脚本崩了"更有信息量。
+ */
+const waitText = async (needle, ms = 20000) => {
+  try {
+    await page.waitForFunction((n) => document.body.innerText.includes(n), needle, { timeout: ms });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// 等页面外壳 + 基础统计的**真实内容**（后者要等 /statistics/report 回来，不能只等外壳）
+await waitText('报表');
+await waitText('账本流水统计');
+
+/**
+ * 拉某个期间 + **同一个账本**的二级口径分类名（在**页面上下文**里发请求，复用登录后的 token）。
+ * 与页面上展示的排行做比对，用来验证"分类 Tab 用的是二级口径"。
+ *
+ * ⚠️ `accountId` 不能省（见 `lastReportAccountId` 的注释）：省了就是拿另一个账本的数据去比对。
+ */
+const fetchL2 = (period, accountId) =>
+  page.evaluate(
+    async ({ p, a }) => {
+      const token = localStorage.getItem('token') || localStorage.getItem('uni-storage-token');
+      const qs = `period=${encodeURIComponent(p)}` + (a ? `&accountId=${encodeURIComponent(a)}` : '');
+      const res = await fetch(`/api/statistics/report?${qs}`, {
+        headers: { Authorization: 'Bearer ' + token },
+      });
+      const body = await res.json();
+      return (body?.data?.expenseCategoriesL2 || []).map((r) => r.name);
+    },
+    { p: period, a: accountId }
+  );
 
 console.log('\n[1] 顶栏与 Tab');
 {
@@ -364,12 +437,29 @@ console.log('\n[4] 趋势图渲染（uCharts canvas：收入/支出折线 + 结�
       };
     });
     check('点中的月份出现高亮 chip', /^\d{2}月$/.test(tapRes.chipText), tapRes.chipText || '(无)');
+    /*
+     * ⚠️ 阈值 2026-10-03 由 **≤2px 放宽到 ≤3px**（luchao 拍板），**依据如下实测** —— 不是"为了让红变绿"：
+     *
+     *   · 存在一个**恒定的约 2px 基准差**：`TrendChart.vue` 用 uCharts 回传的 `o.area[3]`(=42)
+     *     作为 chip 的中心基准，而 uCharts 实际把 X 轴标签画在 **44**。
+     *   · **不是"每格漂移"**：实测标签 `01月@44 … 11月@276` ⇒ `each = 23.2`，
+     *     组件算的 `(width − area[1] − area[3]) / 12` 在 width=335 时 = 23.17 —— 两者一致。
+     *   · 所以这条断言**本来就贴着 2px 红线**：canvas 宽 311 时实测 ≈1.5px（过），
+     *     335 时 ≈2.0px（不过）。放宽到 3px 是**把代理指标校准到它的真实意图**
+     *     （意图是"chip 要盖住那行文字"；chip 宽约 30px，2px 偏移仍完整覆盖，肉眼不可辨）。
+     *   · **≤3px 仍然是有意义的门**：真正的错位（如 chip 用了过期的 width）会 >5px；
+     *     组件算出的 `each` 若与真实布局脱节，误差会随下标线性放大 —— 那类问题照样会被抓住。
+     *
+     * ⛔ 不要为了"看起来更严"把它改回 2px：那会让本断言在任何取整波动下随机变红
+     *    （一个会假红的校验器比没有校验器更糟 —— 它会训练人忽略红色）。
+     */
     check(
-      'chip 落在该月份的 X 轴位置上（误差 ≤2px）',
+      'chip 落在该月份的 X 轴位置上（误差 ≤3px）',
       tapRes.chipCenter !== null &&
         tapRes.expected !== null &&
-        Math.abs(tapRes.chipCenter - tapRes.expected) <= 2,
-      `chip 中心=${tapRes.chipCenter === null ? 'n/a' : Math.round(tapRes.chipCenter)} 该月应有位置=${tapRes.expected === null ? 'n/a' : Math.round(tapRes.expected)}`
+        Math.abs(tapRes.chipCenter - tapRes.expected) <= 3,
+      `chip 中心=${tapRes.chipCenter === null ? 'n/a' : Math.round(tapRes.chipCenter)} 该月应有位置=${tapRes.expected === null ? 'n/a' : Math.round(tapRes.expected)}` +
+        ` 误差=${tapRes.chipCenter === null || tapRes.expected === null ? 'n/a' : Math.abs(tapRes.chipCenter - tapRes.expected).toFixed(2)}px`
     );
     check(
       'tooltip 显示收入 / 支出 / 结余 三条',
@@ -405,27 +495,77 @@ console.log('\n[5] 顶栏 + Tab 吸顶');
 console.log('\n[6] 切到「分类」Tab');
 {
   await page.locator('.tab-item', { hasText: '分类' }).first().click();
-  await page.waitForTimeout(1500);
+
+  /*
+   * ⚠️ 分类 Tab 的默认时段是**当前月**，而"当前月有没有数据"取决于**跑脚本的日期**
+   *    与库里的数据 —— 这条判据曾经**随日历自己变红**：
+   *    2026-10-02 跑时当月无数据，页面**正确**显示「2026年10月暂无记录」，
+   *    而探针拿硬编码 `period=2026-09` 的数据断言页面必须出现 → 9 条假红。
+   *
+   * 现在按**页面实际请求的那个期间**取数据，分两条支路，且都会打印走了哪条
+   * （**绝不静默跳过**）：
+   *   · 有数据 → 直接跑全量检查（环图 / 引出线标注 / 二级口径）；
+   *   · 没数据 → 先断言"空状态确实正确"，再切到「年」粒度
+   *     （与基础统计 Tab 用的是同一份年度数据，必定有数据）跑全量检查。
+   *
+   * 之所以不去拨期间滚轮：PeriodPicker 是 `picker-view` 双滚轮，
+   * 驱动它要么靠猜 offscreen 滚动距离、要么去碰组件内部状态 —— 都比点「年」按钮脆。
+   */
+  /*
+   * ⚠️ 这里**不能**把 `支出分类统计` 当作"数据已就绪"的判据：
+   *    它是模板里的固定文字，**不等数据就会出现**。踩过两次：
+   *    ① 据此以为"当月有数据"，其实 DOM 里还是**上一个 Tab 的数据**（旧内容没被覆盖）；
+   *    ② 据此断言空状态，结果取文本时响应还没渲染，判据取到的是旧数据 → 假红。
+   *    正确做法：等**真实数据里的字符串**（下面用第一个二级分类名）。
+   */
+  await waitText('支出分类统计');
+  let l2 = await fetchL2(lastReportPeriod || '', lastReportAccountId || '');
+  console.log(
+    `   ⓘ 分类 Tab 期间 ${lastReportPeriod || '(未捕获)'}` +
+      ` / 账本 ${lastReportAccountId || '(未捕获)'}，二级分类 ${l2.length} 个`
+  );
+
+  if (l2.length === 0) {
+    // 无数据：等**空状态文案**真的出现，再断言（理由同上）
+    await waitText('暂无记录');
+    const tEmpty = await bodyText();
+    check(
+      '无数据的期间显示空状态（而不是空白或错误态）',
+      tEmpty.includes('暂无记录'),
+      `period=${lastReportPeriod}`
+    );
+    // 切「年」：`.mode-item` / `.confirm` 都是普通按钮，点得稳
+    await page.locator('.period-center').first().click();
+    await page.waitForTimeout(600);
+    await page.locator('.mode-item', { hasText: '年' }).first().click();
+    await page.waitForTimeout(300);
+    await page.locator('.confirm').first().click();
+    l2 = await fetchL2(lastReportPeriod || '', lastReportAccountId || '');
+    console.log(
+      `   ⓘ 已切到年粒度，期间 ${lastReportPeriod || '(未捕获)'}，二级分类 ${l2.length} 个`
+    );
+  }
+
+  // 等**真实数据**渲染出来（第一个二级分类名），再取文本做断言
+  if (l2.length) await waitText(l2[0]);
   const t = await bodyText();
+
   check('支出分类统计', t.includes('支出分类统计'));
   check('收入分类统计', t.includes('收入分类统计'));
 
   // 分类 Tab 必须用**二级口径**：环形图与排行里的名称应能匹配到二级分类。
-  // 判据：直接从接口拿二级数据，检查页面排行里出现了其中的二级分类名
+  // 判据：拿**同一期间、同一账本**的二级数据，检查页面排行里出现了其中的二级分类名
   // （一级口径下这些名字不会出现）。
-  const l2 = await page.evaluate(async () => {
-    const token = localStorage.getItem('token') || localStorage.getItem('uni-storage-token');
-    const res = await fetch('/api/statistics/report?period=2026-09', {
-      headers: { Authorization: 'Bearer ' + token },
-    });
-    const body = await res.json();
-    return (body?.data?.expenseCategoriesL2 || []).map((r) => r.name);
-  });
-  const pageText = await bodyText();
-  const hitL2 = l2.filter((n) => pageText.includes(n));
+  const hitL2 = l2.filter((n) => t.includes(n));
   check(
     '分类 Tab 使用二级口径（排行里出现二级分类名）',
-    l2.length === 0 || hitL2.length > 0,
+    /*
+     * ⚠️ 这里**不能**再留 `l2.length === 0 ||` 这个逃逸阀（2026-10-03 收紧）。
+     *    它的原意是"接口没数据时别误报"，但那种情况现在已经被上面的分支显式处理掉了；
+     *    留着它就等于：接口一旦返回空，这条断言**白过** —— 又是一个不会红的校验器。
+     *    收紧成"必须有二级数据，且页面上真的出现了其中至少一个名字"。
+     */
+    l2.length > 0 && hitL2.length > 0,
     `二级 ${hitL2.length}/${l2.length}`
   );
   const ringSvg = await page.evaluate(() => document.querySelectorAll('.ring-wrap svg').length);

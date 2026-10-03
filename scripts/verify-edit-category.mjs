@@ -163,7 +163,7 @@ await page.reload({ waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(2000);
 
 /* ============================================================
- * ① 时间维度：日头不带月份（反例，防止"无脑加月"）
+ * ① 时间维度 · **月**粒度：日头不带月份（反例，防止"无脑加月"）
  * ============================================================ */
 await page.goto('http://127.0.0.1:5173/#/pages/flow/index', { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(4000);
@@ -183,12 +183,53 @@ const txnNames = async () =>
 
 const timeHeads = await dayHeads();
 check(
-  '① 时间维度：日头是「N日 周X」，不含月份',
+  '① 时间维度 · 月粒度：日头是「N日 周X」，不含月份（反例，防无脑加月）',
   timeHeads.length > 0 && timeHeads.every((t) => /^\d{1,2}日\s*周[一二三四五六日]$/.test(t)),
   JSON.stringify(timeHeads)
 );
 const namesBefore = await txnNames();
 check('   该笔流水挂在分类 A', namesBefore.indexOf(catA.name) >= 0, JSON.stringify(namesBefore));
+
+/* ============================================================
+ * ①b 时间维度 · 年 / 季 / 周 粒度：日头**必须带月份**
+ *
+ * 2026-10-03 新规则（luchao 定）：只有「时间 × 月粒度」不带月份，
+ * 其余维度一律带 —— 年/季/分类的明细跨月，**ISO 周还会跨月**（如 9月30 ~ 10月6），
+ * 组头都不含月份，只写「30日 周三」没法定位到具体哪天。
+ *
+ * ⚠️ 这条是**新规则的唯一守卫**：删掉它，把判据退回 `groupBy === 'category'`
+ *    也不会有人发现（页面照样能跑，只是年/季/周下日头丢了月份）。
+ * ============================================================ */
+for (const gran of ['年', '季', '周']) {
+  console.log(`[1b] 切到「${gran}」粒度 → 日头应带月份`);
+  const openedUnit = await page.evaluate(function () {
+    var items = document.querySelectorAll('.filter-item');
+    if (!items.length) return false;
+    items[0].click();
+    return true;
+  });
+  check(`   ${gran}：粒度弹层已打开`, openedUnit);
+  await page.waitForTimeout(600);
+  const pickedGran = await clickByText('.sheet-item-row', gran);
+  check(`   ${gran}：已选「${gran}」粒度`, pickedGran);
+  await page.waitForTimeout(4000);
+
+  const heads = await dayHeads();
+  check(
+    `①b ★ ${gran}粒度：日头带月份（如「9月30日 周三」）`,
+    heads.length > 0 && heads.every((t) => /^\d{1,2}月\d{1,2}日\s*周[一二三四五六日]$/.test(t)),
+    JSON.stringify(heads)
+  );
+}
+
+// 复位到默认（月），避免影响后续步骤的前提
+console.log('[1b] 复位到「月」粒度');
+await page.evaluate(function () {
+  document.querySelectorAll('.filter-item')[0].click();
+});
+await page.waitForTimeout(600);
+await clickByText('.sheet-item-row', '月');
+await page.waitForTimeout(3000);
 
 /* ============================================================
  * ② 分类维度：日头带月份

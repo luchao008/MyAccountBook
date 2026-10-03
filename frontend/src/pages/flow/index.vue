@@ -14,7 +14,11 @@
          这类错误不报错、不警告，只有肉眼看图才会发现。
     -->
     <view class="header" :style="{ paddingTop: navHeight + 'px' }">
-      <view class="nav" :class="{ solid: navSolid }" :style="{ paddingTop: statusBarHeight + 'px' }">
+      <view
+        class="nav"
+        :class="{ solid: navSolid }"
+        :style="{ paddingTop: statusBarHeight + 'px' }"
+      >
         <view class="nav-inner">
           <view class="nav-btn nav-back" @click="goBack">
             <SvgIcon name="icon-chevron-left" :size="20" />
@@ -39,7 +43,6 @@
             </view>
           </view>
         </view>
-
       </view>
 
       <!-- 结余（原 hero 内容，现与 nav 同处一块渐变） -->
@@ -92,114 +95,164 @@
       数据到位时布局几乎不跳（CLS 小），用户也能预判马上会出现什么。
       ⚠️ 只在首屏出现；筛选/搜索/返回刷新时不铺（那时旧数据还在，换成灰块是倒退）。
     -->
-    <view v-if="skeleton" class="groups">
-      <view v-for="n in 4" :key="n" class="group">
-        <view class="group-head sk-head">
-          <view class="group-title-wrap">
-            <Skeleton w="48" h="16" />
-            <Skeleton w="32" h="11" />
-          </view>
-          <view class="group-right">
-            <Skeleton w="112" h="12" />
-            <Skeleton w="128" h="12" />
-          </view>
-        </view>
-        <view class="group-body">
-          <view class="sk-rows">
-            <view v-for="m in 2" :key="m" class="sk-row">
-              <Skeleton circle :h="28" />
-              <view class="sk-row-main">
-                <Skeleton w="72" h="14" />
-                <Skeleton w="104" h="11" />
+    <!--
+      ── 骨架 ⇄ 内容：交叉淡入（2026-10-03 新增，规格见 docs/交互动效规格.md §C3）──
+
+      `<Transition>` 必须包住**整条 v-if 链**（骨架 / 错误 / 空 / 内容 四选一），
+      不能只包骨架 —— 那样切换时另一半不在过渡里，等于动画只做了一半。
+
+      ⚠️ 外面这层 `.cross-host` 的唯一作用是**提供定位上下文**：离开的那一块会被
+         `position: absolute` 脱流（否则两个分支同时占位、容器高度瞬间变成两者之和，
+         页面会突然长高一大截，滚动位置跟着跳）。
+         这层 relative **不能直接加到 `.page` 上** —— 三个视图的 `.page` 里都有
+         `position: absolute` 的子孙（HomeView 1 处 / ReportView 2 处），
+         改掉它们的定位参照会连带出别的问题。
+
+      ⚠️ 为什么不能只做「内容淡入」：把骨架**瞬时**撤掉、再让内容从 opacity 0 淡入，
+         前几十毫秒内容几乎不可见 —— 那等于**亲手制造**了空白帧（比瞬切更差）。
+         消除闪白只能靠**交叉**：骨架在下面垫着，内容在它上面渐显。
+
+      ⚠️ `<Transition>` 在**小程序端不渲染动画**（静默降级为瞬变）。这是项目既有的
+         "H5 优先"取舍，与 7 个弹层的处理一致。
+    -->
+    <view class="cross-host">
+      <Transition name="cross">
+        <view v-if="skeleton" class="groups">
+          <view v-for="n in 4" :key="n" class="group">
+            <view class="group-head sk-head">
+              <view class="group-title-wrap">
+                <Skeleton w="48" h="16" />
+                <Skeleton w="32" h="11" />
               </view>
-              <Skeleton w="64" h="14" />
+              <view class="group-right">
+                <Skeleton w="112" h="12" />
+                <Skeleton w="128" h="12" />
+              </view>
+            </view>
+            <view class="group-body">
+              <view class="sk-rows">
+                <view v-for="m in 2" :key="m" class="sk-row">
+                  <Skeleton circle :h="28" />
+                  <view class="sk-row-main">
+                    <Skeleton w="72" h="14" />
+                    <Skeleton w="104" h="11" />
+                  </view>
+                  <Skeleton w="64" h="14" />
+                </view>
+              </view>
             </view>
           </view>
         </view>
-      </view>
-    </view>
 
-    <EmptyState
-      v-else-if="error"
-      icon="icon-alert"
-      text="加载失败，请稍后重试"
-      button-text="重试"
-      @action="reloadAll"
-    />
-    <EmptyState v-else-if="!groups.length" icon="icon-inbox" text="该条件下暂无流水" />
+        <EmptyState
+          v-else-if="error"
+          icon="icon-alert"
+          text="加载失败，请稍后重试"
+          button-text="重试"
+          @action="reloadAll"
+        />
+        <EmptyState v-else-if="!groups.length" icon="icon-inbox" text="该条件下暂无流水" />
 
-    <!-- ── 分组列表 ── -->
-    <view v-else class="groups">
-      <view v-for="g in groups" :key="g.key" class="group">
-        <!-- 组头：点击展开/收起；滚动时吸在顶栏下方（推送式，同 iOS 通讯录） -->
-        <view class="group-head" :style="{ top: navHeight + 'px' }" @click="toggleGroup(g)">
-          <!--
+        <!-- ── 分组列表 ── -->
+        <view v-else class="groups">
+          <view v-for="g in groups" :key="g.key" class="group">
+            <!-- 组头：点击展开/收起；滚动时吸在顶栏下方（推送式，同 iOS 通讯录） -->
+            <view class="group-head" :style="{ top: navHeight + 'px' }" @click="toggleGroup(g)">
+              <!--
             组头标题分两种维度：
             · 时间维度 → 「9月」+ 副标题「2026」
             · 分类维度 → 分类名 + 副标题（二级口径下显示所属一级）
           -->
-          <view class="group-title-wrap">
-            <text class="group-title">{{ groupTitle(g) }}</text>
-            <text v-if="groupSub(g)" class="group-sub">{{ groupSub(g) }}</text>
-          </view>
-          <view class="group-right">
-            <view class="group-amounts">
-              <view class="group-line">
-                <text class="group-key">结余</text>
-                <text class="group-val" :class="signClass(g.balance)">{{ formatMoney(g.balance) }}</text>
+              <view class="group-title-wrap">
+                <text class="group-title">{{ groupTitle(g) }}</text>
+                <text v-if="groupSub(g)" class="group-sub">{{ groupSub(g) }}</text>
               </view>
-              <view class="group-line">
-                <text class="group-key">收入</text>
-                <text class="group-val income">{{ formatMoney(g.income) }}</text>
-                <text class="group-sep">|</text>
-                <text class="group-key">支出</text>
-                <text class="group-val expense">{{ formatMoney(g.expense) }}</text>
-              </view>
-            </view>
-            <SvgIcon
-              class="group-arrow"
-              :name="expanded.has(g.key) ? 'icon-chevron-up' : 'icon-chevron-down'"
-              :size="16"
-            />
-          </view>
-        </view>
-
-        <!-- 组内明细：按日分组 -->
-        <view v-if="expanded.has(g.key)" class="group-body">
-          <view v-if="loadingDetail.has(g.key)" class="detail-loading">
-            <text class="state-text">加载中…</text>
-          </view>
-          <EmptyState v-else-if="!details[g.key]?.length" icon="icon-inbox" text="该时段无流水" />
-          <template v-else>
-            <view v-for="day in details[g.key]" :key="day.date" class="day">
-              <!--
-                分类维度下明细跨月，日头必须带月份（「9月15日 周一」）；
-                时间维度组头已含月份，保持「15日 周一」不重复。
-              -->
-              <view class="day-head">
-                <text class="day-head-text">{{ dayHeader(day.date, groupBy === 'category') }}</text>
-              </view>
-              <uni-swipe-action v-for="t in day.items" :key="t.id">
-                <uni-swipe-action-item :right-options="SWIPE_OPTIONS" @click="onSwipe($event, t)">
-                  <view class="txn" @click="editTransaction(t.id)">
-                    <CategoryIcon
-                      class="txn-icon"
-                      :name="t.category?.icon || 'cat-misc'"
-                      :size="28"
-                    />
-                    <view class="txn-main">
-                      <text class="txn-name">{{ t.category?.name || '未分类' }}</text>
-                      <text class="txn-meta">{{ txnMeta(t) }}</text>
-                    </view>
-                    <text class="txn-amount" :class="t.type === 'income' ? 'income' : 'expense'">
-                      {{ t.type === 'income' ? '+' : '-' }}{{ formatMoney(t.amount) }}
-                    </text>
+              <view class="group-right">
+                <view class="group-amounts">
+                  <view class="group-line">
+                    <text class="group-key">结余</text>
+                    <text class="group-val" :class="signClass(g.balance)">{{
+                      formatMoney(g.balance)
+                    }}</text>
                   </view>
-                </uni-swipe-action-item>
-              </uni-swipe-action>
+                  <view class="group-line">
+                    <text class="group-key">收入</text>
+                    <text class="group-val income">{{ formatMoney(g.income) }}</text>
+                    <text class="group-sep">|</text>
+                    <text class="group-key">支出</text>
+                    <text class="group-val expense">{{ formatMoney(g.expense) }}</text>
+                  </view>
+                </view>
+                <SvgIcon
+                  class="group-arrow"
+                  :name="expanded.has(g.key) ? 'icon-chevron-up' : 'icon-chevron-down'"
+                  :size="16"
+                />
+              </view>
             </view>
 
             <!--
+          组内明细：按日分组
+
+          ⚠️ 折叠态**不再用 `v-if` 卸载**，改用 `.group-body-inner` + `grid-template-rows: 0fr → 1fr`
+             控制高度（样式见下方 `.group-body`）。
+             原因：`v-if` 卸载时高度是**瞬变**的 —— 点一下分组头，下面的内容会"啪"地跳下去。
+             这是本项目里"元素出现 / 消失"这一类剩下的最后一处瞬变。
+             `height: auto` 无法过渡（浏览器不知道目标值）；`max-height` 猜一个大值会让
+             **时长随内容量漂移**（内容少时表现为"点了没反应、然后突然收起"）——
+             grid 的 `0fr → 1fr` 是唯一**既不需要预设高度、时长又恒定**的解法。
+        -->
+            <view class="group-body" :class="{ open: expanded.has(g.key) }" :data-gkey="g.key">
+              <view class="group-body-inner">
+                <view v-if="loadingDetail.has(g.key)" class="detail-loading">
+                  <text class="state-text">加载中…</text>
+                </view>
+                <!--
+              ⚠️ `expanded.has(g.key) &&` 这半句是**必需的**：折叠时 `details[key]` 还没加载，
+              `!undefined` 为真 ⇒ 它会渲染「该时段无流水」。当前被 0fr 压扁所以看不见，
+              但只要将来给 `.group-body-inner` 加了 padding（比如 1px），这句错就会立刻露出来。
+            -->
+                <EmptyState
+                  v-else-if="expanded.has(g.key) && !details[g.key]?.length"
+                  icon="icon-inbox"
+                  text="该时段无流水"
+                />
+                <template v-else>
+                  <view v-for="day in details[g.key]" :key="day.date" class="day">
+                    <!--
+                日头是否带月份的唯一判据是 `dayHeadWithMonth`（见 script 里它的定义）：
+                只有「时间 × 月粒度」不带，其余（年 / 季 / 周 / 天 / 分类）都带。
+              -->
+                    <view class="day-head">
+                      <text class="day-head-text">{{ dayHeader(day.date, dayHeadWithMonth) }}</text>
+                    </view>
+                    <uni-swipe-action v-for="t in day.items" :key="t.id">
+                      <uni-swipe-action-item
+                        :right-options="SWIPE_OPTIONS"
+                        @click="onSwipe($event, t)"
+                      >
+                        <view class="txn" @click="editTransaction(t.id)">
+                          <CategoryIcon
+                            class="txn-icon"
+                            :name="t.category?.icon || 'cat-misc'"
+                            :size="28"
+                          />
+                          <view class="txn-main">
+                            <text class="txn-name">{{ t.category?.name || '未分类' }}</text>
+                            <text class="txn-meta">{{ txnMeta(t) }}</text>
+                          </view>
+                          <text
+                            class="txn-amount"
+                            :class="t.type === 'income' ? 'income' : 'expense'"
+                          >
+                            {{ t.type === 'income' ? '+' : '-' }}{{ formatMoney(t.amount) }}
+                          </text>
+                        </view>
+                      </uni-swipe-action-item>
+                    </uni-swipe-action>
+                  </view>
+
+                  <!--
               「加载更多」（2026-10-01 新增）。
 
               ⚠️ 这一块是修**正确性**，不是装饰：
@@ -214,27 +267,24 @@
                 `scripts/check-contrast.mjs` 会校验 .vue 里的 font-size 必须落在
                 `$font-*` / `$icon-*` 阶梯内，并有色值字面量扫描 —— 不新增最省事。
             -->
-            <view v-if="hasMoreDetail(g.key)" class="detail-more" @click.stop="loadMoreDetail(g)">
-              <text class="state-text">
-                {{
-                  isDetailLoadingMore(g.key)
-                    ? '加载中…'
-                    : `加载更多（已显示 ${detailLoaded(g.key)} / ${detailTotal(g.key)} 条）`
-                }}
-              </text>
+                  <view
+                    v-if="hasMoreDetail(g.key)"
+                    class="detail-more"
+                    @click.stop="loadMoreDetail(g)"
+                  >
+                    <text class="state-text">{{ detailMoreText(g.key) }}</text>
+                  </view>
+                </template>
+              </view>
             </view>
-          </template>
+          </view>
         </view>
-      </view>
+      </Transition>
     </view>
 
     <!-- ── 底部分组维度栏：时间 / 分类（两者互斥，各点各的弹层）── -->
     <view class="filter-bar">
-      <view
-        class="filter-item"
-        :class="{ active: groupBy === 'time' }"
-        @click="openUnitPicker"
-      >
+      <view class="filter-item" :class="{ active: groupBy === 'time' }" @click="openUnitPicker">
         <text class="filter-text">{{ groupBy === 'time' ? unitLabel : '时间' }}</text>
         <SvgIcon class="filter-arrow" name="icon-chevron-down" :size="12" />
       </view>
@@ -262,11 +312,15 @@
           <text class="sheet-title">批量操作</text>
           <text class="sheet-sub">编辑、复制(含跨账本)、分享及删除流水</text>
         </view>
-        <view class="sheet-item" @click="goExport"><text class="sheet-item-text">流水导出</text></view>
+        <view class="sheet-item" @click="goExport"
+          ><text class="sheet-item-text">流水导出</text></view
+        >
         <view class="sheet-item" @click="openFilterFromSheet">
           <text class="sheet-item-text">筛选</text>
         </view>
-        <view class="sheet-item" @click="openSortPicker"><text class="sheet-item-text">排序</text></view>
+        <view class="sheet-item" @click="openSortPicker"
+          ><text class="sheet-item-text">排序</text></view
+        >
         <view class="sheet-item sheet-cancel" @click="actionVisible = false">
           <text class="sheet-item-text">取消</text>
         </view>
@@ -285,12 +339,7 @@
           <text class="sheet-item-text" :class="{ 'sheet-item-active': unit === u.value }">
             {{ u.label }}
           </text>
-          <SvgIcon
-            v-if="unit === u.value"
-            class="sheet-check"
-            name="icon-check"
-            :size="18"
-          />
+          <SvgIcon v-if="unit === u.value" class="sheet-check" name="icon-check" :size="18" />
         </view>
       </view>
     </view>
@@ -356,7 +405,6 @@
       :model-value="timeRangeModel"
       @pick="onTimePicked"
     />
-
 
     <!--
       ── 弹层 ⑦：筛选条件摘要（参考图）──
@@ -523,7 +571,7 @@
  * 两者共用同一套筛选参数，见 service 层的 applyFilters 注释。
  */
 import { ref, reactive, computed, onMounted, nextTick } from 'vue';
-import { onPageScroll, onLoad, onShow } from '@dcloudio/uni-app';
+import { onPageScroll, onLoad, onShow, onUnload, onReachBottom } from '@dcloudio/uni-app';
 import SvgIcon from '@/components/SvgIcon.vue';
 import CategoryIcon from '@/components/CategoryIcon.vue';
 import EmptyState from '@/components/EmptyState.vue';
@@ -544,6 +592,7 @@ import {
 import { formatMoney } from '@/utils/format';
 import { periodRange, periodLabel, dayHeader } from '@/utils/period';
 import { useTxnSwipe } from '@/utils/txnSwipe';
+import { createLatest } from '@/utils/latest';
 
 const accountStore = useAccountStore();
 const categoryStore = useCategoryStore();
@@ -592,9 +641,86 @@ function measureHeader() {
   });
 }
 
+/* ── 明细预加载（2026-10-03）─────────────────────────────────────────────
+ *
+ * 目标：**在用户到达底部之前**把下一页备好 ⇒ 滚动全程无停顿、无空白。
+ * 触发方式从"触底"（`onReachBottom`）改成"**接近底部**"：`onPageScroll` 里算
+ * 「距列表底部还剩多少 px」，≤ 阈值就预取。`onReachBottom` 保留为**兜底**（见下）。
+ *
+ * ── 阈值怎么设与算 ──────────────────────────────────────────────
+ *  `PREFETCH_VIEWPORT_MULTIPLE = 1.5`，实际阈值 = **1.5 × 可视区域高度**（H5 375×812 ⇒ 1218px）。
+ *  为什么用「可视高度的倍数」而不是固定 px：
+ *   · 固定 px 在小屏上提前量过大（浪费流量）、在大屏上过小（没效果，等于没预加载）；
+ *   · 视口高度正是"用户一屏能看到多少内容"的度量，倍数即"提前几屏开始拉"，
+ *     语义直观且随设备自适应。
+ *  为什么取 1.5（需求给的区间是 1~2）：
+ *   · 1.0 = 刚好在到底时才开始拉 ⇒ 请求往返期间用户已经看到底了，**没有真正"提前"**；
+ *   · 2.0 = 提前两屏，对"一次只翻一页"的列表偏多，容易在用户没打算继续翻时就白拉流量；
+ *   · 1.5 ≈ 提前一屏半，是"网络往返（通常 <300ms，用户滑一屏的时间）+ 一次翻页的量"，
+ *     够覆盖又不浪费。**要调就改这一个常量**，计算逻辑不用动。
+ *
+ * ⚠️ 数值**现算**（`prefetchThreshold()` 每次读 `window.innerHeight`）而不是模块加载时算一次 ——
+ *    移动端地址栏收起 / 横竖屏切换都会改可视高度，缓存会让阈值失真。
+ *
+ * ⚠️ 位置不依赖 `onPageScroll` 的 `e.scrollTop`：那个值在各端不一致（小程序端不适用），
+ *    而 `window.scrollY` 在 H5 才是真值 —— `onPageScroll` 只当"触发器"用。
+ */
+const PREFETCH_VIEWPORT_MULTIPLE = 1.5;
+/** 两次预取之间的最小间隔：`onPageScroll` 每帧都触发，不节流会连发 */
+const PREFETCH_COOLDOWN_MS = 400;
+/**
+ * 同一次停留的判定：预取后内容变长，用户**没动**时距离又落回阈值内，
+ * 若不挡住就会**级联**把 259 条（3 页）一次拉光。scrollTop 变化小于此值视为"没动"。
+ */
+const PREFETCH_CASCADE_GUARD_PX = 24;
+
+/**
+ * 预取触发状态：上一次预取发生在哪个 key / 哪个滚动位置 / 什么时候。
+ * ⚠️ 是 `let` 不是 `const` —— 每次触发都要整体覆盖（`{ key, y, at }` 三字段要同步更新）。
+ */
+let lastPrefetch = { key: '', y: -1, at: 0 };
+
+/** 当前预取阈值（px）。⚠️ 现算，不缓存 —— 见上方说明 */
+function prefetchThreshold(): number {
+  if (typeof window === 'undefined') return 600; // 非浏览器端兜底
+  return Math.round(window.innerHeight * PREFETCH_VIEWPORT_MULTIPLE);
+}
+
+/** 距列表底部还剩多少 px（≤ 0 表示已在底部 / 已过底部） */
+function distanceToBottom(): number {
+  if (typeof document === 'undefined') return Number.POSITIVE_INFINITY; // 非浏览器端不触发
+  const el = document.documentElement;
+  return el.scrollHeight - (window.scrollY + window.innerHeight);
+}
+
+/*
+ * 是否该预取下一批。三个条件缺一不可：
+ *   ① 没有请求在飞（**并发控制**：一次只预取一组，跨组也排队）
+ *   ② 距底部 ≤ 阈值
+ *   ③ 不是"同一次停留里的重复触发"（冷却时间 + 位置都没变 ⇒ 跳过，防级联）
+ *
+ * ⚠️ `findAutoLoadTarget` 里还有一层"同组不并发"（`detailPaging[key].loadingMore`），
+ *    两者缺一不可：这里挡跨组与频率，那里挡同组重入。
+ */
+function maybePrefetch(): void {
+  if (autoLoadingKey.value) return; // ① 已有请求在飞
+  if (typeof window === 'undefined') return;
+  if (distanceToBottom() > prefetchThreshold()) return; // ② 还不够近
+  const now = Date.now();
+  const y = Math.round(window.scrollY);
+  // ③ 同一次停留：冷却没过、且位置几乎没变 ⇒ 刚预取过，别接着拉
+  if (lastPrefetch.key && now - lastPrefetch.at < PREFETCH_COOLDOWN_MS) return;
+  if (lastPrefetch.key && Math.abs(y - lastPrefetch.y) < PREFETCH_CASCADE_GUARD_PX) return;
+  const target = findAutoLoadTarget();
+  if (!target) return; // 没有"还有剩余"的组
+  lastPrefetch = { key: target.key, y, at: now };
+  void loadMoreDetail(target, 'prefetch');
+}
+
 onPageScroll((e) => {
   const next = (e.scrollTop ?? 0) >= solidThreshold.value;
   if (next !== navSolid.value) navSolid.value = next;
+  maybePrefetch(); // 预加载：接近底部就提前备好下一页
 });
 
 const statusBarHeight = ref(0);
@@ -623,6 +749,21 @@ const LEVEL_OPTIONS = [
   { value: 2 as const, label: '二级分类' },
 ];
 const order = ref<'time' | 'amountDesc' | 'amountAsc'>('time');
+
+/**
+ * 明细「日头」是否带月份 —— `.day-head-text` 是 `15日 周一` 还是 `9月15日 周一`。
+ *
+ * ⚠️ **只有「时间维度 × 月粒度」不带**，其余一律带（2026-10-03 luchao 定）：
+ *   · 月粒度 → 组头就是「9月」，组内明细必然同月，日头再加月份是纯重复
+ *   · 年 / 季 / 分类 → 明细横跨多个月（甚至跨年），只写「15日」根本看不出是哪个月
+ *   · 周 → **ISO 周会跨月**（某周可能是 9月30 ~ 10月6），组头「第40周」不含月份
+ *   · 天 → 组头已是「9月14日」，日头确实与之重复；但规则统一不开口子，
+ *          "某个粒度单独例外"正是下次改错时最难排查的那类分支
+ *
+ * ❌ 别退回成 `groupBy === 'category'` —— 那样年/季/周三种粒度又只剩「15日」，
+ *    正是本次要修的问题。判据回归在 `scripts/verify-edit-category.mjs`（① 月不带 / ①b 年季周带）。
+ */
+const dayHeadWithMonth = computed(() => groupBy.value === 'category' || unit.value !== 'month');
 
 /**
  * 全屏搜索页。
@@ -730,7 +871,21 @@ const error = ref(false);
  * 用 `loaded` 而不是「有没有分组」：空账本也必须停止铺骨架，
  * 否则骨架会永远停在那儿（用户以为一直在加载）。
  */
-const skeleton = ref(false);
+/*
+ * ⚠️ 初值必须是 `true`（2026-10-03 改，C3 交叉淡入的配套修复）。
+ *
+ * 首次挂载 = 首屏，此刻数据**必然**还没回来。初值给 `false` 会让**第一帧**
+ * 落到下面 v-if 链的最后一个分支（内容 / 空态 / 错误态）——
+ * 也就是先渲染一次「该条件下暂无流水」，然后被骨架顶掉。
+ *
+ * 以前这个错误分支只闪 **1 帧（约 16ms）**，基本看不见；
+ * 但加了 C3 的交叉淡入后，它会**淡出 150ms**，把一闪变成了肉眼可见的错值。
+ * 实测证据：交叠帧里能同时采到 `empty[leave] + 骨架[leave] + 内容[enter]` 三个分支。
+ *
+ * 为什么安全：本页的加载入口（`onLoad` / `onShow` → `reloadAll()`）是**无条件**调用的，
+ * 所以初值 `true` 一定会在数据回来后被 `skeleton = false` 收掉（成功走内容、失败走错误态）。
+ */
+const skeleton = ref(true);
 const loaded = ref(false);
 const groups = ref<SummaryItem[]>([]);
 const expanded = ref<Set<string>>(new Set());
@@ -773,7 +928,6 @@ const SORT_OPTIONS = [
   { value: 'amountDesc', label: '按金额从高到低' },
   { value: 'amountAsc', label: '按金额从低到高' },
 ] as const;
-
 
 /** 头部总额 = 各分组之和（与筛选条件联动，口径自洽） */
 const total = computed(() => {
@@ -866,41 +1020,68 @@ function baseParams() {
   };
 }
 
-async function loadGroups() {
+/**
+ * 分组列表的「最后写入者胜」守卫。
+ *
+ * ⚠️ 为什么必须有：改筛选、切粒度、切分类层级、`onShow` 返回刷新都会调 `loadGroups()`。
+ *    在两个**后端成本差异大**的请求之间快速切换时（典型：粒度 年 ↔ 天），
+ *    先发的响应可能后到，`groups.value` 被旧结果覆盖 ——
+ *    界面上的筛选条件与列表内容对不上，而且**不报任何错**。
+ *
+ * 守卫把"只让最新一次落地、且只有它有权关掉加载态"收口在 `utils/latest.ts` 一处
+ * （三个调用点各写一遍 = 三倍漏掉 loading/skeleton/error 某一个的机会）。
+ */
+const groupsGuard = createLatest();
+
+function loadGroups() {
   loading.value = true;
   error.value = false;
   // 只有「从未成功过」才铺骨架；筛选/搜索/返回刷新时旧列表还在，不铺
   if (!loaded.value) skeleton.value = true;
-  try {
-    await accountStore.load();
-    groups.value = await getTransactionSummary(baseParams());
-    /*
-     * 骨架到这一行为止（2026-10-01 改）。
-     *
-     * 组头（结余/收入/支出）、分组列表所需的**全部数据**在上一行就齐了；
-     * 而下面默认展开第一个分组还要再等一个明细请求。此前它是 `await` 的，
-     * 于是「骨架时间 = summary + 明细」= **两个串行 RTT**，
-     * 用户对着骨架白等多一整个往返，而那时页面其实已经有东西可画。
-     *
-     * 改成不 await：骨架在 summary 到手时立即撤掉，
-     * 明细由该组自己的「加载中…」占位兜住（模板里的 `loadingDetail`），
-     * 「进页面就能看到最近的明细」这个行为不变，只是明细晚一个 RTT 出现。
-     * `void` 是刻意的：toggleGroup 内部自己 catch（失败时落成空数组），不会抛。
-     */
-    loaded.value = true;
-    loading.value = false;
-    skeleton.value = false;
-    if (groups.value.length) {
-      void toggleGroup(groups.value[0]);
-    }
-  } catch (err) {
-    console.error('[flow] 分组加载失败', err);
-    error.value = true;
-  } finally {
+  /*
+   * ⚠️ 查询参数在**调用时快照**，不在 `task` 里现读。
+   *    若放在 await 之后再读 `baseParams()`，这次请求携带的会是"用户后来改的条件"，
+   *    也就是"旧调用发了新参数"—— 语义上说不清这次请求代表哪一次意图。
+   *    （即使有守卫兜底、最终结果不会错，也会白发一次请求，且让日志难以解读。）
+   */
+  const params = baseParams();
+  return groupsGuard.run({
+    task: async () => {
+      await accountStore.load();
+      return getTransactionSummary(params);
+    },
+    onSuccess: (list) => {
+      groups.value = list;
+      /*
+       * 骨架到这一行为止（2026-10-01 改）。
+       *
+       * 组头（结余/收入/支出）、分组列表所需的**全部数据**在上一行就齐了；
+       * 而下面默认展开第一个分组还要再等一个明细请求。此前它是 `await` 的，
+       * 于是「骨架时间 = summary + 明细」= **两个串行 RTT**，
+       * 用户对着骨架白等多一整个往返，而那时页面其实已经有东西可画。
+       *
+       * 改成不 await：骨架在 summary 到手时立即撤掉，
+       * 明细由该组自己的「加载中…」占位兜住（模板里的 `loadingDetail`），
+       * 「进页面就能看到最近的明细」这个行为不变，只是明细晚一个 RTT 出现。
+       * `void` 是刻意的：toggleGroup 内部自己 catch（失败时落成空数组），不会抛。
+       */
+      loaded.value = true;
+      loading.value = false;
+      skeleton.value = false;
+      if (list.length) {
+        void toggleGroup(list[0]);
+      }
+    },
+    onError: (err) => {
+      console.error('[flow] 分组加载失败', err);
+      error.value = true;
+    },
     // 兜底：异常路径下也必须把骨架撤掉（正常路径上面已经提前撤过一次，重复赋值无害）
-    loading.value = false;
-    skeleton.value = false;
-  }
+    onSettled: () => {
+      loading.value = false;
+      skeleton.value = false;
+    },
+  });
 }
 
 /** 只重拉列表（搜索/筛选变化） */
@@ -909,6 +1090,65 @@ function reloadAll() {
   details.value = {};
   detailPaging.value = {};
   loadGroups();
+}
+
+/**
+ * 找到某个分组的 `.group-body` 容器。
+ *
+ * ⚠️ 不用 `querySelector('[data-gkey="…"]')`：`key` 里可能出现需要转义的字符，
+ *    而各维度的 key 形态并不统一（月份维度是 `2026-09`、分类维度是分类 id，
+ *    将来若改成中文标签就会直接炸掉）。遍历比对 `dataset` 最稳。
+ */
+function findGroupBody(key: string): HTMLElement | null {
+  if (typeof document === 'undefined') return null; // 小程序端没有 DOM
+  /*
+   * ⚠️ 用下标循环而不是 `for…of`：本项目 tsconfig 没开 `downlevelIteration`，
+   *    `for (const el of NodeListOf)` 会报 **TS2488**（NodeListOf 没有 Symbol.iterator）。
+   */
+  const list = document.querySelectorAll<HTMLElement>('.group-body');
+  for (let i = 0; i < list.length; i += 1) {
+    if (list[i].dataset.gkey === String(key)) return list[i];
+  }
+  return null;
+}
+
+/**
+ * 让 `.group-body` 从 `fromPx` 平滑长到它的内容自然高度。
+ *
+ * **为什么必须有**（2026-10-03 实测）：
+ * 明细是**异步**到达的 —— `toggleGroup` 先展开（此时正文只有一行「加载中…」= 56px），
+ * 明细到达后整块在**一帧内**长到 1395px。实测「最大单帧增长 **1339px**」，
+ * 而且那一帧正好是「加载中…」消失的那一帧。
+ *
+ * **CSS 侧无解**，因为 transition 比较的是**指定值**而不是解析出的像素：
+ *   · `height: auto → auto`   —— 浏览器不知道中间值，无法插值；
+ *   · `grid-template-rows: 1fr → 1fr` —— 指定值**没变**（`1fr` 一直是 `1fr`），
+ *     变的只是它解析出来的像素，所以 D1 的那套 `0fr → 1fr` 在这里**不触发**。
+ * ⇒ 只能自己量、再喂给 `height`。
+ *
+ * ⚠️ 必须作用在**容器** `.group-body` 而不是 `.group-body-inner`：
+ *    inner 是 grid item，默认 `align-self: stretch`，给它设 `height` 会被轨道覆盖而无效。
+ *    容器上本来就有 `overflow: hidden`（D1 留的），正好用来裁剪过渡中尚未长满的内容。
+ *
+ * ⚠️ 用 `setTimeout` 兜底而不是只靠 `transitionend`：元素可能在过渡结束前被收起 /
+ *    卸载，那时 `transitionend` 不会来 —— 而残留的 inline `height` 就是**下一轮那个
+ *    `min-height: 0` 同款故障**（高度被钉死、再也压不下去）。
+ */
+function animateGroupBodyGrow(el: HTMLElement, fromPx: number) {
+  if (typeof document === 'undefined') return;
+  const toPx = el.getBoundingClientRect().height; // 此刻已是明细的自然高度
+  if (toPx <= fromPx + 1) return; // 没长高就别插手（否则已加载过的分组会被误改）
+  el.style.transition = 'none';
+  el.style.height = `${fromPx}px`;
+  void el.offsetHeight; // 强制回流，让下面那行 height 真的参与过渡
+  el.style.transition = 'height 0.2s ease-out';
+  el.style.height = `${toPx}px`;
+  const clear = () => {
+    el.style.transition = '';
+    el.style.height = '';
+  };
+  el.addEventListener('transitionend', clear, { once: true });
+  setTimeout(clear, 400);
 }
 
 async function toggleGroup(g: SummaryItem) {
@@ -925,6 +1165,17 @@ async function toggleGroup(g: SummaryItem) {
 
   loadingDetail.value.add(key);
   loadingDetail.value = new Set(loadingDetail.value);
+
+  /*
+   * 先让「加载中…」那一行渲染出来并量下它的高度 ——
+   * 动画要从**这个**高度长下去（它是用户点下分组头后立刻看到的东西）。
+   * ⚠️ 必须 `await nextTick()`：不 await 的话此刻 DOM 里还是上一帧的内容，
+   *    量到的会是「展开前」的 0，动画就白做了。
+   */
+  await nextTick();
+  const bodyBefore = findGroupBody(key);
+  const heightBefore = bodyBefore ? bodyBefore.getBoundingClientRect().height : 0;
+
   try {
     const page = await getTransactions({ ...detailQuery(g), size: PAGE_SIZE });
     details.value[key] = groupByDay(page.list);
@@ -941,6 +1192,16 @@ async function toggleGroup(g: SummaryItem) {
     loadingDetail.value.delete(key);
     loadingDetail.value = new Set(loadingDetail.value);
   }
+
+  /*
+   * 明细（或空态）已渲染，此刻高度已经是自然值 —— 从 `heightBefore` 平滑长过去。
+   * ⚠️ 只在**首次**加载路径上做：已加载过的分组在上面就 `return` 了，不会走到这里。
+   * ⚠️ 失败路径（`details[key] = []`）也会走到，此时是「加载中…」缩成空态的高度，
+   *    同样平滑 —— 这是对的，不该有一种情况是瞬变的。
+   */
+  await nextTick();
+  const bodyAfter = findGroupBody(key);
+  if (bodyAfter && heightBefore > 0) animateGroupBodyGrow(bodyAfter, heightBefore);
 }
 
 /**
@@ -991,12 +1252,15 @@ function detailQuery(g: SummaryItem) {
  *   · `groupByDay` 用 Map，日期桶按**首次出现顺序**排列，所以跨页时同一天会被合进同一个桶；
  *   · 代价是 O(已加载条数) 的一次重排 —— 几百条量级可忽略。
  */
-async function loadMoreDetail(g: SummaryItem) {
+async function loadMoreDetail(g: SummaryItem, mode: 'user' | 'prefetch' | 'reach' = 'user') {
   const key = g.key;
   const st = detailPaging.value[key];
+  // 并发控制的第一道：同一组不重入（跨组的那道在 maybePrefetch 里）
   if (!st || st.loadingMore || st.loaded >= st.total) return;
 
   st.loadingMore = true;
+  // 记下"这一组正在自动加载"，好让按钮能显示「正在为你加载 X」（跨组时尤其需要）
+  if (mode !== 'user') autoLoadingKey.value = key;
   try {
     // 用记录下来的页码 +1，而不是从 loaded 反推（理由见 detailPaging 的注释）
     const nextPage = st.page + 1;
@@ -1022,8 +1286,84 @@ async function loadMoreDetail(g: SummaryItem) {
   } catch (err) {
     console.error('[flow] 明细加载更多失败', err);
     st.loadingMore = false;
-    uni.showToast({ title: '加载失败，请重试', icon: 'none' });
+    /*
+     * ⚠️ **预加载失败一律不弹 toast**（要求：不要在视觉上打断滚动）：
+     *   用户此刻什么都没做，弹一个"加载失败"他既看不懂在等什么，也无处可点。
+     *   静默失败即可 —— `st.loadingMore` 已复位，触底时 `onReachBottom` 会自然重试；
+     *   若是"用户主动点按钮"，那才需要提示（他知道自己发了什么请求）。
+     */
+    if (mode !== 'prefetch') uni.showToast({ title: '加载失败，请重试', icon: 'none' });
+  } finally {
+    // 成功路径已在 try 里整体替换了 detailPaging[key]，这里只清"自动加载中"这个标记
+    autoLoadingKey.value = '';
   }
+}
+
+/* ── 预加载的目标选择与状态（2026-10-03）──────────────────────────────────
+ *
+ * 触发条件（阈值 / 冷却 / 防级联）见上方 `maybePrefetch` 那一段 —— 这里是它用到的状态。
+ *
+ * 为什么**保留那个按钮**、不做成"纯自动"：
+ *   1. 内容不足一屏时用户根本不会滚动 ⇒ 预加载与触底都不会触发，剩 159 条永远拿不到。
+ *      按钮是这个场景**唯一**的入口。
+ *   2. 预加载是**静默**的（失败不弹 toast），所以它必须有一个"用户能自己再试一次"的入口。
+ *   3. 按钮文案「已显示 100 / 259 条」是"组头金额与明细条数不一致"的**常驻提示**，
+ *      它必须在列表末尾一直看得见。
+ *
+ * 为什么目标是"**最后一个可见组**"而不是"所有可见组"：
+ *   `expanded` 是 Set，多组可同时展开；一次补齐好几组，用户既看不见也停不下来。
+ *   取最后一个 = 离他手指最近的那一组，最符合直觉。
+ */
+
+/** 正在被"自动"预取 / 触底补加载的组 key，空串 = 当前没有（**跨组并发的总闸**）*/
+const autoLoadingKey = ref('');
+
+/**
+ * 找出"该自动加载哪一组"。
+ *
+ * 规则：优先取**最后一个在视口内、且还没加载完**的组；
+ * 视口内一个都没有（内容不足一屏、或用户已滚过）时，退到**最早可加载**的那一组。
+ * ⚠️ 下标循环而非 `for…of`：本项目 tsconfig 没开 `downlevelIteration`，
+ *    遍历 `NodeListOf` 会报 TS2488。
+ */
+function findAutoLoadTarget(): SummaryItem | null {
+  if (typeof document === 'undefined') return null; // 小程序端没有 DOM
+  if (autoLoadingKey.value) return null; // 已经在加载了，别叠第二页
+  const bodies = document.querySelectorAll<HTMLElement>('.group-body');
+  const vh = window.innerHeight || document.documentElement.clientHeight;
+  let lastVisible: SummaryItem | null = null;
+  let firstAvailable: SummaryItem | null = null;
+  for (let i = 0; i < bodies.length; i += 1) {
+    const gkey = bodies[i].dataset.gkey || '';
+    if (!hasMoreDetail(gkey)) continue;
+    const g = groups.value.find((x) => String(x.key) === gkey);
+    if (!g) continue;
+    // 第一个够格的 = 最早的可用组（兜底用）
+    if (!firstAvailable) firstAvailable = g;
+    const r = bodies[i].getBoundingClientRect();
+    // 不断覆盖 ⇒ 最后留下的就是**最后一个**可见的
+    if (r.bottom > 0 && r.top < vh) lastVisible = g;
+  }
+  return lastVisible ?? firstAvailable;
+}
+
+/** 按钮文案：自动加载跨组时要说明"正在为哪一组加载" */
+/**
+ * 按钮文案。预取 / 触底 / 用户点击三种来源共用它。
+ *
+ * ⚠️ **提示为什么不会"打断滚动"**（要求）：
+ *   它位于**列表末尾**，而预取发生在"距底部还剩 1.5 屏"时 —— 那一刻用户**根本看不到**
+ *   这个按钮（它在视口之外），所以预取过程对视线是零打扰；
+ *   等他真滑到底时，按钮已经在那里显示着"加载中…"，不需要临时去找。
+ *   加上预取失败**不弹 toast**（见 loadMoreDetail），滚动全程没有会打断他的浮层。
+ */
+function detailMoreText(key: string): string {
+  if (autoLoadingKey.value && autoLoadingKey.value !== key) {
+    const g = groups.value.find((x) => String(x.key) === autoLoadingKey.value);
+    return `正在为你加载「${g ? groupTitle(g) : '…'}」…`;
+  }
+  if (isDetailLoadingMore(key)) return '加载中…';
+  return `加载更多（已显示 ${detailLoaded(key)} / ${detailTotal(key)} 条）`;
 }
 
 /** 该组是否还有未加载的明细（模板判据） */
@@ -1080,18 +1420,23 @@ function groupSub(g: SummaryItem): string {
 /* ── 交互 ── */
 /** 打开全屏搜索页 */
 function toggleSearch() {
+  // 开面板时也让上一次会话残留的在飞搜索作废（否则它会落进刚清空的列表）
+  searchGuard.invalidate();
   searchVisible.value = true;
   searchKeyword.value = '';
   searchCommitted.value = '';
   searchResults.value = [];
+  searchLoading.value = false;
 }
 
 /** 关闭搜索页并清空（不把关键词带回列表 —— 那是筛选面板的职责） */
 function closeSearch() {
+  searchGuard.invalidate();
   searchVisible.value = false;
   searchKeyword.value = '';
   searchCommitted.value = '';
   searchResults.value = [];
+  searchLoading.value = false;
 }
 
 function onSearchInput(e: any) {
@@ -1111,33 +1456,54 @@ function doSearch() {
   loadSearchResults();
 }
 
-async function loadSearchResults() {
+/**
+ * 搜索的「最后写入者胜」守卫。
+ *
+ * 与分组列表同一个道理：连按两次回车（改了关键词再搜）时，先发的可能后到，
+ * 结果列表会配上一次的关键词 —— 而输入框里显示的是新词。
+ * 另见 `clearSearch()` / `closeSearch()`：清空时必须 `invalidate()`，
+ * 否则"清空后飞回来的旧结果"会把清空的界面又填上。
+ */
+const searchGuard = createLatest();
+
+function loadSearchResults() {
   searchLoading.value = true;
-  try {
-    await accountStore.load();
-    /*
-     * ⚠️ 搜索**不带任何其他筛选条件**（除了账本）：它是"在全部流水里找"，
-     *    带上时间范围/金额区间会让用户困惑"为什么我明明有这笔却搜不到"。
-     *    账本仍然要带 —— 数据隔离的边界，不该跨账本搜。
-     */
-    const page = await getTransactions({
-      keyword: searchCommitted.value,
-      size: 100,
-      accountId: accountStore.currentId || undefined,
-    });
-    searchResults.value = page.list;
-  } catch (err) {
-    console.error('[flow] 搜索失败', err);
-    searchResults.value = [];
-  } finally {
-    searchLoading.value = false;
-  }
+  // 关键词在调用时快照（理由同 loadGroups：不在 await 之后现读 reactive）
+  const keyword = searchCommitted.value;
+  return searchGuard.run({
+    task: async () => {
+      await accountStore.load();
+      return getTransactions({
+        /*
+         * ⚠️ 搜索**不带任何其他筛选条件**（除了账本）：它是"在全部流水里找"，
+         *    带上时间范围/金额区间会让用户困惑"为什么我明明有这笔却搜不到"。
+         *    账本仍然要带 —— 数据隔离的边界，不该跨账本搜。
+         */
+        keyword,
+        size: 100,
+        accountId: accountStore.currentId || undefined,
+      });
+    },
+    onSuccess: (page) => {
+      searchResults.value = page.list;
+    },
+    onError: (err) => {
+      console.error('[flow] 搜索失败', err);
+      searchResults.value = [];
+    },
+    onSettled: () => {
+      searchLoading.value = false;
+    },
+  });
 }
 
 function clearSearch() {
+  // 让在飞的搜索作废：否则清空后飞回来的旧结果会把刚清空的列表又填上
+  searchGuard.invalidate();
   searchKeyword.value = '';
   searchCommitted.value = '';
   searchResults.value = [];
+  searchLoading.value = false;
 }
 
 /** 搜索结果行的副标题：账本名 · 备注 · 日期 时刻（结果跨多天，日期必须带上） */
@@ -1197,7 +1563,7 @@ const hasFilter = computed(
       (filterModel.types || []).length === 1 ||
       // 分类：空数组 = 不过滤
       (filterModel.categoryIds || []).length > 0
-    )
+    ),
 );
 
 /** 条件摘要（供弹层展示）：空串表示该项未设 */
@@ -1449,6 +1815,42 @@ onShow(() => {
   reloadAll();
   // 渐变头高度可能因筛选提示条出现/消失而变，重新测一次
   measureHeader();
+});
+
+/**
+ * 页面卸载：让两个守卫的在飞调用整体作废。
+ *
+ * ⚠️ 不做的后果不是崩溃，是**串台的提示**：本页发出的请求在用户已经返回
+ *    （页面实例销毁）之后才失败时，`onError` 仍会跑 `uni.showToast`，
+ *    于是用户在**别的页面**看到一个属于流水页的报错。
+ *    Vue 3 对已卸载组件写 ref 不报错，所以这个副作用只有肉眼能发现。
+ */
+onUnload(() => {
+  groupsGuard.invalidate();
+  searchGuard.invalidate();
+});
+
+/*
+ * 触底兜底 —— **不是主路径**。主路径是 `maybePrefetch`（接近底部就预取，
+ * 阈值见上方那段）。这里只兜两种情况：
+ *   ① 预加载**静默失败**后用户继续滑到这里 → 重试，且**这次会弹提示**（`mode: 'reach'`）；
+ *   ② 用户快速滚动 / 直接跳到底，阈值预加载没赶上 → 补上。
+ *
+ * ⚠️ 必须注册在 setup 顶层，不能放进任何条件里 —— 否则首屏就注册不上了。
+ * ⚠️ **末页不会发无效请求**：`findAutoLoadTarget` 只认 `hasMoreDetail`
+ *    （`loaded < total`）的组；到底且已加载完时它返回 null ⇒ 这里直接返回。
+ *    另外"第 2 页返回空"时 `loadMoreDetail` 会把 `total` 收到实际条数，
+ *    按钮与后续请求随之一起消失。
+ */
+onReachBottom(() => {
+  if (autoLoadingKey.value) return; // 预取还在飞，别重复发起
+  const now = Date.now();
+  if (lastPrefetch.key && now - lastPrefetch.at < PREFETCH_COOLDOWN_MS) return;
+  const target = findAutoLoadTarget();
+  if (!target) return; // 末页 / 没有剩余
+  // `y: -1` = 触底触发，位置不参与"同一次停留"的级联判断（已经到底了）
+  lastPrefetch = { key: target.key, y: -1, at: now };
+  void loadMoreDetail(target, 'reach');
 });
 </script>
 
@@ -1863,6 +2265,27 @@ onShow(() => {
   border-bottom: 1px solid $v11-line;
 }
 
+/*
+ * 按下反馈（2026-10-03 补）。
+ *
+ * ⚠️ 必须与 `App.vue` 里那条 `-webkit-tap-highlight-color: transparent` **成对存在**：
+ *    那一条是**全局**的，会把系统默认的点击灰块一并去掉 ——
+ *    如果这里没有自绘反馈，按下就是"毫无反应"，**比不改更差**。
+ *
+ * ⚠️ 取色用 `$v11-fill-system`，**不是** `$v11-bg-inset`：
+ *    `.group-head` 的底色是 `$v11-bg-page`，而 `$v11-bg-inset` 压在上面**几乎不可见**
+ *    （两者亮度只差 3/255）—— 完整的选值依据见 `tokens.scss` 的 `$v11-fill-system` 注释。
+ *
+ * ⚠️ 这里刻意**不写色值字面量**：`check-contrast.mjs` 会统计代码里色值的出现次数，
+ *    注释里多写一个就多算一次，会被判成"与预期不一致"（实测踩到过）。
+ *
+ * 规格 §4.3：「列表行按下 100ms 变 / 200ms 回，底色转浅灰、**无位移**」——
+ * 所以只改背景色、不加 transform（列表行位移会显得"晃"）。
+ */
+.group-head:active {
+  background: $v11-fill-system;
+}
+
 .group-title-wrap {
   flex-shrink: 0;
   min-width: 64px;
@@ -1930,11 +2353,44 @@ onShow(() => {
 }
 
 /* ── 明细 ── */
+/*
+ * 分组正文：**白色载体**（浮在 #F8F8F8 页面底上），不是页面底本身。
+ * ⚠️ FL-1 里页面底与卡片同白，同一个 token 两用；改名后这类"白载体"
+ *    会被误当成页面底而变灰 —— 判断标准是「它是页面本身，还是浮在页面上的一块」。
+ *
+ * ── 展开 / 收起的高度动画（2026-10-03 新增）──────────────────────────
+ * 用 `grid-template-rows: 0fr → 1fr`，**不用 height、也不用 max-height**：
+ *   · `height: auto` 无法过渡（浏览器不知道目标值）；
+ *   · `max-height` 需要猜一个大值，**时长会随内容量漂移**
+ *     （内容少时表现为"点了没反应、然后突然收起"）；
+ *   · grid 的行高过渡**不需要预设高度**，时长恒定。
+ *
+ * ⚠️ `overflow: hidden` 必须加在本容器上，否则 0fr 时内容仍然溢出可见。
+ *
+ * ⚠️ **内层 `.group-body-inner` 必须显式 `min-height: 0`** ——
+ *    grid 子项的 `min-height` 默认是 `auto`，它会拒绝被压到 0。
+ *    **2026-10-03 负向验证实测**：去掉这一行后收起时**高度纹丝不动（1395px 全程不变）**
+ *    —— 不是"留一截"，是**功能直接坏掉**。这是 grid 折叠动画最经典的坑。
+ *
+ * ⚠️ 这仍然是**布局动画**（会 reflow），但重排范围**局限在本容器内**，
+ *    不会牵动容器外的兄弟节点 —— 展开收起在语义上就是布局变化，这已是最小代价。
+ *    （全站压平由 `App.vue` 的 `prefers-reduced-motion` 全局规则负责，这里不必再 include。）
+ */
 .group-body {
-  /* 分组正文是**白色载体**（浮在 #F8F8F8 页面底上），不是页面底本身。
-     ⚠️ FL-1 里页面底与卡片同白，同一个 token 两用；改名后这类"白载体"
-        会被误当成页面底而变灰 —— 判断标准是「它是页面本身，还是浮在页面上的一块」。 */
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.2s ease-out;
+  overflow: hidden;
   background: $v11-bg-card;
+}
+
+.group-body.open {
+  grid-template-rows: 1fr;
+}
+
+.group-body-inner {
+  /* 见上方注释：不写这行，收起时高度纹丝不动（负向验证实测） */
+  min-height: 0;
 }
 
 /* ── 首屏骨架 ──
@@ -2004,6 +2460,17 @@ onShow(() => {
   align-items: center;
   padding: $space-3 $space-4;
   border-bottom: 1px solid $v11-line;
+}
+
+/*
+ * 按下反馈（2026-10-03 补）—— 流水行是整个 App 点击最频繁的元素，
+ * 之前它是**唯一没有按下反馈的高频元素**（金额键盘、TabBar、排名项等 13 处早就有）。
+ *
+ * 取色与理由同上面的 `.group-head:active`（页面底上的按下用 `$v11-fill-system`）。
+ * 与 `App.vue` 的 `-webkit-tap-highlight-color: transparent` 成对存在 —— 不可拆分。
+ */
+.txn:active {
+  background: $v11-fill-system;
 }
 
 .txn-icon {

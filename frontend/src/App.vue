@@ -19,6 +19,22 @@ async function tryFlush() {
 }
 
 onLaunch(() => {
+  /*
+   * iOS Safari 的 :active 有个前置条件：**元素或它的祖先必须存在 touch 事件监听器**，
+   * 否则按下时 :active 样式不生效（Safari 的已知行为，不是 bug）。
+   *
+   * 本项目全站 13 处按下反馈、以及本轮给列表行新增的那几处，用的都是 :active，
+   * 所以这里补一个**空监听**把整份文档「激活」—— 一处改动让所有 :active 生效。
+   *
+   * ⚠️ 用运行时判断而不是 #ifdef H5：uni 对 <script setup> **不做条件编译**
+   *    （本项目已踩过这个坑，见 MEMORY.md），#ifdef 在这里是无效的。
+   *    小程序端没有 document，这个判断天然跳过。
+   * ⚠️ passive: true —— 空监听不需要 preventDefault，声明 passive 免得拖慢滚动。
+   */
+  if (typeof document !== 'undefined') {
+    document.addEventListener('touchstart', () => {}, { passive: true });
+  }
+
   // 应用启动：登录态由各页面的 onShow 自行校验；
   // 这里只做一件事 —— 若有离线队列且在线，尝试补传
   tryFlush();
@@ -42,6 +58,17 @@ page {
   line-height: $lh-body;
   font-family: $font-family-base;
   -webkit-font-smoothing: antialiased;
+  /*
+   * 去掉移动端浏览器自带的「点击高亮块」（iOS/Android 点可点元素时那层半透明灰）。
+   *
+   * ⚠️ 这一条**必须与自绘按下反馈同批存在**（见 docs/交互动效规格.md §四）：
+   *    去掉默认高亮却没有任何替代，用户会觉得"点了没反应"，**比不加更差**。
+   *    所以启用它的同时，本轮已给最高频的列表行补上了 :active（flow 的 .txn / .group-head 等）。
+   *
+   * 该属性**可继承**，写在 page 上即可覆盖页面内全部元素（含 fixed 遮罩/弹层）。
+   * 宿主 uni-h5 自身没有设置过它（实测 0 处），所以这里不设就真的会露出灰块。
+   */
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* 统一盒模型，避免 padding 把宽度撑破 */
@@ -209,4 +236,134 @@ uni-modal .uni-modal__btn_primary {
   font-weight: $weight-medium;
 }
 /* #endif */
+
+/* ── 弹层进出场（2026-10-03 新增）───────────────────────────────────────
+ * 规格见 `docs/交互动效规格.md` §B。
+ *
+ * 项目的弹层结构高度统一：**7 个组件都是 `.mask`（遮罩）> `.sheet`（底部面板）** ——
+ *   FlowFilterPanel / FlowCategoryPicker / FlowTypePicker /
+ *   TimeRangePicker / PeriodPicker / CategoryPicker / DateTimePicker
+ * 所以动画**在全局定义一次就能覆盖 7 处**，组件侧只需各包一个 `<transition name="sheet">`。
+ * （`NavDropdown` 结构不同 —— 它是 `.dropdown-mask` + 下拉面板，单独处理。）
+ *
+ * ⚠️ 选择器为什么写这么长（`.mask.sheet-enter-active .sheet`）：
+ *    组件里的 `.sheet` 样式是 scoped 的（带 `[data-v-xxx]`），特异性 (0,2,0)；
+ *    若只写 `.sheet-enter-active .sheet` 同样是 (0,2,0) —— 同级就只能靠 CSS 顺序决胜，太脆。
+ *    加上 `.mask` 前缀提到 (0,3,0)，稳定胜出，不依赖文件顺序。
+ *
+ * ⚠️ 进场 mask 200ms / sheet 400ms 是**刻意不同速**的：遮罩先到位、面板随后滑上来。
+ *    而**出场两者统一 250ms** —— 若遮罩先变透明，整棵子树已不可见，
+ *    面板的滑下动画就白做了（这是最容易踩的一处）。
+ *
+ * ⚠️ 只动 `opacity` 与 `transform`（合成属性），不动 `height` / `bottom`（那会逐帧重排）。
+ *
+ * ⚠️ 已核实 `.sheet` 自身**没有 `transform`**，所以这里的 translateY 不会覆盖掉它的定位。
+ *    若将来给 `.sheet` 加上 translateX 居中之类的写法，这里会冲突 —— 届时改用 CSS 变量组合。
+ *
+ * ⚠️ `<transition>` 在**小程序端不渲染动画**（静默降级为瞬变）。这是项目既有的
+ *    "H5 优先"取舍，与 `pages/calendar` 里 `<transition-group>` 的处理保持一致。
+ */
+.sheet-enter-active,
+.sheet-leave-active {
+  transition: opacity 0.2s ease-out;
+}
+
+/* 出场与面板下滑同速（理由见上） */
+.sheet-leave-active {
+  transition-duration: 0.25s;
+}
+
+.sheet-enter-from,
+.sheet-leave-to {
+  opacity: 0;
+}
+
+.mask.sheet-enter-active .sheet {
+  transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.mask.sheet-leave-active .sheet {
+  transition: transform 0.25s ease-in;
+}
+
+.mask.sheet-enter-from .sheet,
+.mask.sheet-leave-to .sheet {
+  transform: translateY(100%);
+}
+
+/* ── 骨架 ⇄ 内容：交叉淡入（2026-10-03 新增）─────────────────────────────
+ * 规格见 `docs/交互动效规格.md` §C3。三个整屏骨架处共用：
+ *   `pages/flow`（分组列表）· `components/views/HomeView` · `components/views/ReportView`
+ *
+ * 结构约定（三处一致）：
+ *   `.cross-host`（relative，只用来提供定位上下文）
+ *     └ `<Transition name="cross">` └ 互斥分支（骨架 / 错误 / 空 / 内容）
+ *
+ * ⚠️ **离开的那一块必须脱流**（`position: absolute`）——
+ *    两个分支同时留在文档流里时，容器高度 = 两者之和，页面会突然长高一大截。
+ *    Vue 的 `<Transition>` 默认就是"两边同时在 DOM 里"（这正是"交叉"的实现方式），
+ *    所以脱流不是优化，而是**前提**。
+ *
+ * ⚠️ **绝不能加 `mode="out-in"`**：那是"先出后进"的**串行**，中间必然存在
+ *    两边都不在的一刻 —— 那一帧就是闪白。交叉的意义就在于没有这个空档。
+ *
+ * ⚠️ 进场 200ms / 出场 150ms 刻意不同速：骨架要**够久地垫在下面**，
+ *    否则内容还没显出来、底色就先露了（那正是要消除的东西）。
+ *    这也是为什么"只给内容加淡入"是负优化 —— 骨架一撤，前几十毫秒
+ *    内容还几乎透明，等于亲手制造了空白帧。
+ *
+ * ⚠️ 只动 `opacity`（合成属性）；高度由**进入**的分支自然撑开，不做高度动画
+ *    （骨架与真实内容高度不必相等，动 height 会演变成布局抖动）。
+ */
+.cross-host {
+  position: relative;
+}
+
+.cross-enter-active {
+  transition: opacity 0.2s ease-out;
+}
+
+.cross-leave-active {
+  /* 脱流：理由见上方注释 */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  transition: opacity 0.15s ease-in;
+}
+
+.cross-enter-from,
+.cross-leave-to {
+  opacity: 0;
+}
+
+/* ── 无障碍：尊重系统「减少动态效果」（2026-10-03 改为全局兜底）───────────
+ * 项目本来就有 `@mixin reduce-motion`（tokens.scss:408），但它是**逐处 @include** 的 ——
+ * 实测只覆盖了 5 处，而全站有 13 处 `transition:`、13 处 `:active`、2 处 `@keyframes`，
+ * 本次新加的 7 个弹层动画更是一处都没覆盖。
+ *
+ * ⚠️ 「靠人记得加」对无障碍是**不可接受的**：漏掉一处，那部分用户就在那一处失去保护。
+ *    所以改成全局一条 —— 一处覆盖全站，**将来新增的动画自动被覆盖**。
+ *    原有那 5 处 `@include` 保留不动（无害，同时是"这里是有意动效"的显式标注）。
+ *
+ * ⚠️ 用 `0.01ms` 而不是 `none`：
+ *    `none` 会让 `transitionend` / `animationend` **永远不触发** ——
+ *    而本项目的弹层关闭依赖 Vue 的 transition 生命周期来卸载 DOM，
+ *    用 `none` 会导致**弹层关不掉**。0.01ms 既让用户看不到动效，又保住了事件。
+ *
+ * ⚠️ `!important` 在这里是**必需**的：要压过组件 scoped 样式里的时长声明
+ *    （那些选择器带 `[data-v-xxx]`，特异性更高）。这是 `!important` 少见的正当用法。
+ *
+ * ⚠️ 不含 `transition-property` / `animation-name` 的重写 —— 只改**时长**。
+ *    这样"压平"是纯粹的加速，不会改变任何元素最终落在哪个状态，风险最小。
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
 </style>

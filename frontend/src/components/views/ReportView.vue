@@ -30,7 +30,11 @@
           <text class="tab-text">基础统计</text>
           <view v-if="tab === 'basic'" class="tab-underline" />
         </view>
-        <view class="tab-item" :class="{ active: tab === 'category' }" @click="switchTab('category')">
+        <view
+          class="tab-item"
+          :class="{ active: tab === 'category' }"
+          @click="switchTab('category')"
+        >
           <text class="tab-text">分类</text>
           <view v-if="tab === 'category'" class="tab-underline" />
         </view>
@@ -56,104 +60,121 @@
       ⚠️ 只在**首屏**出现（`skeleton` = 正在请求 && 从未拿到过数据）。
       切换 Tab / 改时段都不铺 —— 那时旧报表还在，换成灰块是信息量倒退。
     -->
-    <template v-if="skeleton">
-      <view class="hero">
-        <Skeleton w="80" h="14" />
-        <view class="sk-balance">
-          <Skeleton w="32" h="14" />
-          <Skeleton w="160" h="28" r="8" />
-        </view>
-        <Skeleton class="sk-io" w="200" h="13" />
-      </view>
+    <!--
+      ── 骨架 ⇄ 内容：交叉淡入（2026-10-03 新增，规格见 docs/交互动效规格.md §C3）──
 
-      <view class="milestone">
-        <Skeleton w="20" h="20" r="6" />
-        <Skeleton w="72" h="14" />
-        <Skeleton w="88" h="14" />
-      </view>
-
-      <view v-for="n in 2" :key="n" class="panel">
-        <Skeleton w="72" h="16" />
-        <view class="sk-ranks">
-          <view v-for="m in 3" :key="m" class="sk-rank">
-            <Skeleton w="20" h="20" r="6" />
-            <view class="sk-rank-main">
-              <Skeleton w="96" h="14" />
-              <Skeleton w="100%" h="6" r="3" />
+      这一层包住**从骨架到内容的整条 v-if 链**（骨架 / 失败 / 空 / 内容）。
+      ⚠️ `<PeriodPicker>`（时段弹窗）**留在链外** —— 它是常驻组件、只在 visible 时渲染，
+         包进来会跟着做过渡，属于误伤。
+      ⚠️ 每个分支必须**单一根元素**，所以 `<template v-if>` / `<template v-else>` 换成了
+         `<view class="cross-block">`（`<template>` 是多根 fragment，Transition 不认）。
+      ⚠️ `.cross-block` 刻意不带任何样式；`.cross-host` 只为提供定位上下文（离开的脱流）。
+         完整理由见 App.vue 里 `.cross-*` 规则的注释。
+    -->
+    <view class="cross-host">
+      <Transition name="cross">
+        <view v-if="skeleton" class="cross-block">
+          <view class="hero">
+            <Skeleton w="80" h="14" />
+            <view class="sk-balance">
+              <Skeleton w="32" h="14" />
+              <Skeleton w="160" h="28" r="8" />
             </view>
-            <Skeleton w="56" h="14" />
+            <Skeleton class="sk-io" w="200" h="13" />
           </view>
-        </view>
-      </view>
-    </template>
 
-    <!-- 请求失败 -->
-    <EmptyState
-      v-else-if="error"
-      icon="icon-alert"
-      text="加载失败，请稍后重试"
-      button-text="重试"
-      @action="loadData"
-    />
-
-    <!-- 空数据 -->
-    <EmptyState
-      v-else-if="!hasData"
-      icon="icon-inbox"
-      :text="`${periodText}暂无记录`"
-    />
-
-    <!-- 有数据 -->
-    <template v-else>
-      <!-- ============ 基础统计 ============ -->
-      <template v-if="tab === 'basic'">
-        <!-- 账本流水统计：白底深墨大数字（FL-1 无插画） -->
-        <view class="hero">
-          <text class="hero-label">账本流水统计</text>
-          <view class="hero-balance-row">
-            <text class="hero-balance-label">结余</text>
-            <text class="hero-balance">¥{{ formatMoney(report.summary.balance) }}</text>
+          <view class="milestone">
+            <Skeleton w="20" h="20" r="6" />
+            <Skeleton w="72" h="14" />
+            <Skeleton w="88" h="14" />
           </view>
-          <view class="hero-io">
-            <text class="hero-io-item">总收入 {{ formatMoney(report.summary.income) }}</text>
-            <text class="hero-io-sep">|</text>
-            <text class="hero-io-item">总支出 {{ formatMoney(report.summary.expense) }}</text>
+
+          <view v-for="n in 2" :key="n" class="panel">
+            <Skeleton w="72" h="16" />
+            <view class="sk-ranks">
+              <view v-for="m in 3" :key="m" class="sk-rank">
+                <Skeleton w="20" h="20" r="6" />
+                <view class="sk-rank-main">
+                  <Skeleton w="96" h="14" />
+                  <Skeleton w="100%" h="6" r="3" />
+                </view>
+                <Skeleton w="56" h="14" />
+              </view>
+            </view>
           </view>
         </view>
 
-        <!-- 记账里程碑 -->
-        <view class="milestone">
-          <SvgIcon class="milestone-icon" name="icon-list-check" :size="20" />
-          <text class="milestone-label">记账里程碑</text>
-          <text class="milestone-count">记账笔数 {{ report.summary.count }}</text>
-        </view>
+        <!-- 请求失败 -->
+        <EmptyState
+          v-else-if="error"
+          icon="icon-alert"
+          text="加载失败，请稍后重试"
+          button-text="重试"
+          @action="loadData"
+        />
 
-        <!-- 收入来源 -->
-        <view class="panel">
-          <text class="panel-title">收入来源</text>
-          <EmptyState v-if="!report.incomeCategories.length" icon="icon-inbox" text="暂无收入记录" />
-          <RankList
-            v-else
-            :rows="report.incomeCategories"
-            @select="(r) => r.categoryId && goCategoryFlow(r.categoryId, 1)"
-          />
-        </view>
+        <!-- 空数据 -->
+        <EmptyState v-else-if="!hasData" icon="icon-inbox" :text="`${periodText}暂无记录`" />
 
-        <!-- 支出分布 -->
-        <view class="panel">
-          <text class="panel-title">支出分布</text>
-          <EmptyState v-if="!report.expenseCategories.length" icon="icon-inbox" text="暂无支出记录" />
-          <RankList
-            v-else
-            :rows="report.expenseCategories"
-            @select="(r) => r.categoryId && goCategoryFlow(r.categoryId, 1)"
-          />
-        </view>
+        <!-- 有数据 -->
+        <view v-else class="cross-block">
+          <!-- ============ 基础统计 ============ -->
+          <template v-if="tab === 'basic'">
+            <!-- 账本流水统计：白底深墨大数字（FL-1 无插画） -->
+            <view class="hero">
+              <text class="hero-label">账本流水统计</text>
+              <view class="hero-balance-row">
+                <text class="hero-balance-label">结余</text>
+                <text class="hero-balance">¥{{ formatMoney(report.summary.balance) }}</text>
+              </view>
+              <view class="hero-io">
+                <text class="hero-io-item">总收入 {{ formatMoney(report.summary.income) }}</text>
+                <text class="hero-io-sep">|</text>
+                <text class="hero-io-item">总支出 {{ formatMoney(report.summary.expense) }}</text>
+              </view>
+            </view>
 
-        <!-- 月度收支趋势（仅年粒度） -->
-        <view v-if="report.granularity === 'year' && report.trend.length" class="panel">
-          <text class="panel-title">月度收支趋势</text>
-          <!--
+            <!-- 记账里程碑 -->
+            <view class="milestone">
+              <SvgIcon class="milestone-icon" name="icon-list-check" :size="20" />
+              <text class="milestone-label">记账里程碑</text>
+              <text class="milestone-count">记账笔数 {{ report.summary.count }}</text>
+            </view>
+
+            <!-- 收入来源 -->
+            <view class="panel">
+              <text class="panel-title">收入来源</text>
+              <EmptyState
+                v-if="!report.incomeCategories.length"
+                icon="icon-inbox"
+                text="暂无收入记录"
+              />
+              <RankList
+                v-else
+                :rows="report.incomeCategories"
+                @select="(r) => r.categoryId && goCategoryFlow(r.categoryId, 1)"
+              />
+            </view>
+
+            <!-- 支出分布 -->
+            <view class="panel">
+              <text class="panel-title">支出分布</text>
+              <EmptyState
+                v-if="!report.expenseCategories.length"
+                icon="icon-inbox"
+                text="暂无支出记录"
+              />
+              <RankList
+                v-else
+                :rows="report.expenseCategories"
+                @select="(r) => r.categoryId && goCategoryFlow(r.categoryId, 1)"
+              />
+            </view>
+
+            <!-- 月度收支趋势（仅年粒度） -->
+            <view v-if="report.granularity === 'year' && report.trend.length" class="panel">
+              <text class="panel-title">月度收支趋势</text>
+              <!--
             异步组件 + 占位骨架（2026-10-01）。
             ⚠️ 必须有这一层：TrendChart 用的是 qiun-data-charts，它会连带拉进
                u-charts（整份打进 statistics 页 chunk，实测该 chunk 267 KB / gzip 72 KB）
@@ -167,63 +188,77 @@
                Suspense 在 uni-app 的小程序端不受支持（H5 能用，小程序/App 不行），
                而本项目要出多个端。loadingComponent 走的是普通组件渲染，各端一致。
           -->
-          <TrendChartAsync :trend="report.trend" />
-        </view>
-      </template>
+              <TrendChartAsync :trend="report.trend" />
+            </view>
+          </template>
 
-      <!-- ============ 分类 ============ -->
-      <template v-else>
-        <view class="panel">
-          <view class="panel-head">
-            <text class="panel-title">支出分类统计</text>
-            <view class="panel-head-right">
-              <text class="panel-meta">总支出 </text>
-              <text class="panel-meta-val expense">{{ formatMoney(report.summary.expense) }}</text>
-              <text class="panel-meta"> 记账笔数 {{ expenseCount }}</text>
+          <!-- ============ 分类 ============ -->
+          <template v-else>
+            <view class="panel">
+              <view class="panel-head">
+                <text class="panel-title">支出分类统计</text>
+                <view class="panel-head-right">
+                  <text class="panel-meta">总支出 </text>
+                  <text class="panel-meta-val expense">{{
+                    formatMoney(report.summary.expense)
+                  }}</text>
+                  <text class="panel-meta"> 记账笔数 {{ expenseCount }}</text>
+                </view>
+              </view>
+              <EmptyState
+                v-if="!report.expenseCategoriesL2.length"
+                icon="icon-pie"
+                text="暂无支出记录"
+              />
+              <template v-else>
+                <view class="ring-area">
+                  <RingChart :items="expenseChartItems" :size="130" :thickness="24" show-labels />
+                </view>
+                <RankList
+                  :rows="report.expenseCategoriesL2"
+                  @select="(r) => r.categoryId && goCategoryFlow(r.categoryId, 2)"
+                />
+              </template>
+            </view>
+
+            <view class="panel">
+              <view class="panel-head">
+                <text class="panel-title">收入分类统计</text>
+                <view class="panel-head-right">
+                  <text class="panel-meta">总收入 </text>
+                  <text class="panel-meta-val income">{{
+                    formatMoney(report.summary.income)
+                  }}</text>
+                  <text class="panel-meta"> 记账笔数 {{ incomeCount }}</text>
+                </view>
+              </view>
+              <EmptyState
+                v-if="!report.incomeCategoriesL2.length"
+                icon="icon-pie"
+                text="暂无收入记录"
+              />
+              <template v-else>
+                <view class="ring-area">
+                  <RingChart :items="incomeChartItems" :size="130" :thickness="24" show-labels />
+                </view>
+                <RankList
+                  :rows="report.incomeCategoriesL2"
+                  @select="(r) => r.categoryId && goCategoryFlow(r.categoryId, 2)"
+                />
+              </template>
+            </view>
+          </template>
+
+          <!-- 导出报表 -->
+          <view class="export-wrap">
+            <view class="export-btn" @click="exportCsv">
+              <SvgIcon name="icon-receipt" :size="16" />
+              <text class="export-text">导出报表</text>
             </view>
           </view>
-          <EmptyState v-if="!report.expenseCategoriesL2.length" icon="icon-pie" text="暂无支出记录" />
-          <template v-else>
-            <view class="ring-area">
-              <RingChart :items="expenseChartItems" :size="130" :thickness="24" show-labels />
-            </view>
-            <RankList
-              :rows="report.expenseCategoriesL2"
-              @select="(r) => r.categoryId && goCategoryFlow(r.categoryId, 2)"
-            />
-          </template>
         </view>
-
-        <view class="panel">
-          <view class="panel-head">
-            <text class="panel-title">收入分类统计</text>
-            <view class="panel-head-right">
-              <text class="panel-meta">总收入 </text>
-              <text class="panel-meta-val income">{{ formatMoney(report.summary.income) }}</text>
-              <text class="panel-meta"> 记账笔数 {{ incomeCount }}</text>
-            </view>
-          </view>
-          <EmptyState v-if="!report.incomeCategoriesL2.length" icon="icon-pie" text="暂无收入记录" />
-          <template v-else>
-            <view class="ring-area">
-              <RingChart :items="incomeChartItems" :size="130" :thickness="24" show-labels />
-            </view>
-            <RankList
-              :rows="report.incomeCategoriesL2"
-              @select="(r) => r.categoryId && goCategoryFlow(r.categoryId, 2)"
-            />
-          </template>
-        </view>
-      </template>
-
-      <!-- 导出报表 -->
-      <view class="export-wrap">
-        <view class="export-btn" @click="exportCsv">
-          <SvgIcon name="icon-receipt" :size="16" />
-          <text class="export-text">导出报表</text>
-        </view>
-      </view>
-    </template>
+      </Transition>
+    </view>
 
     <!-- 时段选择弹窗：粒度由当前 Tab 记住的 period 长度决定，而不是等接口回来 -->
     <PeriodPicker
@@ -248,7 +283,7 @@
  *
  * 三种状态统一由一次请求驱动（/statistics/report 是聚合接口，不会有"一半转圈"）。
  */
-import { ref, reactive, computed, onMounted, defineAsyncComponent } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import SvgIcon from '@/components/SvgIcon.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import Skeleton from '@/components/Skeleton.vue';
@@ -260,6 +295,7 @@ import { useAccountStore } from '@/store/account';
 import { getReport, type ReportData, type ReportCategory } from '@/api/statistics';
 import { CHART_SERIES, CHART_OTHER_COLOR } from '@/constants/chart';
 import { formatMoney } from '@/utils/format';
+import { createLatest } from '@/utils/latest';
 
 const accountStore = useAccountStore();
 
@@ -315,9 +351,14 @@ const TrendChartAsync = defineAsyncComponent({
  */
 function goCategoryFlow(categoryId: string, level: 1 | 2) {
   const url =
-    '/pages/flow/index?groupBy=category&level=' + level +
-    '&categoryIds=' + encodeURIComponent(categoryId) +
-    '&start=' + report.start + '&end=' + report.end;
+    '/pages/flow/index?groupBy=category&level=' +
+    level +
+    '&categoryIds=' +
+    encodeURIComponent(categoryId) +
+    '&start=' +
+    report.start +
+    '&end=' +
+    report.end;
   uni.navigateTo({ url });
 }
 
@@ -335,7 +376,18 @@ const error = ref(false);
  * 用 `loaded` 而不是 `hasData`：该账本该时段确实可能没有记录，
  * 那种情况也必须停止铺骨架，否则骨架会永远停在那儿。
  */
-const skeleton = ref(false);
+/*
+ * ⚠️ 初值必须是 `true`（2026-10-03 改，C3 交叉淡入的配套修复）。
+ *
+ * 首次挂载 = 首屏，此刻数据必然还没回来。初值 `false` 会让**第一帧**落到
+ * v-if 链的最后一个分支（空态 `!hasData` / 内容），也就是先渲染一次
+ * 「……暂无记录」，再被骨架顶掉。以前只闪 1 帧（约 16ms）；
+ * 加了交叉淡入后它会**淡出 150ms**，把一闪变成了肉眼可见的错值。
+ *
+ * 为什么安全：`onMounted(loadData)` 是无条件调用，所以初值 `true`
+ * 一定会在数据回来后被 `skeleton = false` 收掉。
+ */
+const skeleton = ref(true);
 const loaded = ref(false);
 
 /**
@@ -391,22 +443,26 @@ const hasData = computed(() => report.summary.count > 0);
 
 /** 笔数：两级口径的 count 之和相同（同一批交易换了个分组方式），这里用二级的 */
 const expenseCount = computed(() =>
-  report.expenseCategoriesL2.reduce((sum, r) => sum + r.count, 0)
+  report.expenseCategoriesL2.reduce((sum, r) => sum + r.count, 0),
 );
-const incomeCount = computed(() =>
-  report.incomeCategoriesL2.reduce((sum, r) => sum + r.count, 0)
-);
+const incomeCount = computed(() => report.incomeCategoriesL2.reduce((sum, r) => sum + r.count, 0));
 
 /** 环形图数据：Top 6 + 其他（与其他页口径一致） */
 function toChartItems(rows: ReportCategory[]) {
   const MAX = 6;
   if (rows.length <= MAX) {
-    return rows.map((r, i) => ({ name: r.name, value: Number(r.sum), color: CHART_SERIES[i % CHART_SERIES.length] }));
+    return rows.map((r, i) => ({
+      name: r.name,
+      value: Number(r.sum),
+      color: CHART_SERIES[i % CHART_SERIES.length],
+    }));
   }
   const sorted = [...rows].sort((a, b) => Number(b.sum) - Number(a.sum));
   const rest = sorted.slice(MAX);
   const restSum = rest.reduce((s, r) => s + Number(r.sum), 0);
-  const items = sorted.slice(0, MAX).map((r, i) => ({ name: r.name, value: Number(r.sum), color: CHART_SERIES[i] }));
+  const items = sorted
+    .slice(0, MAX)
+    .map((r, i) => ({ name: r.name, value: Number(r.sum), color: CHART_SERIES[i] }));
   items.push({ name: '其他', value: restSum, color: CHART_OTHER_COLOR });
   return items;
 }
@@ -419,26 +475,62 @@ function toChartItems(rows: ReportCategory[]) {
 const expenseChartItems = computed(() => toChartItems(report.expenseCategoriesL2));
 const incomeChartItems = computed(() => toChartItems(report.incomeCategoriesL2));
 
-async function loadData() {
+/**
+ * 报表加载的「最后写入者胜」守卫。
+ *
+ * ⚠️ 为什么必须有：切 Tab（基础统计 ↔ 分类）、点 `◀ ▶` 步进时段、改粒度
+ *    都会调 `loadData()`，而这几种请求的**后端成本差异很大**（换口径要重算聚合）。
+ *    先发的响应后到时，`Object.assign(report, data)` 会把**旧时段**的数据写回去，
+ *    而 `period.value` 已经是新的 —— 用户看到
+ *    **「8 月的标题 + 6 月的数字」**。这是本项目最危险的一类缺陷：
+ *    数字是错的、界面完全正常、控制台没有任何报错。
+ */
+const reportGuard = createLatest();
+
+function loadData() {
   loading.value = true;
   error.value = false;
   // 只有「从未成功过」才铺骨架；切 Tab / 改时段时旧报表还在，不铺
   if (!loaded.value) skeleton.value = true;
-  try {
-    await accountStore.load();
-    const data = await getReport(period.value, accountStore.currentId);
-    Object.assign(report, data);
-    // 时段回填：PeriodPicker 需要知道当前粒度才能正确回显模式
-    report.period = data.period;
-    loaded.value = true;
-  } catch (err) {
-    console.error('[report] 加载失败', err);
-    error.value = true;
-  } finally {
-    loading.value = false;
-    skeleton.value = false;
-  }
+  /*
+   * ⚠️ 时段与账本在**调用时快照**。
+   *    若放进 `task` 里在 await 之后再读，这次请求会带上"用户后来才改的时段"，
+   *    也就是"旧调用发了新参数"—— 即使守卫能让最终结果正确，
+   *    中间也会白发一次请求，日志也读不出这次请求代表哪一次意图。
+   */
+  const wantPeriod = period.value;
+  const wantAccountId = accountStore.currentId;
+  return reportGuard.run({
+    task: async () => {
+      await accountStore.load();
+      return getReport(wantPeriod, wantAccountId);
+    },
+    onSuccess: (data) => {
+      Object.assign(report, data);
+      // 时段回填：PeriodPicker 需要知道当前粒度才能正确回显模式
+      report.period = data.period;
+      loaded.value = true;
+    },
+    onError: (err) => {
+      console.error('[report] 加载失败', err);
+      error.value = true;
+    },
+    onSettled: () => {
+      loading.value = false;
+      skeleton.value = false;
+    },
+  });
 }
+
+/**
+ * 组件卸载：让在飞请求作废。
+ *
+ * 用 Vue 的 `onUnmounted` 而不是 uni 的 `onUnload` —— ReportView 是**组件**
+ * （由 `pages/statistics/index.vue` 承载），页面级生命周期钩子在子组件里不触发。
+ */
+onUnmounted(() => {
+  reportGuard.invalidate();
+});
 
 function switchTab(next: 'basic' | 'category') {
   if (tab.value === next) return;
@@ -498,12 +590,12 @@ function exportCsv() {
     rows.push(['报表', '分类', pt]);
     rows.push(['支出分类统计', '金额', '占比%', '所属一级']);
     report.expenseCategoriesL2.forEach((r) =>
-      rows.push([r.name, r.sum, String(r.ratio), r.parentName ?? ''])
+      rows.push([r.name, r.sum, String(r.ratio), r.parentName ?? '']),
     );
     rows.push([]);
     rows.push(['收入分类统计', '金额', '占比%', '所属一级']);
     report.incomeCategoriesL2.forEach((r) =>
-      rows.push([r.name, r.sum, String(r.ratio), r.parentName ?? ''])
+      rows.push([r.name, r.sum, String(r.ratio), r.parentName ?? '']),
     );
   }
 
@@ -830,9 +922,26 @@ onMounted(loadData);
 }
 
 /* ── 面板 ── */
+/*
+ * ⚠️ 留白口径：margin `$space-2`(8) + padding `$space-3`(12) —— 2026-10-03 由 16+16 收紧（luchao 拍板）。
+ *
+ * 为什么动它：环图引出线的标注空间被**容器宽度**卡住。几何关系是
+ *   名称可用 = 容器半宽 − LABEL_GAP − 百分比宽 − 3
+ *            = (375 − 2·margin − 2·padding)/2 − 73 − 45 − 3
+ * 原来 16+16 → 容器 **311** → 名称只剩 **35px**（5 个分类名被省略号截断，
+ * 「私家车费用」只显示 3 个字）。收紧到 8+12 → 容器 335 → 名称约 **46.5px**。
+ *
+ * ⚠️ 因果链里最容易搞反的一环：**不是"环太小"**。`LABEL_GAP = outerR + 8 = size/2 + 8`
+ *    随 size **增大**而增大 —— 把环放大反而让标注被推得更靠外、名称更窄
+ *    （size 130→150 时名称可用会掉到约 24.5px）。要救名称列只能**给容器让宽度**。
+ *
+ * ⚠️ 这是一处**跨页面的视觉口径变化**（报表页卡片的左右留白比其它页更窄），
+ *    已在 `docs/H5丝滑体验优化执行计划.md` §5.2.2 记录为由 luchao 拍板的取舍。
+ *    若将来统一改回 16/16，需连带重算上面的公式（名字列会重新掉到 35px）。
+ */
 .panel {
-  margin: $space-4 $space-4 0;
-  padding: $space-4;
+  margin: $space-2 $space-2 0;
+  padding: $space-3;
   background: $v11-bg-card;
   border-radius: $v11-radius-card;
 }

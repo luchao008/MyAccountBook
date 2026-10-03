@@ -8,195 +8,214 @@
       真实数字，把它换成灰块是**信息量倒退** —— 用户本来能看着旧数字等新数字。
       这就是为什么判据不是 `loading` 而是 `skeleton`。
     -->
-    <template v-if="skeleton">
-      <!-- banner：金色系块（灰块压浅金渐变会发脏，见 Skeleton.vue 注释） -->
-      <view class="banner">
-        <view class="banner-top">
-          <Skeleton hero w="112" h="30" r="14" />
-          <Skeleton hero w="28" h="28" r="8" />
-        </view>
-        <view class="banner-main">
-          <Skeleton hero w="48" h="14" />
-          <Skeleton hero style="margin-top: 6px" w="176" h="36" r="8" />
-        </view>
-        <view class="banner-sub">
-          <view class="sub-item"><Skeleton hero w="96" h="16" /></view>
-          <view class="sub-item"><Skeleton hero w="96" h="16" /></view>
-        </view>
-      </view>
+    <!--
+      ── 骨架 ⇄ 内容：交叉淡入（2026-10-03 新增，规格见 docs/交互动效规格.md §C3）──
 
-      <!-- 区间卡：5 行（今天 / 本周 / 本月 / 本年 / 去年） -->
-      <view class="card range-card">
-        <view v-for="n in 5" :key="n" class="range-row">
-          <Skeleton w="32" h="32" r="9" />
-          <view class="range-main">
-            <Skeleton w="56" h="14" />
-            <Skeleton w="104" h="12" />
+      ⚠️ `<Transition>` 必须包住**整条 v-if 链**（骨架 / 失败 / 内容 三选一），
+         且每个分支要有**单一根元素** —— 所以原来的 `<template v-if>` 换成了
+         `<view class="cross-block">`（`<template>` 是多根 fragment，Transition 不认它，
+         会静默不做过渡）。
+      ⚠️ `.cross-block` **刻意不带任何样式**：多包一层无 padding / border 的块级容器
+         对布局零影响（外边距照旧折叠、宽度照旧撑满）。
+      ⚠️ `.cross-host` 只为提供定位上下文（离开的那一块要脱流），理由见 App.vue 里同名规则。
+      ⚠️ 小程序端不渲染动画、静默降级为瞬变 —— 项目"H5 优先"的既有取舍（同 7 个弹层）。
+    -->
+    <view class="cross-host">
+      <Transition name="cross">
+        <view v-if="skeleton" class="cross-block">
+          <!-- banner：金色系块（灰块压浅金渐变会发脏，见 Skeleton.vue 注释） -->
+          <view class="banner">
+            <view class="banner-top">
+              <Skeleton hero w="112" h="30" r="14" />
+              <Skeleton hero w="28" h="28" r="8" />
+            </view>
+            <view class="banner-main">
+              <Skeleton hero w="48" h="14" />
+              <Skeleton hero style="margin-top: 6px" w="176" h="36" r="8" />
+            </view>
+            <view class="banner-sub">
+              <view class="sub-item"><Skeleton hero w="96" h="16" /></view>
+              <view class="sub-item"><Skeleton hero w="96" h="16" /></view>
+            </view>
           </view>
-          <view class="range-amounts">
-            <Skeleton w="88" h="12" />
-            <Skeleton w="88" h="12" />
-          </view>
-        </view>
-      </view>
 
-      <!-- 排行卡：标题行 + 5 条 -->
-      <view class="card rank-card">
-        <view class="rank-header">
-          <Skeleton w="120" h="16" />
-          <Skeleton w="88" h="12" />
-        </view>
-        <view class="rank-list">
-          <view v-for="n in 5" :key="n" class="rank-item">
-            <Skeleton w="16" h="16" r="4" />
-            <view class="rank-body">
-              <view class="rank-line">
-                <view class="rank-name">
-                  <Skeleton circle :h="36" />
-                  <Skeleton w="56" h="14" />
-                </view>
-                <Skeleton w="64" h="14" />
+          <!-- 区间卡：5 行（今天 / 本周 / 本月 / 本年 / 去年） -->
+          <view class="card range-card">
+            <view v-for="n in 5" :key="n" class="range-row">
+              <Skeleton w="32" h="32" r="9" />
+              <view class="range-main">
+                <Skeleton w="56" h="14" />
+                <Skeleton w="104" h="12" />
               </view>
-              <Skeleton w="100%" h="6" r="3" />
+              <view class="range-amounts">
+                <Skeleton w="88" h="12" />
+                <Skeleton w="88" h="12" />
+              </view>
+            </view>
+          </view>
+
+          <!-- 排行卡：标题行 + 5 条 -->
+          <view class="card rank-card">
+            <view class="rank-header">
+              <Skeleton w="120" h="16" />
+              <Skeleton w="88" h="12" />
+            </view>
+            <view class="rank-list">
+              <view v-for="n in 5" :key="n" class="rank-item">
+                <Skeleton w="16" h="16" r="4" />
+                <view class="rank-body">
+                  <view class="rank-line">
+                    <view class="rank-name">
+                      <Skeleton circle :h="36" />
+                      <Skeleton w="56" h="14" />
+                    </view>
+                    <Skeleton w="64" h="14" />
+                  </view>
+                  <Skeleton w="100%" h="6" r="3" />
+                </view>
+              </view>
             </view>
           </view>
         </view>
-      </view>
-    </template>
 
-    <!-- 首屏失败：给重试入口，而不是让用户看着一片灰 -->
-    <EmptyState
-      v-else-if="error"
-      icon="icon-alert"
-      text="加载失败，请稍后重试"
-      button-text="重试"
-      @action="loadData"
-    />
+        <!-- 首屏失败：给重试入口，而不是让用户看着一片灰 -->
+        <EmptyState
+          v-else-if="error"
+          icon="icon-alert"
+          text="加载失败，请稍后重试"
+          button-text="重试"
+          @action="loadData"
+        />
 
-    <template v-else>
-      <!-- 顶部 banner：当前账本的历年累计 -->
-      <view class="banner">
-        <view class="banner-top">
-          <view class="account-switch" @click="switchAccount">
-            <SvgIcon class="account-icon" name="icon-wallet" :size="14" />
-            <text class="account-name">{{ accountStore.currentName }}</text>
-            <SvgIcon class="account-arrow" name="icon-chevron-down" :size="12" />
-          </view>
-          <!--
+        <view v-else class="cross-block">
+          <!-- 顶部 banner：当前账本的历年累计 -->
+          <view class="banner">
+            <view class="banner-top">
+              <view class="account-switch" @click="switchAccount">
+                <SvgIcon class="account-icon" name="icon-wallet" :size="14" />
+                <text class="account-name">{{ accountStore.currentName }}</text>
+                <SvgIcon class="account-arrow" name="icon-chevron-down" :size="12" />
+              </view>
+              <!--
           右上角图标 = **图表页入口**（2026-09-30 luchao 定：不动导航栏，直接用这个 svg）。
           它原本是纯装饰，现在可点 —— 所以触摸区撑到 44、并给按下反馈。
         -->
-          <view class="banner-action" @click="goCharts">
-            <SvgIcon class="banner-deco" name="icon-chart-bar" :size="28" />
-          </view>
-        </view>
-
-        <view class="banner-main">
-          <text class="banner-label">总支出</text>
-          <text class="banner-expense">¥{{ formatMoney(overview.total.expense) }}</text>
-        </view>
-
-        <view class="banner-sub">
-          <view class="sub-item">
-            <text class="sub-label">总收入</text>
-            <text class="sub-value">{{ formatMoney(overview.total.income) }}</text>
-          </view>
-          <view class="sub-item">
-            <text class="sub-label">结余</text>
-            <text class="sub-value">{{ formatMoney(overview.total.balance) }}</text>
-          </view>
-        </view>
-      </view>
-
-      <!-- 时间区间统计 -->
-      <view class="card range-card">
-        <!-- 每行可点：跳到流水页并带上该区间的起止与分组粒度 -->
-        <view
-          v-for="(item, index) in overview.ranges"
-          :key="item.key"
-          class="range-row"
-          @click="goFlow(item)"
-        >
-          <view class="range-icon" :style="{ background: iconColors[index % iconColors.length] }">
-            <text class="range-icon-text">{{ iconTexts[index] || '¥' }}</text>
-          </view>
-          <view class="range-main">
-            <text class="range-label">{{ item.label }}</text>
-            <text class="range-period">{{ item.period }}</text>
-          </view>
-          <view class="range-amounts">
-            <view class="amount-line">
-              <text class="amount-key">总收入</text>
-              <text class="amount-val income">{{ formatMoney(item.income) }}</text>
-            </view>
-            <view class="amount-line">
-              <text class="amount-key">总支出</text>
-              <text class="amount-val expense">{{ formatMoney(item.expense) }}</text>
-            </view>
-          </view>
-        </view>
-      </view>
-
-      <!-- 本月分类支出排行 -->
-      <view class="card rank-card">
-        <view class="rank-header">
-          <text class="rank-title">本月各分类支出排行</text>
-          <view class="rank-summary">
-            <text class="summary-item">记账笔数 {{ monthCount }}</text>
-            <text class="summary-item">
-              总支出
-              <text class="summary-val">{{ formatMoney(monthExpense) }}</text>
-            </text>
-          </view>
-        </view>
-
-        <EmptyState v-if="!ranking.length" icon="icon-chart-bar" text="本月还没有支出记录" />
-
-        <view v-else class="rank-list">
-          <view
-            v-for="(item, index) in visibleRanking"
-            :key="item.categoryId || index"
-            class="rank-item"
-            :class="{ 'rank-item-link': isClickable(item) }"
-            @click="goCategoryFlow(item)"
-          >
-            <text class="rank-no">{{ index + 1 }}</text>
-            <view class="rank-body">
-              <view class="rank-line">
-                <view class="rank-name">
-                  <CategoryIcon :name="item.icon" :size="36" />
-                  <text>{{ item.name }}</text>
-                </view>
-                <view class="rank-right">
-                  <text class="rank-ratio">{{ item.ratio }}%</text>
-                  <text class="rank-dot">•</text>
-                  <text class="rank-amount">{{ formatMoney(item.sum) }}</text>
-                </view>
+              <view class="banner-action" @click="goCharts">
+                <SvgIcon class="banner-deco" name="icon-chart-bar" :size="28" />
               </view>
-              <view class="bar-bg">
-                <view class="bar-fill" :style="{ width: barWidth(item.ratio) }" />
+            </view>
+
+            <view class="banner-main">
+              <text class="banner-label">总支出</text>
+              <text class="banner-expense">¥{{ formatMoney(overview.total.expense) }}</text>
+            </view>
+
+            <view class="banner-sub">
+              <view class="sub-item">
+                <text class="sub-label">总收入</text>
+                <text class="sub-value">{{ formatMoney(overview.total.income) }}</text>
+              </view>
+              <view class="sub-item">
+                <text class="sub-label">结余</text>
+                <text class="sub-value">{{ formatMoney(overview.total.balance) }}</text>
               </view>
             </view>
           </view>
 
-          <view
-            v-if="ranking.length > COLLAPSED_COUNT"
-            class="rank-toggle"
-            @click="expanded = !expanded"
-          >
-            <text class="rank-toggle-text">{{ expanded ? '收起' : '点击展开' }}</text>
-            <SvgIcon :name="expanded ? 'icon-chevron-up' : 'icon-chevron-down'" :size="12" />
+          <!-- 时间区间统计 -->
+          <view class="card range-card">
+            <!-- 每行可点：跳到流水页并带上该区间的起止与分组粒度 -->
+            <view
+              v-for="(item, index) in overview.ranges"
+              :key="item.key"
+              class="range-row"
+              @click="goFlow(item)"
+            >
+              <view
+                class="range-icon"
+                :style="{ background: iconColors[index % iconColors.length] }"
+              >
+                <text class="range-icon-text">{{ iconTexts[index] || '¥' }}</text>
+              </view>
+              <view class="range-main">
+                <text class="range-label">{{ item.label }}</text>
+                <text class="range-period">{{ item.period }}</text>
+              </view>
+              <view class="range-amounts">
+                <view class="amount-line">
+                  <text class="amount-key">总收入</text>
+                  <text class="amount-val income">{{ formatMoney(item.income) }}</text>
+                </view>
+                <view class="amount-line">
+                  <text class="amount-key">总支出</text>
+                  <text class="amount-val expense">{{ formatMoney(item.expense) }}</text>
+                </view>
+              </view>
+            </view>
+          </view>
+
+          <!-- 本月分类支出排行 -->
+          <view class="card rank-card">
+            <view class="rank-header">
+              <text class="rank-title">本月各分类支出排行</text>
+              <view class="rank-summary">
+                <text class="summary-item">记账笔数 {{ monthCount }}</text>
+                <text class="summary-item">
+                  总支出
+                  <text class="summary-val">{{ formatMoney(monthExpense) }}</text>
+                </text>
+              </view>
+            </view>
+
+            <EmptyState v-if="!ranking.length" icon="icon-chart-bar" text="本月还没有支出记录" />
+
+            <view v-else class="rank-list">
+              <view
+                v-for="(item, index) in visibleRanking"
+                :key="item.categoryId || index"
+                class="rank-item"
+                :class="{ 'rank-item-link': isClickable(item) }"
+                @click="goCategoryFlow(item)"
+              >
+                <text class="rank-no">{{ index + 1 }}</text>
+                <view class="rank-body">
+                  <view class="rank-line">
+                    <view class="rank-name">
+                      <CategoryIcon :name="item.icon" :size="36" />
+                      <text>{{ item.name }}</text>
+                    </view>
+                    <view class="rank-right">
+                      <text class="rank-ratio">{{ item.ratio }}%</text>
+                      <text class="rank-dot">•</text>
+                      <text class="rank-amount">{{ formatMoney(item.sum) }}</text>
+                    </view>
+                  </view>
+                  <view class="bar-bg">
+                    <view class="bar-fill" :style="{ width: barWidth(item.ratio) }" />
+                  </view>
+                </view>
+              </view>
+
+              <view
+                v-if="ranking.length > COLLAPSED_COUNT"
+                class="rank-toggle"
+                @click="expanded = !expanded"
+              >
+                <text class="rank-toggle-text">{{ expanded ? '收起' : '点击展开' }}</text>
+                <SvgIcon :name="expanded ? 'icon-chevron-up' : 'icon-chevron-down'" :size="12" />
+              </view>
+            </view>
           </view>
         </view>
-      </view>
-    </template>
+      </Transition>
+    </view>
 
     <!-- 底栏的「记一笔」与导航由容器统一承载，视图内不再持有 -->
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import EmptyState from '@/components/EmptyState.vue';
 import Skeleton from '@/components/Skeleton.vue';
 import { useUserStore } from '@/store/user';
@@ -208,6 +227,7 @@ import SvgIcon from '@/components/SvgIcon.vue';
 import CategoryIcon from '@/components/CategoryIcon.vue';
 import { formatMoney } from '@/utils/format';
 import { SOLID_SERIES } from '@/constants/chart';
+import { createLatest } from '@/utils/latest';
 
 const userStore = useUserStore();
 const accountStore = useAccountStore();
@@ -234,7 +254,18 @@ const loading = ref(false);
  * 判据用 `loaded` 而不是「有没有数据」：账本可能真的是空的（0 条流水），
  * 那时「拿到过空数据」也必须停止铺骨架，否则骨架会永远停在那儿。
  */
-const skeleton = ref(false);
+/*
+ * ⚠️ 初值必须是 `true`（2026-10-03 改，C3 交叉淡入的配套修复）。
+ *
+ * 首次挂载 = 首屏，此刻数据必然还没回来。初值 `false` 会让**第一帧**落到
+ * v-if 链的最后一个分支（内容），于是先渲染一次 **¥0.00**，再被骨架顶掉。
+ * 以前只闪 1 帧（约 16ms）；加了交叉淡入后它会**淡出 150ms** —— 一个错误的
+ * 金额在屏幕上停留 0.15 秒，比"看不见"糟得多。
+ *
+ * 为什么安全：`onMounted(activate)` 无条件调 `loadData()`，
+ * 所以初值 `true` 一定会在数据回来后被 `skeleton = false` 收掉。
+ */
+const skeleton = ref(true);
 /**
  * 是否成功拿到过一次数据（失败不算 —— 首屏失败后点重试仍要铺骨架）。
  *
@@ -337,31 +368,50 @@ function currentMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-async function loadData() {
+/**
+ * 首页数据的「最后写入者胜」守卫。
+ *
+ * ⚠️ 为什么必须有：`loadData()` 由**下拉刷新**、**切换账本**、视图激活三条路径触发。
+ *    下拉刷新可以连拉两次；更危险的是**切账本** ——
+ *    若 A 账本的响应晚于 B 账本落地，界面顶部显示的是「已切到 B」，
+ *    下面的合计与排行却是 **A 账本的钱**。这是跨账本的数据串台，属于最严重的一类：
+ *    数字看着正常、也没有任何报错，但看到的是别的账本。
+ */
+const homeGuard = createLatest();
+
+function loadData() {
   loading.value = true;
   // 只有「从未成功过」才铺骨架；失败后重试仍算首屏，所以看的是 loaded
   if (!loaded.value) skeleton.value = true;
   error.value = false;
-  try {
-    const accountId = accountStore.currentId;
-    const [ov, rank] = await Promise.all([
-      getOverview(accountId),
-      getCategoryStat(currentMonth(), 'expense', accountId),
-    ]);
-    overview.total = ov.total;
-    overview.ranges = ov.ranges;
-    // 保留全量：折叠/展开由 visibleRanking 控制，不在这里截断
-    ranking.value = rank;
-    expanded.value = false;
-    loaded.value = true;
-  } catch (err) {
-    console.error('[home] 加载失败', err);
-    error.value = true;
-  } finally {
-    loading.value = false;
-    skeleton.value = false;
-    uni.stopPullDownRefresh();
-  }
+  /*
+   * ⚠️ 账本 id 与「本月」都在调用时快照。
+   *    若在 await 之后再读 `accountStore.currentId`，这次请求会带上切换后的新账本 id ——
+   *    正好制造出"旧请求拿了新账本的钱"这种串台（比"新请求拿旧账本"更难察觉）。
+   */
+  const accountId = accountStore.currentId;
+  const month = currentMonth();
+  return homeGuard.run({
+    task: () => Promise.all([getOverview(accountId), getCategoryStat(month, 'expense', accountId)]),
+    onSuccess: ([ov, rank]) => {
+      overview.total = ov.total;
+      overview.ranges = ov.ranges;
+      // 保留全量：折叠/展开由 visibleRanking 控制，不在这里截断
+      ranking.value = rank;
+      expanded.value = false;
+      loaded.value = true;
+    },
+    onError: (err) => {
+      console.error('[home] 加载失败', err);
+      error.value = true;
+    },
+    // 下拉刷新的收尾也属于"只有最新一次有权做"：旧请求提前收起来会让转圈提前消失
+    onSettled: () => {
+      loading.value = false;
+      skeleton.value = false;
+      uni.stopPullDownRefresh();
+    },
+  });
 }
 
 /** 切换账本 */
@@ -410,6 +460,17 @@ async function onPullDownRefresh() {
 }
 
 onMounted(activate);
+
+/**
+ * 卸载：让在飞请求作废。
+ *
+ * ⚠️ 必须挂 `onUnmounted` 而不是页面级的 `onUnload` —— HomeView 是**组件**
+ *    （由 `pages/main/index.vue` 用 v-show 承载），页面级钩子不会在子组件里触发。
+ *    这里也顺带保证「页面 A 的请求在用户已经离开后失败」时不会弹出串台的 toast。
+ */
+onUnmounted(() => {
+  homeGuard.invalidate();
+});
 
 defineExpose({ activate, onPullDownRefresh });
 </script>

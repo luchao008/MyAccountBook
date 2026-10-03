@@ -1,51 +1,54 @@
 <template>
-  <view v-if="visible" class="mask" @click="close">
-    <view class="sheet" @click.stop>
-      <view class="header">
-        <text class="title">选择时间</text>
-        <view class="close" @click="close"><SvgIcon name="icon-close" :size="20" /></view>
-      </view>
-
-      <!-- 粒度切换：月 / 年 -->
-      <view class="mode-switch">
-        <view
-          class="mode-item"
-          :class="{ active: mode === 'month' }"
-          @click="switchMode('month')"
-        >
-          <text class="mode-text">月</text>
+  <transition name="sheet">
+    <view v-if="visible" class="mask" @click="close">
+      <view class="sheet" @click.stop>
+        <view class="header">
+          <text class="title">选择时间</text>
+          <view class="close" @click="close"><SvgIcon name="icon-close" :size="20" /></view>
         </view>
-        <view
-          class="mode-item"
-          :class="{ active: mode === 'year' }"
-          @click="switchMode('year')"
-        >
-          <text class="mode-text">年</text>
+
+        <!-- 粒度切换：月 / 年 -->
+        <view class="mode-switch">
+          <view
+            class="mode-item"
+            :class="{ active: mode === 'month' }"
+            @click="switchMode('month')"
+          >
+            <text class="mode-text">月</text>
+          </view>
+          <view class="mode-item" :class="{ active: mode === 'year' }" @click="switchMode('year')">
+            <text class="mode-text">年</text>
+          </view>
         </view>
-      </view>
 
-      <!-- 年模式：仅一列年份 -->
-      <picker-view v-if="mode === 'year'" class="wheel" :value="yearWheelValue" @change="onYearWheelChange">
-        <picker-view-column>
-          <view v-for="y in years" :key="'y' + y" class="wheel-item">{{ y }} 年</view>
-        </picker-view-column>
-      </picker-view>
+        <!-- 年模式：仅一列年份 -->
+        <picker-view
+          v-if="mode === 'year'"
+          class="wheel"
+          :value="yearWheelValue"
+          @change="onYearWheelChange"
+        >
+          <picker-view-column>
+            <view v-for="y in years" :key="'y' + y" class="wheel-item">{{ y }} 年</view>
+          </picker-view-column>
+        </picker-view>
 
-      <!-- 月模式：年 + 月两列 -->
-      <picker-view v-else class="wheel" :value="monthWheelValue" @change="onMonthWheelChange">
-        <picker-view-column>
-          <view v-for="y in years" :key="'y' + y" class="wheel-item">{{ y }} 年</view>
-        </picker-view-column>
-        <picker-view-column>
-          <view v-for="m in 12" :key="'m' + m" class="wheel-item">{{ m }} 月</view>
-        </picker-view-column>
-      </picker-view>
+        <!-- 月模式：年 + 月两列 -->
+        <picker-view v-else class="wheel" :value="monthWheelValue" @change="onMonthWheelChange">
+          <picker-view-column>
+            <view v-for="y in years" :key="'y' + y" class="wheel-item">{{ y }} 年</view>
+          </picker-view-column>
+          <picker-view-column>
+            <view v-for="m in 12" :key="'m' + m" class="wheel-item">{{ m }} 月</view>
+          </picker-view-column>
+        </picker-view>
 
-      <view class="confirm" @click="confirm">
-        <text class="confirm-text">确定</text>
+        <view class="confirm" @click="confirm">
+          <text class="confirm-text">确定</text>
+        </view>
       </view>
     </view>
-  </view>
+  </transition>
 </template>
 
 <script setup lang="ts">
@@ -98,7 +101,7 @@ watch(
     const yi = years.indexOf(Number(y));
     yearIndex.value = yi >= 0 ? yi : years.indexOf(NOW_YEAR);
     monthIndex.value = m ? Number(m) - 1 : new Date().getMonth();
-  }
+  },
 );
 
 function switchMode(next: 'year' | 'month') {
@@ -117,9 +120,7 @@ function onMonthWheelChange(e: any) {
 function confirm() {
   const y = years[yearIndex.value];
   const period =
-    mode.value === 'year'
-      ? `${y}`
-      : `${y}-${String(monthIndex.value + 1).padStart(2, '0')}`;
+    mode.value === 'year' ? `${y}` : `${y}-${String(monthIndex.value + 1).padStart(2, '0')}`;
   emit('confirm', { period, granularity: mode.value });
   close();
 }
